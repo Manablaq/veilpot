@@ -1,0 +1,1257 @@
+{
+  "schemaVersion": 1,
+  "method": "deterministic SplitMix64 simulation; sanity evidence only",
+  "seed": "6216455452567421271",
+  "targetSamplesPerScenario": 50000,
+  "winnerSamplesPerScenario": 20000,
+  "targetScenarios": [
+    {
+      "name": "unit",
+      "total": "1",
+      "bucket": "1",
+      "size": 1,
+      "theoreticalFailure": {
+        "numerator": "0",
+        "denominator": "1",
+        "decimal": "0"
+      },
+      "theoreticalExpectedAttempts": {
+        "numerator": "1",
+        "denominator": "1",
+        "decimal": "1"
+      },
+      "observedMeanAttempts": 1,
+      "distribution": {
+        "bins": 1,
+        "samples": 50000,
+        "minimumCount": 50000,
+        "maximumCount": 50000,
+        "maxRelativeDeviation": 0,
+        "chiSquare": 0
+      }
+    },
+    {
+      "name": "unit",
+      "total": "1",
+      "bucket": "1",
+      "size": 2,
+      "theoreticalFailure": {
+        "numerator": "0",
+        "denominator": "1",
+        "decimal": "0"
+      },
+      "theoreticalExpectedAttempts": {
+        "numerator": "1",
+        "denominator": "1",
+        "decimal": "1"
+      },
+      "observedMeanAttempts": 1,
+      "distribution": {
+        "bins": 1,
+        "samples": 50000,
+        "minimumCount": 50000,
+        "maximumCount": 50000,
+        "maxRelativeDeviation": 0,
+        "chiSquare": 0
+      }
+    },
+    {
+      "name": "unit",
+      "total": "1",
+      "bucket": "1",
+      "size": 4,
+      "theoreticalFailure": {
+        "numerator": "0",
+        "denominator": "1",
+        "decimal": "0"
+      },
+      "theoreticalExpectedAttempts": {
+        "numerator": "1",
+        "denominator": "1",
+        "decimal": "1"
+      },
+      "observedMeanAttempts": 1,
+      "distribution": {
+        "bins": 1,
+        "samples": 50000,
+        "minimumCount": 50000,
+        "maximumCount": 50000,
+        "maxRelativeDeviation": 0,
+        "chiSquare": 0
+      }
+    },
+    {
+      "name": "unit",
+      "total": "1",
+      "bucket": "1",
+      "size": 8,
+      "theoreticalFailure": {
+        "numerator": "0",
+        "denominator": "1",
+        "decimal": "0"
+      },
+      "theoreticalExpectedAttempts": {
+        "numerator": "1",
+        "denominator": "1",
+        "decimal": "1"
+      },
+      "observedMeanAttempts": 1,
+      "distribution": {
+        "bins": 1,
+        "samples": 50000,
+        "minimumCount": 50000,
+        "maximumCount": 50000,
+        "maxRelativeDeviation": 0,
+        "chiSquare": 0
+      }
+    },
+    {
+      "name": "unit",
+      "total": "1",
+      "bucket": "1",
+      "size": 16,
+      "theoreticalFailure": {
+        "numerator": "0",
+        "denominator": "1",
+        "decimal": "0"
+      },
+      "theoreticalExpectedAttempts": {
+        "numerator": "1",
+        "denominator": "1",
+        "decimal": "1"
+      },
+      "observedMeanAttempts": 1,
+      "distribution": {
+        "bins": 1,
+        "samples": 50000,
+        "minimumCount": 50000,
+        "maximumCount": 50000,
+        "maxRelativeDeviation": 0,
+        "chiSquare": 0
+      }
+    },
+    {
+      "name": "just-over-half",
+      "total": "513",
+      "bucket": "1024",
+      "size": 1,
+      "theoreticalFailure": {
+        "numerator": "511",
+        "denominator": "1024",
+        "decimal": "0.4990234375"
+      },
+      "theoreticalExpectedAttempts": {
+        "numerator": "1024",
+        "denominator": "513",
+        "decimal": "1.996101364522417153996101"
+      },
+      "observedMeanAttempts": 1.99364,
+      "distribution": {
+        "bins": 513,
+        "samples": 50000,
+        "minimumCount": 73,
+        "maximumCount": 122,
+        "maxRelativeDeviation": 0.25172,
+        "chiSquare": 506.04016
+      }
+    },
+    {
+      "name": "just-over-half",
+      "total": "513",
+      "bucket": "1024",
+      "size": 2,
+      "theoreticalFailure": {
+        "numerator": "261121",
+        "denominator": "1048576",
+        "decimal": "0.24902439117431640625"
+      },
+      "theoreticalExpectedAttempts": {
+        "numerator": "1048576",
+        "denominator": "787455",
+        "decimal": "1.331601170860557111200005"
+      },
+      "observedMeanAttempts": 1.32786,
+      "distribution": {
+        "bins": 513,
+        "samples": 50000,
+        "minimumCount": 72,
+        "maximumCount": 134,
+        "maxRelativeDeviation": 0.37484,
+        "chiSquare": 535.7326
+      }
+    },
+    {
+      "name": "just-over-half",
+      "total": "513",
+      "bucket": "1024",
+      "size": 4,
+      "theoreticalFailure": {
+        "numerator": "68184176641",
+        "denominator": "1099511627776",
+        "decimal": "0.062013147399738954845815"
+      },
+      "theoreticalExpectedAttempts": {
+        "numerator": "1099511627776",
+        "denominator": "1031327451135",
+        "decimal": "1.066113024108843139622108"
+      },
+      "observedMeanAttempts": 1.0675,
+      "distribution": {
+        "bins": 513,
+        "samples": 50000,
+        "minimumCount": 68,
+        "maximumCount": 130,
+        "maxRelativeDeviation": 0.3338,
+        "chiSquare": 544.6587999999999
+      }
+    },
+    {
+      "name": "just-over-half",
+      "total": "513",
+      "bucket": "1024",
+      "size": 8,
+      "theoreticalFailure": {
+        "numerator": "4649081944211090042881",
+        "denominator": "1208925819614629174706176",
+        "decimal": "0.003845630450421750296751"
+      },
+      "theoreticalExpectedAttempts": {
+        "numerator": "1208925819614629174706176",
+        "denominator": "1204276737670418084663295",
+        "decimal": "1.003860476416080564743255"
+      },
+      "observedMeanAttempts": 1.00368,
+      "distribution": {
+        "bins": 513,
+        "samples": 50000,
+        "minimumCount": 68,
+        "maximumCount": 124,
+        "maxRelativeDeviation": 0.30232,
+        "chiSquare": 530.9104000000003
+      }
+    },
+    {
+      "name": "just-over-half",
+      "total": "513",
+      "bucket": "1024",
+      "size": 16,
+      "theoreticalFailure": {
+        "numerator": "21613962923989568949877044687531502418780161",
+        "denominator": "1461501637330902918203684832716283019655932542976",
+        "decimal": "0.000014788873561210994067"
+      },
+      "theoreticalExpectedAttempts": {
+        "numerator": "1461501637330902918203684832716283019655932542976",
+        "denominator": "1461480023367978928634734955671595488153513762815",
+        "decimal": "1.000014789092275226737477"
+      },
+      "observedMeanAttempts": 1.00008,
+      "distribution": {
+        "bins": 513,
+        "samples": 50000,
+        "minimumCount": 71,
+        "maximumCount": 131,
+        "maxRelativeDeviation": 0.34406000000000003,
+        "chiSquare": 510.75976
+      }
+    },
+    {
+      "name": "highly-uneven-total",
+      "total": "100",
+      "bucket": "128",
+      "size": 1,
+      "theoreticalFailure": {
+        "numerator": "7",
+        "denominator": "32",
+        "decimal": "0.21875"
+      },
+      "theoreticalExpectedAttempts": {
+        "numerator": "32",
+        "denominator": "25",
+        "decimal": "1.28"
+      },
+      "observedMeanAttempts": 1.28608,
+      "distribution": {
+        "bins": 100,
+        "samples": 50000,
+        "minimumCount": 443,
+        "maximumCount": 548,
+        "maxRelativeDeviation": 0.114,
+        "chiSquare": 106.41599999999998
+      }
+    },
+    {
+      "name": "highly-uneven-total",
+      "total": "100",
+      "bucket": "128",
+      "size": 2,
+      "theoreticalFailure": {
+        "numerator": "49",
+        "denominator": "1024",
+        "decimal": "0.0478515625"
+      },
+      "theoreticalExpectedAttempts": {
+        "numerator": "1024",
+        "denominator": "975",
+        "decimal": "1.050256410256410256410256"
+      },
+      "observedMeanAttempts": 1.05086,
+      "distribution": {
+        "bins": 100,
+        "samples": 50000,
+        "minimumCount": 448,
+        "maximumCount": 548,
+        "maxRelativeDeviation": 0.104,
+        "chiSquare": 92.07599999999995
+      }
+    },
+    {
+      "name": "highly-uneven-total",
+      "total": "100",
+      "bucket": "128",
+      "size": 4,
+      "theoreticalFailure": {
+        "numerator": "2401",
+        "denominator": "1048576",
+        "decimal": "0.00228977203369140625"
+      },
+      "theoreticalExpectedAttempts": {
+        "numerator": "1048576",
+        "denominator": "1046175",
+        "decimal": "1.002295027122613329509881"
+      },
+      "observedMeanAttempts": 1.00232,
+      "distribution": {
+        "bins": 100,
+        "samples": 50000,
+        "minimumCount": 452,
+        "maximumCount": 558,
+        "maxRelativeDeviation": 0.116,
+        "chiSquare": 104.80799999999996
+      }
+    },
+    {
+      "name": "highly-uneven-total",
+      "total": "100",
+      "bucket": "128",
+      "size": 8,
+      "theoreticalFailure": {
+        "numerator": "5764801",
+        "denominator": "1099511627776",
+        "decimal": "0.000005243055966275278478"
+      },
+      "theoreticalExpectedAttempts": {
+        "numerator": "1099511627776",
+        "denominator": "1099505862975",
+        "decimal": "1.000005243083456055274428"
+      },
+      "observedMeanAttempts": 1.00002,
+      "distribution": {
+        "bins": 100,
+        "samples": 50000,
+        "minimumCount": 433,
+        "maximumCount": 551,
+        "maxRelativeDeviation": 0.134,
+        "chiSquare": 107.648
+      }
+    },
+    {
+      "name": "highly-uneven-total",
+      "total": "100",
+      "bucket": "128",
+      "size": 16,
+      "theoreticalFailure": {
+        "numerator": "33232930569601",
+        "denominator": "1208925819614629174706176",
+        "decimal": "0.000000000027489635865494"
+      },
+      "theoreticalExpectedAttempts": {
+        "numerator": "1208925819614629174706176",
+        "denominator": "1208925819581396244136575",
+        "decimal": "1.00000000002748963586625"
+      },
+      "observedMeanAttempts": 1,
+      "distribution": {
+        "bins": 100,
+        "samples": 50000,
+        "minimumCount": 453,
+        "maximumCount": 562,
+        "maxRelativeDeviation": 0.124,
+        "chiSquare": 98.35199999999996
+      }
+    },
+    {
+      "name": "just-below-bucket",
+      "total": "1023",
+      "bucket": "1024",
+      "size": 1,
+      "theoreticalFailure": {
+        "numerator": "1",
+        "denominator": "1024",
+        "decimal": "0.0009765625"
+      },
+      "theoreticalExpectedAttempts": {
+        "numerator": "1024",
+        "denominator": "1023",
+        "decimal": "1.00097751710654936461388"
+      },
+      "observedMeanAttempts": 1.00114,
+      "distribution": {
+        "bins": 1023,
+        "samples": 50000,
+        "minimumCount": 27,
+        "maximumCount": 73,
+        "maxRelativeDeviation": 0.49358,
+        "chiSquare": 1032.314080000001
+      }
+    },
+    {
+      "name": "just-below-bucket",
+      "total": "1023",
+      "bucket": "1024",
+      "size": 2,
+      "theoreticalFailure": {
+        "numerator": "1",
+        "denominator": "1048576",
+        "decimal": "0.00000095367431640625"
+      },
+      "theoreticalExpectedAttempts": {
+        "numerator": "1048576",
+        "denominator": "1048575",
+        "decimal": "1.000000953675225901819135"
+      },
+      "observedMeanAttempts": 1,
+      "distribution": {
+        "bins": 1023,
+        "samples": 50000,
+        "minimumCount": 29,
+        "maximumCount": 73,
+        "maxRelativeDeviation": 0.49358,
+        "chiSquare": 1053.9198399999989
+      }
+    },
+    {
+      "name": "just-below-bucket",
+      "total": "1023",
+      "bucket": "1024",
+      "size": 4,
+      "theoreticalFailure": {
+        "numerator": "1",
+        "denominator": "1099511627776",
+        "decimal": "0.000000000000909494701772"
+      },
+      "theoreticalExpectedAttempts": {
+        "numerator": "1099511627776",
+        "denominator": "1099511627775",
+        "decimal": "1.000000000000909494701773"
+      },
+      "observedMeanAttempts": 1,
+      "distribution": {
+        "bins": 1023,
+        "samples": 50000,
+        "minimumCount": 24,
+        "maximumCount": 70,
+        "maxRelativeDeviation": 0.50896,
+        "chiSquare": 996.4681599999997
+      }
+    },
+    {
+      "name": "just-below-bucket",
+      "total": "1023",
+      "bucket": "1024",
+      "size": 8,
+      "theoreticalFailure": {
+        "numerator": "1",
+        "denominator": "1208925819614629174706176",
+        "decimal": "0"
+      },
+      "theoreticalExpectedAttempts": {
+        "numerator": "1208925819614629174706176",
+        "denominator": "1208925819614629174706175",
+        "decimal": "1"
+      },
+      "observedMeanAttempts": 1,
+      "distribution": {
+        "bins": 1023,
+        "samples": 50000,
+        "minimumCount": 28,
+        "maximumCount": 68,
+        "maxRelativeDeviation": 0.42712,
+        "chiSquare": 1004.69308
+      }
+    },
+    {
+      "name": "just-below-bucket",
+      "total": "1023",
+      "bucket": "1024",
+      "size": 16,
+      "theoreticalFailure": {
+        "numerator": "1",
+        "denominator": "1461501637330902918203684832716283019655932542976",
+        "decimal": "0"
+      },
+      "theoreticalExpectedAttempts": {
+        "numerator": "1461501637330902918203684832716283019655932542976",
+        "denominator": "1461501637330902918203684832716283019655932542975",
+        "decimal": "1"
+      },
+      "observedMeanAttempts": 1,
+      "distribution": {
+        "bins": 1023,
+        "samples": 50000,
+        "minimumCount": 28,
+        "maximumCount": 75,
+        "maxRelativeDeviation": 0.5345,
+        "chiSquare": 1019.3424399999999
+      }
+    },
+    {
+      "name": "power-of-two",
+      "total": "1024",
+      "bucket": "1024",
+      "size": 1,
+      "theoreticalFailure": {
+        "numerator": "0",
+        "denominator": "1",
+        "decimal": "0"
+      },
+      "theoreticalExpectedAttempts": {
+        "numerator": "1",
+        "denominator": "1",
+        "decimal": "1"
+      },
+      "observedMeanAttempts": 1,
+      "distribution": {
+        "bins": 1024,
+        "samples": 50000,
+        "minimumCount": 26,
+        "maximumCount": 70,
+        "maxRelativeDeviation": 0.46752,
+        "chiSquare": 1096.4121599999994
+      }
+    },
+    {
+      "name": "power-of-two",
+      "total": "1024",
+      "bucket": "1024",
+      "size": 2,
+      "theoreticalFailure": {
+        "numerator": "0",
+        "denominator": "1",
+        "decimal": "0"
+      },
+      "theoreticalExpectedAttempts": {
+        "numerator": "1",
+        "denominator": "1",
+        "decimal": "1"
+      },
+      "observedMeanAttempts": 1,
+      "distribution": {
+        "bins": 1024,
+        "samples": 50000,
+        "minimumCount": 29,
+        "maximumCount": 80,
+        "maxRelativeDeviation": 0.6384,
+        "chiSquare": 1048.8575999999991
+      }
+    },
+    {
+      "name": "power-of-two",
+      "total": "1024",
+      "bucket": "1024",
+      "size": 4,
+      "theoreticalFailure": {
+        "numerator": "0",
+        "denominator": "1",
+        "decimal": "0"
+      },
+      "theoreticalExpectedAttempts": {
+        "numerator": "1",
+        "denominator": "1",
+        "decimal": "1"
+      },
+      "observedMeanAttempts": 1,
+      "distribution": {
+        "bins": 1024,
+        "samples": 50000,
+        "minimumCount": 29,
+        "maximumCount": 73,
+        "maxRelativeDeviation": 0.49504,
+        "chiSquare": 1059.8348799999976
+      }
+    },
+    {
+      "name": "power-of-two",
+      "total": "1024",
+      "bucket": "1024",
+      "size": 8,
+      "theoreticalFailure": {
+        "numerator": "0",
+        "denominator": "1",
+        "decimal": "0"
+      },
+      "theoreticalExpectedAttempts": {
+        "numerator": "1",
+        "denominator": "1",
+        "decimal": "1"
+      },
+      "observedMeanAttempts": 1,
+      "distribution": {
+        "bins": 1024,
+        "samples": 50000,
+        "minimumCount": 28,
+        "maximumCount": 73,
+        "maxRelativeDeviation": 0.49504,
+        "chiSquare": 1035.3407999999997
+      }
+    },
+    {
+      "name": "power-of-two",
+      "total": "1024",
+      "bucket": "1024",
+      "size": 16,
+      "theoreticalFailure": {
+        "numerator": "0",
+        "denominator": "1",
+        "decimal": "0"
+      },
+      "theoreticalExpectedAttempts": {
+        "numerator": "1",
+        "denominator": "1",
+        "decimal": "1"
+      },
+      "observedMeanAttempts": 1,
+      "distribution": {
+        "bins": 1024,
+        "samples": 50000,
+        "minimumCount": 25,
+        "maximumCount": 73,
+        "maxRelativeDeviation": 0.49504,
+        "chiSquare": 1018.4243199999995
+      }
+    }
+  ],
+  "winnerScenarios": [
+    {
+      "weights": [
+        "1"
+      ],
+      "total": "1",
+      "bucket": "1",
+      "size": 1,
+      "samples": 20000,
+      "counts": [
+        20000
+      ]
+    },
+    {
+      "weights": [
+        "1"
+      ],
+      "total": "1",
+      "bucket": "1",
+      "size": 2,
+      "samples": 20000,
+      "counts": [
+        20000
+      ]
+    },
+    {
+      "weights": [
+        "1"
+      ],
+      "total": "1",
+      "bucket": "1",
+      "size": 4,
+      "samples": 20000,
+      "counts": [
+        20000
+      ]
+    },
+    {
+      "weights": [
+        "1"
+      ],
+      "total": "1",
+      "bucket": "1",
+      "size": 8,
+      "samples": 20000,
+      "counts": [
+        20000
+      ]
+    },
+    {
+      "weights": [
+        "1"
+      ],
+      "total": "1",
+      "bucket": "1",
+      "size": 16,
+      "samples": 20000,
+      "counts": [
+        20000
+      ]
+    },
+    {
+      "weights": [
+        "1",
+        "1"
+      ],
+      "total": "2",
+      "bucket": "2",
+      "size": 1,
+      "samples": 20000,
+      "counts": [
+        10083,
+        9917
+      ]
+    },
+    {
+      "weights": [
+        "1",
+        "1"
+      ],
+      "total": "2",
+      "bucket": "2",
+      "size": 2,
+      "samples": 20000,
+      "counts": [
+        9993,
+        10007
+      ]
+    },
+    {
+      "weights": [
+        "1",
+        "1"
+      ],
+      "total": "2",
+      "bucket": "2",
+      "size": 4,
+      "samples": 20000,
+      "counts": [
+        9990,
+        10010
+      ]
+    },
+    {
+      "weights": [
+        "1",
+        "1"
+      ],
+      "total": "2",
+      "bucket": "2",
+      "size": 8,
+      "samples": 20000,
+      "counts": [
+        9858,
+        10142
+      ]
+    },
+    {
+      "weights": [
+        "1",
+        "1"
+      ],
+      "total": "2",
+      "bucket": "2",
+      "size": 16,
+      "samples": 20000,
+      "counts": [
+        9974,
+        10026
+      ]
+    },
+    {
+      "weights": [
+        "1",
+        "2"
+      ],
+      "total": "3",
+      "bucket": "4",
+      "size": 1,
+      "samples": 20000,
+      "counts": [
+        6682,
+        13318
+      ]
+    },
+    {
+      "weights": [
+        "1",
+        "2"
+      ],
+      "total": "3",
+      "bucket": "4",
+      "size": 2,
+      "samples": 20000,
+      "counts": [
+        6510,
+        13490
+      ]
+    },
+    {
+      "weights": [
+        "1",
+        "2"
+      ],
+      "total": "3",
+      "bucket": "4",
+      "size": 4,
+      "samples": 20000,
+      "counts": [
+        6666,
+        13334
+      ]
+    },
+    {
+      "weights": [
+        "1",
+        "2"
+      ],
+      "total": "3",
+      "bucket": "4",
+      "size": 8,
+      "samples": 20000,
+      "counts": [
+        6712,
+        13288
+      ]
+    },
+    {
+      "weights": [
+        "1",
+        "2"
+      ],
+      "total": "3",
+      "bucket": "4",
+      "size": 16,
+      "samples": 20000,
+      "counts": [
+        6648,
+        13352
+      ]
+    },
+    {
+      "weights": [
+        "1",
+        "2",
+        "7"
+      ],
+      "total": "10",
+      "bucket": "16",
+      "size": 1,
+      "samples": 20000,
+      "counts": [
+        1982,
+        3958,
+        14060
+      ]
+    },
+    {
+      "weights": [
+        "1",
+        "2",
+        "7"
+      ],
+      "total": "10",
+      "bucket": "16",
+      "size": 2,
+      "samples": 20000,
+      "counts": [
+        2030,
+        4015,
+        13955
+      ]
+    },
+    {
+      "weights": [
+        "1",
+        "2",
+        "7"
+      ],
+      "total": "10",
+      "bucket": "16",
+      "size": 4,
+      "samples": 20000,
+      "counts": [
+        1998,
+        4028,
+        13974
+      ]
+    },
+    {
+      "weights": [
+        "1",
+        "2",
+        "7"
+      ],
+      "total": "10",
+      "bucket": "16",
+      "size": 8,
+      "samples": 20000,
+      "counts": [
+        1939,
+        3945,
+        14116
+      ]
+    },
+    {
+      "weights": [
+        "1",
+        "2",
+        "7"
+      ],
+      "total": "10",
+      "bucket": "16",
+      "size": 16,
+      "samples": 20000,
+      "counts": [
+        2023,
+        3984,
+        13993
+      ]
+    },
+    {
+      "weights": [
+        "0",
+        "5",
+        "0"
+      ],
+      "total": "5",
+      "bucket": "8",
+      "size": 1,
+      "samples": 20000,
+      "counts": [
+        0,
+        20000,
+        0
+      ]
+    },
+    {
+      "weights": [
+        "0",
+        "5",
+        "0"
+      ],
+      "total": "5",
+      "bucket": "8",
+      "size": 2,
+      "samples": 20000,
+      "counts": [
+        0,
+        20000,
+        0
+      ]
+    },
+    {
+      "weights": [
+        "0",
+        "5",
+        "0"
+      ],
+      "total": "5",
+      "bucket": "8",
+      "size": 4,
+      "samples": 20000,
+      "counts": [
+        0,
+        20000,
+        0
+      ]
+    },
+    {
+      "weights": [
+        "0",
+        "5",
+        "0"
+      ],
+      "total": "5",
+      "bucket": "8",
+      "size": 8,
+      "samples": 20000,
+      "counts": [
+        0,
+        20000,
+        0
+      ]
+    },
+    {
+      "weights": [
+        "0",
+        "5",
+        "0"
+      ],
+      "total": "5",
+      "bucket": "8",
+      "size": 16,
+      "samples": 20000,
+      "counts": [
+        0,
+        20000,
+        0
+      ]
+    },
+    {
+      "weights": [
+        "97",
+        "3"
+      ],
+      "total": "100",
+      "bucket": "128",
+      "size": 1,
+      "samples": 20000,
+      "counts": [
+        19418,
+        582
+      ]
+    },
+    {
+      "weights": [
+        "97",
+        "3"
+      ],
+      "total": "100",
+      "bucket": "128",
+      "size": 2,
+      "samples": 20000,
+      "counts": [
+        19396,
+        604
+      ]
+    },
+    {
+      "weights": [
+        "97",
+        "3"
+      ],
+      "total": "100",
+      "bucket": "128",
+      "size": 4,
+      "samples": 20000,
+      "counts": [
+        19424,
+        576
+      ]
+    },
+    {
+      "weights": [
+        "97",
+        "3"
+      ],
+      "total": "100",
+      "bucket": "128",
+      "size": 8,
+      "samples": 20000,
+      "counts": [
+        19408,
+        592
+      ]
+    },
+    {
+      "weights": [
+        "97",
+        "3"
+      ],
+      "total": "100",
+      "bucket": "128",
+      "size": 16,
+      "samples": 20000,
+      "counts": [
+        19393,
+        607
+      ]
+    },
+    {
+      "weights": [
+        "1",
+        "1",
+        "1",
+        "1",
+        "1",
+        "1"
+      ],
+      "total": "6",
+      "bucket": "8",
+      "size": 1,
+      "samples": 20000,
+      "counts": [
+        3321,
+        3348,
+        3361,
+        3319,
+        3296,
+        3355
+      ]
+    },
+    {
+      "weights": [
+        "1",
+        "1",
+        "1",
+        "1",
+        "1",
+        "1"
+      ],
+      "total": "6",
+      "bucket": "8",
+      "size": 2,
+      "samples": 20000,
+      "counts": [
+        3333,
+        3360,
+        3330,
+        3389,
+        3306,
+        3282
+      ]
+    },
+    {
+      "weights": [
+        "1",
+        "1",
+        "1",
+        "1",
+        "1",
+        "1"
+      ],
+      "total": "6",
+      "bucket": "8",
+      "size": 4,
+      "samples": 20000,
+      "counts": [
+        3347,
+        3245,
+        3261,
+        3350,
+        3478,
+        3319
+      ]
+    },
+    {
+      "weights": [
+        "1",
+        "1",
+        "1",
+        "1",
+        "1",
+        "1"
+      ],
+      "total": "6",
+      "bucket": "8",
+      "size": 8,
+      "samples": 20000,
+      "counts": [
+        3306,
+        3340,
+        3394,
+        3279,
+        3329,
+        3352
+      ]
+    },
+    {
+      "weights": [
+        "1",
+        "1",
+        "1",
+        "1",
+        "1",
+        "1"
+      ],
+      "total": "6",
+      "bucket": "8",
+      "size": 16,
+      "samples": 20000,
+      "counts": [
+        3309,
+        3286,
+        3344,
+        3406,
+        3394,
+        3261
+      ]
+    },
+    {
+      "weights": [
+        "1099511627775",
+        "549755813888",
+        "17"
+      ],
+      "total": "1649267441680",
+      "bucket": "2199023255552",
+      "size": 1,
+      "samples": 20000,
+      "counts": [
+        13376,
+        6624,
+        0
+      ]
+    },
+    {
+      "weights": [
+        "1099511627775",
+        "549755813888",
+        "17"
+      ],
+      "total": "1649267441680",
+      "bucket": "2199023255552",
+      "size": 2,
+      "samples": 20000,
+      "counts": [
+        13366,
+        6634,
+        0
+      ]
+    },
+    {
+      "weights": [
+        "1099511627775",
+        "549755813888",
+        "17"
+      ],
+      "total": "1649267441680",
+      "bucket": "2199023255552",
+      "size": 4,
+      "samples": 20000,
+      "counts": [
+        13394,
+        6606,
+        0
+      ]
+    },
+    {
+      "weights": [
+        "1099511627775",
+        "549755813888",
+        "17"
+      ],
+      "total": "1649267441680",
+      "bucket": "2199023255552",
+      "size": 8,
+      "samples": 20000,
+      "counts": [
+        13313,
+        6687,
+        0
+      ]
+    },
+    {
+      "weights": [
+        "1099511627775",
+        "549755813888",
+        "17"
+      ],
+      "total": "1649267441680",
+      "bucket": "2199023255552",
+      "size": 16,
+      "samples": 20000,
+      "counts": [
+        13226,
+        6774,
+        0
+      ]
+    }
+  ],
+  "passed": true
+}

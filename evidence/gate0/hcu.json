@@ -1,0 +1,194 @@
+{
+  "schemaVersion": 1,
+  "measurementEnvironment": {
+    "network": "Hardhat in-process mock FHEVM",
+    "mockCryptography": true,
+    "plugin": "@fhevm/hardhat-plugin@0.4.2",
+    "hcuSource": "plugin transaction receipt event analysis",
+    "nodeActuallyUsed": "v22.23.2"
+  },
+  "currentDocumentedLimits": {
+    "globalHCU": 20000000,
+    "sequentialHCU": 5000000,
+    "classification": "VERIFIED FACT; not a local measurement"
+  },
+  "testAssertions": 262,
+  "measurements": [
+    {
+      "operation": "encrypted-total-ingest",
+      "status": "MEASURED LOCALLY",
+      "evmGas": "185797",
+      "globalHCU": 0,
+      "sequentialHCU": 0
+    },
+    {
+      "operation": "bucket-computation",
+      "status": "MEASURED LOCALLY",
+      "evmGas": "795573",
+      "globalHCU": 4056064,
+      "sequentialHCU": 1923032
+    },
+    {
+      "operation": "candidate-generation-and-validation",
+      "batchSize": 1,
+      "status": "MEASURED LOCALLY",
+      "evmGas": "214866",
+      "globalHCU": 240000,
+      "sequentialHCU": 240000
+    },
+    {
+      "operation": "serial-reduction",
+      "batchSize": 1,
+      "status": "MEASURED LOCALLY",
+      "evmGas": "228099",
+      "globalHCU": 106066,
+      "sequentialHCU": 82034
+    },
+    {
+      "operation": "balanced-reduction",
+      "batchSize": 1,
+      "status": "MEASURED LOCALLY",
+      "evmGas": "150945",
+      "globalHCU": 57032,
+      "sequentialHCU": 57032
+    },
+    {
+      "operation": "candidate-generation-and-validation",
+      "batchSize": 2,
+      "status": "MEASURED LOCALLY",
+      "evmGas": "314844",
+      "globalHCU": 480000,
+      "sequentialHCU": 240000
+    },
+    {
+      "operation": "serial-reduction",
+      "batchSize": 2,
+      "status": "MEASURED LOCALLY",
+      "evmGas": "281455",
+      "globalHCU": 212068,
+      "sequentialHCU": 139034
+    },
+    {
+      "operation": "balanced-reduction",
+      "batchSize": 2,
+      "status": "MEASURED LOCALLY",
+      "evmGas": "206764",
+      "globalHCU": 138032,
+      "sequentialHCU": 114000
+    },
+    {
+      "operation": "candidate-generation-and-validation",
+      "batchSize": 4,
+      "status": "MEASURED LOCALLY",
+      "evmGas": "548983",
+      "globalHCU": 960000,
+      "sequentialHCU": 240000
+    },
+    {
+      "operation": "serial-reduction",
+      "batchSize": 4,
+      "status": "MEASURED LOCALLY",
+      "evmGas": "388168",
+      "globalHCU": 424072,
+      "sequentialHCU": 253034
+    },
+    {
+      "operation": "balanced-reduction",
+      "batchSize": 4,
+      "status": "MEASURED LOCALLY",
+      "evmGas": "274722",
+      "globalHCU": 300032,
+      "sequentialHCU": 171000
+    },
+    {
+      "operation": "candidate-generation-and-validation",
+      "batchSize": 8,
+      "status": "MEASURED LOCALLY",
+      "evmGas": "1017245",
+      "globalHCU": 1920000,
+      "sequentialHCU": 240000
+    },
+    {
+      "operation": "serial-reduction",
+      "batchSize": 8,
+      "status": "MEASURED LOCALLY",
+      "evmGas": "601594",
+      "globalHCU": 848080,
+      "sequentialHCU": 481034
+    },
+    {
+      "operation": "balanced-reduction",
+      "batchSize": 8,
+      "status": "MEASURED LOCALLY",
+      "evmGas": "410420",
+      "globalHCU": 624032,
+      "sequentialHCU": 228000
+    },
+    {
+      "operation": "candidate-generation-and-validation",
+      "batchSize": 16,
+      "status": "MEASURED LOCALLY",
+      "evmGas": "1953742",
+      "globalHCU": 3840000,
+      "sequentialHCU": 240000
+    },
+    {
+      "operation": "serial-reduction",
+      "batchSize": 16,
+      "status": "MEASURED LOCALLY",
+      "evmGas": "1028449",
+      "globalHCU": 1696096,
+      "sequentialHCU": 937034
+    },
+    {
+      "operation": "balanced-reduction",
+      "batchSize": 16,
+      "status": "MEASURED LOCALLY",
+      "evmGas": "681601",
+      "globalHCU": 1272032,
+      "sequentialHCU": 285000
+    },
+    {
+      "operation": "prefix-selection",
+      "participantCount": 1,
+      "status": "MEASURED LOCALLY",
+      "evmGas": "435952",
+      "globalHCU": 976096,
+      "sequentialHCU": 758064
+    },
+    {
+      "operation": "prefix-selection",
+      "participantCount": 2,
+      "status": "MEASURED LOCALLY",
+      "evmGas": "583478",
+      "globalHCU": 1952128,
+      "sequentialHCU": 1017064
+    },
+    {
+      "operation": "prefix-selection",
+      "participantCount": 4,
+      "status": "MEASURED LOCALLY",
+      "evmGas": "881573",
+      "globalHCU": 3904192,
+      "sequentialHCU": 1535064
+    },
+    {
+      "operation": "prefix-selection",
+      "participantCount": 8,
+      "status": "MEASURED LOCALLY",
+      "evmGas": "1489437",
+      "globalHCU": 7808320,
+      "sequentialHCU": 2571064
+    },
+    {
+      "operation": "prefix-selection",
+      "participantCount": 16,
+      "status": "MEASURED LOCALLY",
+      "evmGas": "2752630",
+      "globalHCU": 15616576,
+      "sequentialHCU": 4643064
+    }
+  ],
+  "publicDecryptionLatency": "NOT MEASURED LOCALLY",
+  "kmsRoundTripLatency": "NOT MEASURED LOCALLY"
+}

@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "types": ["node", "mocha"],
+    "outDir": "dist"
+  },
+  "include": ["hardhat.config.ts", "test/**/*.ts"]
+}

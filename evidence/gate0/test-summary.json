@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "generatedAfterSuccessfulGate0Command": true,
+  "referenceModel": {
+    "passed": true,
+    "mochaTests": 6
+  },
+  "exhaustive": {
+    "passed": true,
+    "tuplesChecked": 7052
+  },
+  "statisticalSanity": {
+    "passed": true
+  },
+  "solidityMock": {
+    "passed": true,
+    "mochaTests": 26,
+    "assertions": 262,
+    "allMeasurementsCompleted": true
+  },
+  "liveSepolia": "NOT RUN",
+  "finalStatus": "CONDITIONAL"
+}

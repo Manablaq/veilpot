@@ -1,0 +1,19 @@
+{
+  "name": "@veilpot/reference-model",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/model.js",
+  "types": "dist/model.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "test": "mocha --import=tsx 'test/**/*.test.ts'",
+    "gate0": "node --import=tsx src/generate-evidence.ts && mocha --import=tsx 'test/**/*.test.ts'"
+  },
+  "devDependencies": {
+    "@types/chai": "4.3.20",
+    "@types/mocha": "10.0.10",
+    "chai": "4.5.0",
+    "mocha": "11.7.5"
+  }
+}

@@ -1,0 +1,13 @@
+node_modules/
+dist/
+artifacts/
+cache/
+coverage/
+typechain-types/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+.DS_Store
+fhevmTemp/
+.tooling/

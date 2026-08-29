@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "implementation": "independent strict-TypeScript bigint model",
+  "exportedFunctions": [
+    "nextPowerOfTwoBucket",
+    "candidateValid",
+    "serialFirstValid",
+    "balancedFirstValid",
+    "selectWinnerFromPrefixes",
+    "batchFailureProbability",
+    "expectedBatchAttempts"
+  ],
+  "candidateSizes": [
+    {
+      "size": 1,
+      "strictWorstCaseFailureUpperBound": {
+        "numerator": "1",
+        "denominator": "2",
+        "decimal": "0.5"
+      }
+    },
+    {
+      "size": 2,
+      "strictWorstCaseFailureUpperBound": {
+        "numerator": "1",
+        "denominator": "4",
+        "decimal": "0.25"
+      }
+    },
+    {
+      "size": 4,
+      "strictWorstCaseFailureUpperBound": {
+        "numerator": "1",
+        "denominator": "16",
+        "decimal": "0.0625"
+      }
+    },
+    {
+      "size": 8,
+      "strictWorstCaseFailureUpperBound": {
+        "numerator": "1",
+        "denominator": "256",
+        "decimal": "0.00390625"
+      }
+    },
+    {
+      "size": 16,
+      "strictWorstCaseFailureUpperBound": {
+        "numerator": "1",
+        "denominator": "65536",
+        "decimal": "0.0000152587890625"
+      }
+    }
+  ],
+  "zeroTotal": "rejected before candidate generation",
+  "deterministicSeed": "6216455452567421271",
+  "passed": true
+}

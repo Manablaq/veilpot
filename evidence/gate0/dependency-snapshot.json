@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "generatedFrom": [
+    "package.json",
+    "packages/contracts/package.json",
+    "pnpm-lock.yaml"
+  ],
+  "runtime": {
+    "requiredNode": ">=22 <23",
+    "nodeActuallyUsed": "v22.23.2",
+    "packageManager": "pnpm@10.18.3"
+  },
+  "criticalDependencies": {
+    "hardhat": "2.28.6",
+    "@fhevm/solidity": "0.11.1",
+    "@fhevm/hardhat-plugin": "0.4.2",
+    "@fhevm/mock-utils": "0.4.2",
+    "@openzeppelin/confidential-contracts": "0.5.3",
+    "ethers": "6.16.0",
+    "typescript": "5.9.3",
+    "mocha": "11.7.5",
+    "@zama-fhe/relayer-sdk": "0.4.1"
+  },
+  "futureFrontendSdkRegistryBaseline": {
+    "@zama-fhe/sdk": "3.5.1",
+    "@zama-fhe/react-sdk": "3.5.1",
+    "installedInGate0": false,
+    "source": "npm registry metadata queried 2026-08-29"
+  },
+  "exactPinsVerified": true
+}
