@@ -85,6 +85,15 @@ permit candidate sampling from an empty range. No batch is generated for zero.
 - production proof-relay incentives/censorship handling;
 - safe chunked settlement using one immutable target and encrypted carried prefix.
 
+## Sepolia runner preparation
+
+**DESIGN DECISION:** the reproducible non-secret Sepolia runner is prepared in
+`packages/contracts/scripts/run-sepolia.ts` and is documented in
+[`GATE_0_SEPOLIA_VERIFICATION.md`](GATE_0_SEPOLIA_VERIFICATION.md). It creates live evidence only
+after a real broadcast, stores no protected cleartext or credential, and resumes from public
+contract state. At this decision revision, no Sepolia credentials were configured and no transaction
+was broadcast; this is not live verification evidence.
+
 ## Required Sepolia tests
 
 1. Deploy the exact compiled probe through `ZamaEthereumConfig` and confirm current addresses and

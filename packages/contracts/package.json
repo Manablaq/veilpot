@@ -6,7 +6,11 @@
     "compile": "cross-env TS_NODE_TRANSPILE_ONLY=true hardhat compile",
     "lint:sol": "solhint --max-warnings 0 'contracts/**/*.sol'",
     "test": "hardhat test",
-    "test:gate0": "hardhat test test/VeilDrawProbe.test.ts"
+    "test:gate0": "hardhat test test/VeilDrawProbe.test.ts",
+    "live:sepolia": "hardhat run --network sepolia scripts/run-sepolia.ts",
+    "live:sepolia:interrupt": "cross-env VEILPOT_LIVE_STOP_AFTER=batch-generated hardhat run --network sepolia scripts/run-sepolia.ts",
+    "live:sepolia:failure-drill": "cross-env VEILPOT_LIVE_RUN_FAILURE_DRILL=true hardhat run --network sepolia scripts/run-sepolia.ts",
+    "live:sepolia:finalize": "cross-env VEILPOT_LIVE_FINALIZE=true hardhat run --network sepolia scripts/run-sepolia.ts"
   },
   "dependencies": {
     "@fhevm/solidity": "0.11.1",

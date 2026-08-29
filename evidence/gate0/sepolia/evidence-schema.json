@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "generatedOnlyAfterLiveExecution": true,
+  "requiredProvenanceFields": [
+    "localGate0BaselineCommit",
+    "liveVerificationToolingCommit"
+  ],
+  "requiredFinalizationEvidence": [
+    "unauthorized-user-decrypt-total: expected DENIED and actual DENIED"
+  ],
+  "requiredArtifacts": [
+    "deployment.json",
+    "run-summary.json",
+    "transactions.json",
+    "privacy-probes.json",
+    "proof-binding.json",
+    "anti-grinding.json",
+    "zero-total.json",
+    "recovery.json",
+    "performance.json",
+    "source-parity.json"
+  ],
+  "secretPolicy": "No private keys, RPC URLs, proofs, or protected cleartexts may be recorded."
+}
