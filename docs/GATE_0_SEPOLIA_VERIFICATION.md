@@ -2,17 +2,19 @@
 
 ## Status
 
-**CONDITIONAL — PARTIAL OFFICIAL LIVE EVIDENCE EXISTS, BUT IS NOT FINALIZED.** This record contains
-the reproducible live-probe plan, tooling incidents, and measured partial Sepolia results. Gate 0
-remains `CONDITIONAL` until the generated `evidence/gate0/sepolia/` artifacts contain all required
-transaction references and every mandatory scenario is complete.
+The historical pre-finalization status was **CONDITIONAL — PARTIAL OFFICIAL LIVE EVIDENCE EXISTS,
+BUT IS NOT FINALIZED.** This record retains the reproducible live-probe plan, tooling incidents,
+and measured partial Sepolia results.
 
 The first finalization attempt under `58ad8c0b464e0dca68b0a98e80bb5dcacd29e883` completed without an
 Ethereum transaction but emitted an invalid snapshot: it captured its own invocation before the
 terminal status was persisted, omitted an explicit final decision, and did not materialize all
 execution-mode/provenance fields. That snapshot is archived in Git metadata and recorded as a
-`FINALIZATION_EVIDENCE_EMISSION_DEFECT` tooling incident. The corrected emitter is being reviewed;
-the current protocol status is `PASS_READY_TO_FINALIZE`, not yet `FINALIZED`.
+`FINALIZATION_EVIDENCE_EMISSION_DEFECT` tooling incident. The corrected emitter under
+`d8a305c03d0734626bb04909571bac3f4805d37c` subsequently emitted and validated the final bundle
+(invocation `d5a3fc45-565c-419e-9880-db45d80c9ab7`).
+
+**CURRENT GATE 0 STATUS: PASS / FINALIZED.**
 
 Final evidence publication uses `final-bundle-manifest.json` as its commit marker. Component JSON
 files without that marker, matching SHA-256 hashes, terminal finalization metadata, and a PASS

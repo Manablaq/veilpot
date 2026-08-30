@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "localGate0BaselineCommit": "5b8483569b8ca63b821e7eb5ef5333ff86917b79",
+  "liveVerificationToolingCommit": "10742cd4de1330970b4e38a87d4f7dded4b0fb97",
+  "liveVerificationToolingRevisions": [
+    "10742cd4de1330970b4e38a87d4f7dded4b0fb97",
+    "9c9c54863e44e3aae55b344a3cb8c0d8bdf261ba",
+    "58ad8c0b464e0dca68b0a98e80bb5dcacd29e883",
+    "d8a305c03d0734626bb04909571bac3f4805d37c"
+  ],
+  "probes": [
+    {
+      "label": "candidate-batch-generated",
+      "state": "AwaitingBatchProof",
+      "resumeRequired": true
+    },
+    {
+      "label": "intentional-interruption",
+      "actual": "STOPPED_AFTER_BATCH_GENERATION"
+    },
+    {
+      "label": "interruption-resume",
+      "actual": "RESUMED_WITHOUT_NEW_CANDIDATE_BATCH"
+    }
+  ]
+}

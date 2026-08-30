@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "localGate0BaselineCommit": "5b8483569b8ca63b821e7eb5ef5333ff86917b79",
+  "liveVerificationToolingCommit": "10742cd4de1330970b4e38a87d4f7dded4b0fb97",
+  "liveVerificationToolingRevisions": [
+    "10742cd4de1330970b4e38a87d4f7dded4b0fb97",
+    "9c9c54863e44e3aae55b344a3cb8c0d8bdf261ba",
+    "58ad8c0b464e0dca68b0a98e80bb5dcacd29e883",
+    "d8a305c03d0734626bb04909571bac3f4805d37c"
+  ],
+  "finalGateDecision": "PASS",
+  "finalizationStatus": "FINALIZED",
+  "finalizationInvocationId": "d5a3fc45-565c-419e-9880-db45d80c9ab7",
+  "status": "FINALIZED",
+  "evidenceTaxonomy": {
+    "localHcu": "DETERMINISTIC_FOR_IDENTICAL_MOCK_OPERATION",
+    "localEvmGas": "RUN_SPECIFIC",
+    "liveEvmGas": "OBSERVED_SEPOLIA_RECEIPT_VALUE",
+    "liveHcuDepth": "NOT_DIRECTLY_OBSERVABLE_ON_LIVE_SEPOLIA",
+    "duplicateRunnerExclusion": "PASS_LOCAL_WITH_LIVE_NONMUTATION_CORROBORATION",
+    "boundedRetrySemantics": "PASS_LOCAL; live run respected the six-new-batch cap and stopped on success before BOUNDED_STOP",
+    "reductionEquivalence": "PASS_WITH_DISCLOSED_LIMITATION"
+  },
+  "primaryDeployment": {
+    "contractAddress": "0x77CAB2cE4706523320cdFc51Adb5BEE1bb27FB91",
+    "deploymentTransactionHash": "0x02db47c735d5da384d51269298098d4ed81af3530530832c993b2a513f1d73ae",
+    "deploymentBlockNumber": 11596932,
+    "timestamp": "2026-08-30T06:01:37.856Z"
+  },
+  "invocations": [
+    {
+      "invocationId": "77d33373-a83c-42a1-b439-a8d41349dad4",
+      "runnerMode": "failure-retry-drill",
+      "startedAt": "2026-08-30T15:33:10.388Z",
+      "startingConfirmedNonce": 457,
+      "toolingCommit": "9c9c54863e44e3aae55b344a3cb8c0d8bdf261ba",
+      "deployerAddress": "0x1f87Ae197af539253978d435aD45cCf28Fb95024",
+      "status": "COMPLETED",
+      "stage": "runner-completed",
+      "completedAt": "2026-08-30T15:39:49.363Z"
+    },
+    {
+      "invocationId": "32cca5be-510f-4454-b495-85aabc4948af",
+      "runnerMode": "finalize",
+      "startedAt": "2026-08-30T18:15:30.872Z",
+      "startingConfirmedNonce": 487,
+      "toolingCommit": "58ad8c0b464e0dca68b0a98e80bb5dcacd29e883",
+      "deployerAddress": "0x1f87Ae197af539253978d435aD45cCf28Fb95024",
+      "status": "COMPLETED",
+      "stage": "runner-completed",
+      "completedAt": "2026-08-30T18:15:38.529Z"
+    },
+    {
+      "invocationId": "d5a3fc45-565c-419e-9880-db45d80c9ab7",
+      "runnerMode": "finalize",
+      "startedAt": "2026-08-30T18:58:20.917Z",
+      "startingConfirmedNonce": 487,
+      "toolingCommit": "d8a305c03d0734626bb04909571bac3f4805d37c",
+      "deployerAddress": "0x1f87Ae197af539253978d435aD45cCf28Fb95024",
+      "status": "COMPLETED",
+      "stage": "runner-completed",
+      "completedAt": "2026-08-30T18:58:29.013Z"
+    }
+  ],
+  "noSecretValuesRecorded": true
+}

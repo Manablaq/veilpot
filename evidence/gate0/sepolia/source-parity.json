@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "localGate0BaselineCommit": "5b8483569b8ca63b821e7eb5ef5333ff86917b79",
+  "liveVerificationToolingCommit": "10742cd4de1330970b4e38a87d4f7dded4b0fb97",
+  "liveVerificationToolingRevisions": [
+    "10742cd4de1330970b4e38a87d4f7dded4b0fb97",
+    "9c9c54863e44e3aae55b344a3cb8c0d8bdf261ba",
+    "58ad8c0b464e0dca68b0a98e80bb5dcacd29e883",
+    "d8a305c03d0734626bb04909571bac3f4805d37c"
+  ],
+  "repositoryArtifactToOnChainRuntimeMatch": true,
+  "artifactRuntimeBytecodeHash": "0xa0098465cd670a0b150f52035cd9677da4fa1de34fd0d917120146a8cd57899f",
+  "onChainRuntimeBytecodeHash": "0xa0098465cd670a0b150f52035cd9677da4fa1de34fd0d917120146a8cd57899f",
+  "sourceVerification": "NOT_ATTEMPTED_BY_RUNNER; record an external Sourcify result only if actually returned"
+}

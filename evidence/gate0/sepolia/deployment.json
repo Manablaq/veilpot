@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "chainId": 11155111,
+  "network": "sepolia",
+  "deploymentTimestamp": "2026-08-30T06:01:37.856Z",
+  "deploymentTransactionHash": "0x02db47c735d5da384d51269298098d4ed81af3530530832c993b2a513f1d73ae",
+  "contractAddress": "0x77CAB2cE4706523320cdFc51Adb5BEE1bb27FB91",
+  "deployerAddress": "0x1f87Ae197af539253978d435aD45cCf28Fb95024",
+  "localGate0BaselineCommit": "5b8483569b8ca63b821e7eb5ef5333ff86917b79",
+  "liveVerificationToolingCommit": "10742cd4de1330970b4e38a87d4f7dded4b0fb97",
+  "liveVerificationToolingRevisions": [
+    "10742cd4de1330970b4e38a87d4f7dded4b0fb97",
+    "9c9c54863e44e3aae55b344a3cb8c0d8bdf261ba",
+    "58ad8c0b464e0dca68b0a98e80bb5dcacd29e883",
+    "d8a305c03d0734626bb04909571bac3f4805d37c"
+  ],
+  "solidityCompilerVersion": "0.8.27",
+  "optimizer": {
+    "enabled": true,
+    "runs": 800
+  },
+  "metadata": {
+    "bytecodeHash": "none"
+  },
+  "evmVersion": "cancun",
+  "abiHash": "0x2308c02549cec7f3fa015108ff7b92aa6926b716302a85f8d04301ab7ab6d7dd",
+  "creationBytecodeHash": "0x6d30663a31d695fc6bfbc7efe4d2d9dc086f5c4f7ceb5823c6fa6a46a4f4ca6b",
+  "artifactRuntimeBytecodeHash": "0xa0098465cd670a0b150f52035cd9677da4fa1de34fd0d917120146a8cd57899f",
+  "onChainRuntimeBytecodeHash": "0xa0098465cd670a0b150f52035cd9677da4fa1de34fd0d917120146a8cd57899f",
+  "sourceHash": "0x20c3af2758c3bc9928314534169a21b3f8d733da4d15ae312ee36b1d6bbd53ef",
+  "dependencyVersions": {
+    "fhevmSolidity": "0.11.1",
+    "fhevmHardhatPlugin": "0.4.2",
+    "relayerSdk": "0.4.1"
+  }
+}

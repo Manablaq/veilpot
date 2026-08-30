@@ -1,0 +1,164 @@
+{
+  "schemaVersion": 1,
+  "localGate0BaselineCommit": "5b8483569b8ca63b821e7eb5ef5333ff86917b79",
+  "liveVerificationToolingCommit": "10742cd4de1330970b4e38a87d4f7dded4b0fb97",
+  "liveVerificationToolingRevisions": [
+    "10742cd4de1330970b4e38a87d4f7dded4b0fb97",
+    "9c9c54863e44e3aae55b344a3cb8c0d8bdf261ba",
+    "58ad8c0b464e0dca68b0a98e80bb5dcacd29e883",
+    "d8a305c03d0734626bb04909571bac3f4805d37c"
+  ],
+  "probes": [
+    {
+      "label": "successful-batch-reroll",
+      "expected": "REVERT",
+      "actual": "REVERTED",
+      "error": {
+        "category": "ProviderError",
+        "code": 3,
+        "shortMessagePresent": false
+      },
+      "executionMode": "STATICCALL_REJECTION",
+      "ethereumTransactionBroadcast": false,
+      "executionModeEvidence": "LEGACY_EXPECTED_FAILURE_STATICCALL_PATH"
+    },
+    {
+      "label": "primary-success-irreversible",
+      "actualState": "4",
+      "expectedState": "4"
+    },
+    {
+      "label": "failure-retry-before-valid-failure-proof",
+      "expected": "REVERT",
+      "actual": "REVERTED",
+      "error": {
+        "category": "ProviderError",
+        "code": 3,
+        "shortMessagePresent": false
+      },
+      "executionMode": "STATICCALL_REJECTION",
+      "ethereumTransactionBroadcast": false,
+      "executionModeEvidence": "LEGACY_EXPECTED_FAILURE_STATICCALL_PATH"
+    },
+    {
+      "label": "failure-retry-after-proven-failure",
+      "actual": "PASSED",
+      "firstBatchCleartextRecorded": false,
+      "secondBatchCleartextRecorded": false
+    },
+    {
+      "label": "failure-retry-drill:retry-before-valid-failure-proof-batch-3",
+      "expected": "REVERT",
+      "actual": "REVERTED",
+      "error": {
+        "category": "ProviderError",
+        "code": 3,
+        "shortMessagePresent": false
+      },
+      "invocationId": "77d33373-a83c-42a1-b439-a8d41349dad4",
+      "executionMode": "STATICCALL_REJECTION",
+      "ethereumTransactionBroadcast": false,
+      "executionModeEvidence": "LEGACY_EXPECTED_FAILURE_STATICCALL_PATH"
+    },
+    {
+      "label": "failure-retry-drill:failure-proof-accepted-batch-3",
+      "actual": "PASSED",
+      "protectedCleartextRecorded": false,
+      "invocationId": "77d33373-a83c-42a1-b439-a8d41349dad4"
+    },
+    {
+      "label": "failure-retry-drill:retry-before-valid-failure-proof-batch-4",
+      "expected": "REVERT",
+      "actual": "REVERTED",
+      "error": {
+        "category": "ProviderError",
+        "code": 3,
+        "shortMessagePresent": false
+      },
+      "invocationId": "77d33373-a83c-42a1-b439-a8d41349dad4",
+      "executionMode": "STATICCALL_REJECTION",
+      "ethereumTransactionBroadcast": false,
+      "executionModeEvidence": "LEGACY_EXPECTED_FAILURE_STATICCALL_PATH"
+    },
+    {
+      "label": "failure-retry-drill:failure-proof-accepted-batch-4",
+      "actual": "PASSED",
+      "protectedCleartextRecorded": false,
+      "invocationId": "77d33373-a83c-42a1-b439-a8d41349dad4"
+    },
+    {
+      "label": "failure-retry-drill:retry-before-valid-failure-proof-batch-5",
+      "expected": "REVERT",
+      "actual": "REVERTED",
+      "error": {
+        "category": "ProviderError",
+        "code": 3,
+        "shortMessagePresent": false
+      },
+      "invocationId": "77d33373-a83c-42a1-b439-a8d41349dad4",
+      "executionMode": "STATICCALL_REJECTION",
+      "ethereumTransactionBroadcast": false,
+      "executionModeEvidence": "LEGACY_EXPECTED_FAILURE_STATICCALL_PATH"
+    },
+    {
+      "label": "failure-retry-drill:failure-proof-accepted-batch-5",
+      "actual": "PASSED",
+      "protectedCleartextRecorded": false,
+      "invocationId": "77d33373-a83c-42a1-b439-a8d41349dad4"
+    },
+    {
+      "label": "failure-retry-drill:retry-before-valid-failure-proof-batch-6",
+      "expected": "REVERT",
+      "actual": "REVERTED",
+      "error": {
+        "category": "ProviderError",
+        "code": 3,
+        "shortMessagePresent": false
+      },
+      "invocationId": "77d33373-a83c-42a1-b439-a8d41349dad4",
+      "executionMode": "STATICCALL_REJECTION",
+      "ethereumTransactionBroadcast": false,
+      "executionModeEvidence": "LEGACY_EXPECTED_FAILURE_STATICCALL_PATH"
+    },
+    {
+      "label": "failure-retry-drill:failure-proof-accepted-batch-6",
+      "actual": "PASSED",
+      "protectedCleartextRecorded": false,
+      "invocationId": "77d33373-a83c-42a1-b439-a8d41349dad4"
+    },
+    {
+      "label": "failure-retry-drill:retry-before-valid-failure-proof-batch-7",
+      "expected": "REVERT",
+      "actual": "REVERTED",
+      "error": {
+        "category": "ProviderError",
+        "code": 3,
+        "shortMessagePresent": false
+      },
+      "invocationId": "77d33373-a83c-42a1-b439-a8d41349dad4",
+      "executionMode": "STATICCALL_REJECTION",
+      "ethereumTransactionBroadcast": false,
+      "executionModeEvidence": "LEGACY_EXPECTED_FAILURE_STATICCALL_PATH"
+    },
+    {
+      "label": "failure-retry-drill:failure-proof-accepted-batch-7",
+      "actual": "PASSED",
+      "protectedCleartextRecorded": false,
+      "invocationId": "77d33373-a83c-42a1-b439-a8d41349dad4"
+    },
+    {
+      "label": "failure-retry-drill-successful-batch-reroll",
+      "expected": "REVERT",
+      "actual": "REVERTED",
+      "error": {
+        "category": "ProviderError",
+        "code": 3,
+        "shortMessagePresent": false
+      },
+      "invocationId": "77d33373-a83c-42a1-b439-a8d41349dad4",
+      "executionMode": "STATICCALL_REJECTION",
+      "ethereumTransactionBroadcast": false,
+      "executionModeEvidence": "LEGACY_EXPECTED_FAILURE_STATICCALL_PATH"
+    }
+  ]
+}

@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "localGate0BaselineCommit": "5b8483569b8ca63b821e7eb5ef5333ff86917b79",
+  "liveVerificationToolingCommit": "10742cd4de1330970b4e38a87d4f7dded4b0fb97",
+  "liveVerificationToolingRevisions": [
+    "10742cd4de1330970b4e38a87d4f7dded4b0fb97",
+    "9c9c54863e44e3aae55b344a3cb8c0d8bdf261ba",
+    "58ad8c0b464e0dca68b0a98e80bb5dcacd29e883",
+    "d8a305c03d0734626bb04909571bac3f4805d37c"
+  ],
+  "measurements": [
+    {
+      "operation": "primary:bucket-public-decrypt",
+      "observedSepolia": true,
+      "durationMilliseconds": 6942
+    },
+    {
+      "operation": "primary:batch-success-public-decrypt",
+      "observedSepolia": true,
+      "durationMilliseconds": 2982
+    },
+    {
+      "operation": "prefix-selection",
+      "participantCount": 4,
+      "observedSepolia": true,
+      "gasUsed": "1212482",
+      "liveHcuDepth": "NOT_DIRECTLY_OBSERVABLE_ON_LIVE_SEPOLIA"
+    },
+    {
+      "operation": "prefix-selection",
+      "participantCount": 8,
+      "observedSepolia": true,
+      "gasUsed": "1803981",
+      "liveHcuDepth": "NOT_DIRECTLY_OBSERVABLE_ON_LIVE_SEPOLIA"
+    },
+    {
+      "operation": "prefix-selection",
+      "participantCount": 12,
+      "observedSepolia": true,
+      "gasUsed": "2460913",
+      "liveHcuDepth": "NOT_DIRECTLY_OBSERVABLE_ON_LIVE_SEPOLIA"
+    },
+    {
+      "operation": "prefix-selection",
+      "participantCount": 16,
+      "observedSepolia": true,
+      "gasUsed": "3138093",
+      "liveHcuDepth": "NOT_DIRECTLY_OBSERVABLE_ON_LIVE_SEPOLIA"
+    },
+    {
+      "operation": "failure-retry-drill:batch-success-public-decrypt",
+      "batchId": "3",
+      "observedSepolia": true,
+      "durationMilliseconds": 2959,
+      "invocationId": "77d33373-a83c-42a1-b439-a8d41349dad4"
+    },
+    {
+      "operation": "failure-retry-drill:batch-success-public-decrypt",
+      "batchId": "4",
+      "observedSepolia": true,
+      "durationMilliseconds": 2894,
+      "invocationId": "77d33373-a83c-42a1-b439-a8d41349dad4"
+    },
+    {
+      "operation": "failure-retry-drill:batch-success-public-decrypt",
+      "batchId": "5",
+      "observedSepolia": true,
+      "durationMilliseconds": 2969,
+      "invocationId": "77d33373-a83c-42a1-b439-a8d41349dad4"
+    },
+    {
+      "operation": "failure-retry-drill:batch-success-public-decrypt",
+      "batchId": "6",
+      "observedSepolia": true,
+      "durationMilliseconds": 2920,
+      "invocationId": "77d33373-a83c-42a1-b439-a8d41349dad4"
+    },
+    {
+      "operation": "failure-retry-drill:batch-success-public-decrypt",
+      "batchId": "7",
+      "observedSepolia": true,
+      "durationMilliseconds": 2935,
+      "invocationId": "77d33373-a83c-42a1-b439-a8d41349dad4"
+    },
+    {
+      "operation": "failure-retry-drill:batch-success-public-decrypt",
+      "batchId": "8",
+      "observedSepolia": true,
+      "durationMilliseconds": 3110,
+      "invocationId": "77d33373-a83c-42a1-b439-a8d41349dad4"
+    }
+  ],
+  "liveHcu": "NOT_DIRECTLY_OBSERVABLE_ON_LIVE_SEPOLIA unless an authoritative endpoint is added",
+  "measurementTaxonomy": {
+    "localHcu": "DETERMINISTIC_FOR_IDENTICAL_MOCK_OPERATION",
+    "localEvmGas": "RUN_SPECIFIC",
+    "liveEvmGas": "OBSERVED_SEPOLIA_RECEIPT_VALUE",
+    "liveHcuDepth": "NOT_DIRECTLY_OBSERVABLE_ON_LIVE_SEPOLIA"
+  }
+}

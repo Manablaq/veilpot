@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "finalGateDecision": "PASS",
+  "finalizationStatus": "FINALIZED",
+  "finalizationInvocationId": "d5a3fc45-565c-419e-9880-db45d80c9ab7",
+  "toolingCommit": "d8a305c03d0734626bb04909571bac3f4805d37c",
+  "liveVerificationToolingRevisions": [
+    "10742cd4de1330970b4e38a87d4f7dded4b0fb97",
+    "9c9c54863e44e3aae55b344a3cb8c0d8bdf261ba",
+    "58ad8c0b464e0dca68b0a98e80bb5dcacd29e883",
+    "d8a305c03d0734626bb04909571bac3f4805d37c"
+  ],
+  "localGate0BaselineCommit": "5b8483569b8ca63b821e7eb5ef5333ff86917b79",
+  "createdAt": "2026-08-30T18:58:20.917Z",
+  "completedAt": "2026-08-30T18:58:29.013Z",
+  "artifactSha256": {
+    "deployment.json": "0xd296c716224182da86f843bba6c552d02e3d4405539c7100646491c923a95761",
+    "run-summary.json": "0x086b176116c11228882c110654ceb24a934832f6065fe96f6a4779466319b959",
+    "transactions.json": "0xdee946c9bfa0975752b963c570a3e957bffa743399f0fd8db6335dac8827737c",
+    "privacy-probes.json": "0xd5513cc7571b06e96edef269a85cd93c8172c99a8cd65a1676cbbcf3db5e5bde",
+    "proof-binding.json": "0x3bc178b9076d12316abf2465030d345bdb9b026043128523180ba90549e99d9b",
+    "anti-grinding.json": "0xc366dfae1085a5eecb391adaf9a08be8dcde5673b6df7994e0c43f8618192589",
+    "zero-total.json": "0xf3d1c6fae7d5ed6114e7cc18bb18dbaf214521d5eb7b15fed150290dd8b08aa4",
+    "recovery.json": "0xf6b786950238141bc2d4e36549ec341cc01779e7a4ea7dcaa26addb00aef9306",
+    "performance.json": "0x07b9afdc78cff63d139c52d9bc40acc42d6f6341f24a07b4686c92bf7f72d3a7",
+    "source-parity.json": "0xac3c7fd337a27c8b15e572ff22650a4dd1006f19b493e276ede748fa5f865810"
+  },
+  "artifactCount": 10
+}

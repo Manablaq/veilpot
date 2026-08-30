@@ -6,10 +6,13 @@ The immutable local/pre-live baseline decision was **CONDITIONAL**: Sepolia evid
 required at that point. The complete live protocol audit subsequently reached
 `PASS_READY_TO_FINALIZE`. The first finalization emission was rejected as evidence because its
 snapshot was incomplete (see the finalization-emission incident record); it did not mutate protocol
-state. The current status remains **PASS_READY_TO_FINALIZE** until the corrected finalizer emits a
-validated bundle with `finalGateDecision: PASS` and `finalizationStatus: FINALIZED`. A future
-successful corrected emission may then record the current final Gate 0 decision as **PASS** without
-deleting this historical CONDITIONAL record.
+state. The corrected finalizer under `d8a305c03d0734626bb04909571bac3f4805d37c` then emitted a
+validated bundle whose marker is `PASS` / `FINALIZED` (invocation
+`d5a3fc45-565c-419e-9880-db45d80c9ab7`, manifest SHA-256
+`fb4fb348d4f6cc725ac341ec3f67d7256d69bd5a3f91ae1f2b3bbcc87bf690b1`).
+
+**CURRENT GATE 0 STATUS: PASS / FINALIZED.** The historical CONDITIONAL and
+`PASS_READY_TO_FINALIZE` states remain recorded above for provenance.
 
 ## Objective
 
