@@ -13,6 +13,23 @@
     "newTransactionRecordsRequire": "invocationId",
     "historicalRecordsWithoutInvocationId": "intentionally unattributed; never backfill by guess"
   },
+  "finalBundle": {
+    "finalGateDecision": "PASS",
+    "finalizationStatus": "FINALIZED",
+    "finalizationInvocationMustBeTerminal": true,
+    "allArtifactsRequireCompleteProvenance": true
+  },
+  "executionMode": {
+    "stateChangingReceipt": "STATE_CHANGING_TRANSACTION",
+    "staticCallRejection": "STATICCALL_REJECTION",
+    "staticCallBroadcast": false
+  },
+  "requiredFinalSummaryFields": [
+    "finalGateDecision",
+    "finalizationStatus",
+    "finalizationInvocationId",
+    "evidenceTaxonomy"
+  ],
   "measurementTaxonomy": {
     "localHcu": "DETERMINISTIC_FOR_IDENTICAL_MOCK_OPERATION",
     "localEvmGas": "RUN_SPECIFIC",

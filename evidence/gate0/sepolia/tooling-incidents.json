@@ -59,6 +59,29 @@
       "excludedFromFinalGate0SuccessEvidence": true,
       "activeProgressArchivedInGitMetadata": ".git/veilpot-gate0-sepolia-progress.failed-interrupt-8d729489.json",
       "secretValuesRecorded": false
+    },
+    {
+      "classification": "FINALIZATION_EVIDENCE_EMISSION_DEFECT",
+      "occurredAt": "2026-08-30T18:15:38.529Z",
+      "chainId": 11155111,
+      "toolingCommit": "58ad8c0b464e0dca68b0a98e80bb5dcacd29e883",
+      "finalizationInvocationId": "32cca5be-510f-4454-b495-85aabc4948af",
+      "protocolStateUnaffected": true,
+      "nonceBefore": 487,
+      "nonceAfter": 487,
+      "ethereumTransactionBroadcast": false,
+      "invocationCompletedAfterEmission": true,
+      "finalPassDecisionAbsent": true,
+      "executionModeTaxonomyIncomplete": true,
+      "sourceParityProvenanceIncomplete": true,
+      "humanDecisionStatusStale": true,
+      "emittedBundleRejectedBeforeCommit": true,
+      "finalEvidenceCommitCreated": false,
+      "gate1Started": false,
+      "rootCause": "Final evidence was emitted before the finalization invocation was persisted as terminal COMPLETED; the emitter also omitted an explicit final PASS decision, execution-mode fields, and complete source-parity provenance.",
+      "protocolPrivacyFairnessResult": "UNAFFECTED",
+      "excludedFromFinalGate0SuccessEvidence": true,
+      "secretValuesRecorded": false
     }
   ]
 }

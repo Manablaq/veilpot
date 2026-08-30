@@ -19,6 +19,12 @@ import {
   nextFailureDrillAction,
   releaseLiveRunLock,
 } from "../scripts/live-run-support";
+import {
+  assertFinalBundleSummary,
+  assertFinalizationPreconditions,
+  assertTerminalFinalizationInvocation,
+  normalizeEvidenceRecord,
+} from "../scripts/finalization-support";
 
 interface Measurement {
   readonly operation: string;
@@ -314,6 +320,104 @@ describe("VeilDrawProbe Gate 0", function () {
       expect(hardhatConfig).to.include('metadata: { bytecodeHash: "none" }');
       expect(hardhatConfig).to.include("optimizer: { enabled: true, runs: 800 }");
       assertions += 25;
+    });
+  });
+
+  describe("final evidence emission safeguards", function () {
+    it("requires terminal finalization state and preserves the lock until publication", async function () {
+      const runner = await readFile(resolve(process.cwd(), "scripts/run-sepolia.ts"), "utf8");
+      const main = runner.slice(runner.indexOf("async function main(): Promise<void>"));
+      const terminal = main.indexOf(
+        'await markInvocationTerminal(state, "COMPLETED", "runner-completed")',
+      );
+      const publish = main.indexOf("await publishFinalEvidence(state)");
+      const clear = main.indexOf("await clearInvocationAndRelease(state)");
+      expect(terminal).to.be.greaterThan(-1);
+      expect(publish).to.be.greaterThan(terminal);
+      expect(clear).to.be.greaterThan(publish);
+      expect(runner).to.include("assertTerminalFinalizationInvocation");
+
+      const directory = await mkdtemp(join(tmpdir(), "veilpot-final-lock-"));
+      const lockPath = join(directory, "runner.lock.json");
+      const invocation = createInvocation(
+        "finalize",
+        487,
+        "tooling",
+        "0x1111111111111111111111111111111111111111",
+      );
+      try {
+        await acquireLiveRunLock(lockPath, invocation);
+        invocation.status = "COMPLETED";
+        invocation.stage = "runner-completed";
+        invocation.completedAt = new Date().toISOString();
+        const { updateLiveRunLock } = await import("../scripts/live-run-support");
+        await updateLiveRunLock(lockPath, invocation);
+        expect((await readFile(lockPath, "utf8")).length).to.be.greaterThan(0);
+      } finally {
+        await releaseLiveRunLock(lockPath);
+        await rm(directory, { recursive: true, force: true });
+      }
+      assertions += 5;
+    });
+
+    it("enforces final predicates and terminal invocation snapshots", function () {
+      expect(() => {
+        assertFinalizationPreconditions([
+          "zero-total-complete",
+          "prefix-measurements-complete",
+          "interruption-resume-complete",
+          "failure-retry-drill-accepted",
+        ]);
+      }).to.throw("unauthorized-user-decrypt-total-denied");
+      expect(() => {
+        assertFinalizationPreconditions([
+          "zero-total-complete",
+          "prefix-measurements-complete",
+          "interruption-resume-complete",
+          "failure-retry-drill-accepted",
+          "unauthorized-user-decrypt-total-denied",
+        ]);
+      }).not.to.throw();
+      expect(() => {
+        assertTerminalFinalizationInvocation({
+          invocationId: "final",
+          runnerMode: "finalize",
+          status: "RUNNING",
+          stage: "fhevm-initialized",
+        });
+      }).to.throw();
+      expect(() => {
+        assertTerminalFinalizationInvocation({
+          invocationId: "final",
+          runnerMode: "finalize",
+          status: "COMPLETED",
+          stage: "runner-completed",
+          completedAt: "2026-08-30T00:00:00.000Z",
+        });
+      }).not.to.throw();
+      expect(() => {
+        assertFinalBundleSummary(
+          {
+            finalGateDecision: "PASS",
+            finalizationStatus: "FINALIZED",
+            finalizationInvocationId: "final",
+          },
+          "final",
+        );
+      }).not.to.throw();
+      assertions += 5;
+    });
+
+    it("materializes transaction versus static-call evidence modes", function () {
+      expect(normalizeEvidenceRecord({ label: "mutation", transactionHash: "0xabc" })).to.include({
+        executionMode: "STATE_CHANGING_TRANSACTION",
+        ethereumTransactionBroadcast: true,
+      });
+      expect(normalizeEvidenceRecord({ label: "rejection", actual: "REVERTED" })).to.include({
+        executionMode: "STATICCALL_REJECTION",
+        ethereumTransactionBroadcast: false,
+      });
+      assertions += 2;
     });
   });
 

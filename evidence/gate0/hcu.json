@@ -18,12 +18,12 @@
     "evmGas": "RUN_SPECIFIC",
     "evmGasVariationCause": "Mock encrypted-input handles and proofs use cryptographic randomness; their calldata zero-byte pattern changes intrinsic EVM gas while FHE operation events remain fixed."
   },
-  "testAssertions": 300,
+  "testAssertions": 312,
   "measurements": [
     {
       "operation": "encrypted-total-ingest",
       "status": "MEASURED LOCALLY",
-      "evmGas": "185810",
+      "evmGas": "185822",
       "globalHCU": 0,
       "sequentialHCU": 0
     },
@@ -174,7 +174,7 @@
       "operation": "prefix-selection",
       "participantCount": 4,
       "status": "MEASURED LOCALLY",
-      "evmGas": "881427",
+      "evmGas": "881415",
       "globalHCU": 3904192,
       "sequentialHCU": 1535064
     },
@@ -182,7 +182,7 @@
       "operation": "prefix-selection",
       "participantCount": 8,
       "status": "MEASURED LOCALLY",
-      "evmGas": "1489143",
+      "evmGas": "1489155",
       "globalHCU": 7808320,
       "sequentialHCU": 2571064
     },
@@ -190,7 +190,7 @@
       "operation": "prefix-selection",
       "participantCount": 16,
       "status": "MEASURED LOCALLY",
-      "evmGas": "2751896",
+      "evmGas": "2751884",
       "globalHCU": 15616576,
       "sequentialHCU": 4643064
     }

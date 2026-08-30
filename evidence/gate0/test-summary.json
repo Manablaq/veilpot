@@ -15,7 +15,7 @@
   "solidityMock": {
     "passed": true,
     "mochaTests": 30,
-    "assertions": 300,
+    "assertions": 312,
     "allMeasurementsCompleted": true
   },
   "localMeasurementPolicy": {

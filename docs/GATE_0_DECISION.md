@@ -1,5 +1,16 @@
 # Gate 0 decision
 
+## Decision history and current status
+
+The immutable local/pre-live baseline decision was **CONDITIONAL**: Sepolia evidence was still
+required at that point. The complete live protocol audit subsequently reached
+`PASS_READY_TO_FINALIZE`. The first finalization emission was rejected as evidence because its
+snapshot was incomplete (see the finalization-emission incident record); it did not mutate protocol
+state. The current status remains **PASS_READY_TO_FINALIZE** until the corrected finalizer emits a
+validated bundle with `finalGateDecision: PASS` and `finalizationStatus: FINALIZED`. A future
+successful corrected emission may then record the current final Gate 0 decision as **PASS** without
+deleting this historical CONDITIONAL record.
+
 ## Objective
 
 Determine whether Veilpot can perform exact proportional weighted selection with encrypted weights

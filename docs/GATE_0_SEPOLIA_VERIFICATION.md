@@ -7,6 +7,13 @@ the reproducible live-probe plan, tooling incidents, and measured partial Sepoli
 remains `CONDITIONAL` until the generated `evidence/gate0/sepolia/` artifacts contain all required
 transaction references and every mandatory scenario is complete.
 
+The first finalization attempt under `58ad8c0b464e0dca68b0a98e80bb5dcacd29e883` completed without an
+Ethereum transaction but emitted an invalid snapshot: it captured its own invocation before the
+terminal status was persisted, omitted an explicit final decision, and did not materialize all
+execution-mode/provenance fields. That snapshot is archived in Git metadata and recorded as a
+`FINALIZATION_EVIDENCE_EMISSION_DEFECT` tooling incident. The corrected emitter is being reviewed;
+the current protocol status is `PASS_READY_TO_FINALIZE`, not yet `FINALIZED`.
+
 ## Tooling incident: excluded pre-official deployment
 
 **TOOLING INCIDENT — NOT A PROTOCOL FAIL.** On 2026-08-29, tooling commit

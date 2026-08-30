@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import { performance } from "node:perf_hooks";
 
 import { FhevmType } from "@fhevm/hardhat-plugin";
@@ -20,6 +21,12 @@ import {
   type LiveInvocation,
   type RunnerMode,
 } from "./live-run-support";
+import {
+  assertFinalBundleSummary,
+  assertFinalizationPreconditions,
+  assertTerminalFinalizationInvocation,
+  normalizeEvidenceRecords,
+} from "./finalization-support";
 
 type Handle = `0x${string}`;
 type JsonObject = Record<string, unknown>;
@@ -215,12 +222,24 @@ async function completeInvocation(
   status: Exclude<InvocationStatus, "RUNNING" | "FAILED">,
   stage: string,
 ): Promise<void> {
+  await markInvocationTerminal(state, status, stage);
+  await clearInvocationAndRelease(state);
+}
+
+async function markInvocationTerminal(
+  state: RunState,
+  status: Exclude<InvocationStatus, "RUNNING" | "FAILED">,
+  stage: string,
+): Promise<void> {
   const invocation = activeInvocation(state);
   invocation.status = status;
   invocation.stage = stage;
   invocation.completedAt = new Date().toISOString();
   await updateLiveRunLock(LIVE_RUN_LOCK_PATH, invocation);
   await persist(state);
+}
+
+async function clearInvocationAndRelease(state: RunState): Promise<void> {
   delete state.activeInvocationId;
   await persist(state);
   await releaseLiveRunLock(LIVE_RUN_LOCK_PATH);
@@ -319,6 +338,8 @@ async function receiptRecord(
       status: receipt.status === 1 ? "SUCCESS" : "FAILED",
       gasUsed: receipt.gasUsed.toString(),
       confirmationMilliseconds: Math.round(performance.now() - start),
+      executionMode: "STATE_CHANGING_TRANSACTION",
+      ethereumTransactionBroadcast: true,
     }),
   );
   await persist(state);
@@ -345,6 +366,8 @@ async function expectedFailure(
         label,
         expected: "REVERT",
         actual: "REVERTED",
+        executionMode: "STATICCALL_REJECTION",
+        ethereumTransactionBroadcast: false,
         error: sanitizeError(error),
       }),
     );
@@ -493,6 +516,7 @@ async function recordUnauthorizedUserDecrypt(
 async function writeDeploymentManifest(
   state: RunState,
   deployment: DeploymentRecord,
+  outputDirectory: string = EVIDENCE_DIRECTORY,
 ): Promise<void> {
   const artifactPath = resolve(
     process.cwd(),
@@ -548,13 +572,16 @@ async function writeDeploymentManifest(
       relayerSdk: contractsPackage.devDependencies["@zama-fhe/relayer-sdk"],
     },
   };
-  await writeFile(resolve(EVIDENCE_DIRECTORY, "deployment.json"), jsonStringify(manifest));
+  await writeFile(resolve(outputDirectory, "deployment.json"), jsonStringify(manifest));
   await writeFile(
-    resolve(EVIDENCE_DIRECTORY, "source-parity.json"),
+    resolve(outputDirectory, "source-parity.json"),
     jsonStringify({
       schemaVersion: 1,
       localGate0BaselineCommit: state.localGate0BaselineCommit,
       liveVerificationToolingCommit: state.liveVerificationToolingCommit,
+      liveVerificationToolingRevisions: state.toolingRevisions ?? [
+        state.liveVerificationToolingCommit,
+      ],
       repositoryArtifactToOnChainRuntimeMatch:
         manifest.artifactRuntimeBytecodeHash === manifest.onChainRuntimeBytecodeHash,
       artifactRuntimeBytecodeHash: manifest.artifactRuntimeBytecodeHash,
@@ -1043,19 +1070,56 @@ async function runFailureRetryDrill(state: RunState, signerAddress: string): Pro
   }
 }
 
-async function emitEvidence(state: RunState): Promise<void> {
-  const provenance = {
+function provenanceFor(state: RunState): JsonObject {
+  return {
     localGate0BaselineCommit: state.localGate0BaselineCommit,
     liveVerificationToolingCommit: state.liveVerificationToolingCommit,
     liveVerificationToolingRevisions: state.toolingRevisions ?? [
       state.liveVerificationToolingCommit,
     ],
   };
+}
+
+const FINAL_EVIDENCE_FILENAMES = [
+  "deployment.json",
+  "run-summary.json",
+  "transactions.json",
+  "privacy-probes.json",
+  "proof-binding.json",
+  "anti-grinding.json",
+  "zero-total.json",
+  "recovery.json",
+  "performance.json",
+  "source-parity.json",
+] as const;
+
+async function emitEvidence(state: RunState, outputDirectory: string): Promise<void> {
+  const provenance = provenanceFor(state);
+  const finalizationInvocation = state.invocations?.find(
+    (invocation) => invocation.invocationId === state.activeInvocationId,
+  );
+  if (finalizationInvocation === undefined) {
+    throw new Error("finalization invocation is missing before evidence emission");
+  }
+  assertTerminalFinalizationInvocation(finalizationInvocation);
   const files: Readonly<Record<string, unknown>> = {
     "run-summary.json": {
       schemaVersion: 1,
       ...provenance,
-      status: "IN_PROGRESS_OR_COMPLETE_PER_RECORDED_SCENARIOS",
+      finalGateDecision: "PASS",
+      finalizationStatus: "FINALIZED",
+      finalizationInvocationId: finalizationInvocation.invocationId,
+      status: "FINALIZED",
+      evidenceTaxonomy: {
+        localHcu: "DETERMINISTIC_FOR_IDENTICAL_MOCK_OPERATION",
+        localEvmGas: "RUN_SPECIFIC",
+        liveEvmGas: "OBSERVED_SEPOLIA_RECEIPT_VALUE",
+        liveHcuDepth: "NOT_DIRECTLY_OBSERVABLE_ON_LIVE_SEPOLIA",
+        duplicateRunnerExclusion: "PASS_LOCAL_WITH_LIVE_NONMUTATION_CORROBORATION",
+        boundedRetrySemantics:
+          "PASS_LOCAL; live run respected the six-new-batch cap and stopped on success before BOUNDED_STOP",
+        reductionEquivalence: "PASS_WITH_DISCLOSED_LIMITATION",
+      },
       primaryDeployment: state.deployment ?? null,
       invocations: state.invocations ?? [],
       noSecretValuesRecorded: true,
@@ -1063,26 +1127,124 @@ async function emitEvidence(state: RunState): Promise<void> {
     "transactions.json": {
       schemaVersion: 1,
       ...provenance,
-      transactions: state.transactions,
+      transactions: normalizeEvidenceRecords(state.transactions),
       note: "Historical transactions without invocationId are intentionally unattributed.",
     },
-    "privacy-probes.json": { schemaVersion: 1, ...provenance, probes: state.privacyProbes },
-    "proof-binding.json": { schemaVersion: 1, ...provenance, probes: state.proofBinding },
-    "anti-grinding.json": { schemaVersion: 1, ...provenance, probes: state.antiGrinding },
-    "zero-total.json": { schemaVersion: 1, ...provenance, probes: state.zeroTotal },
-    "recovery.json": { schemaVersion: 1, ...provenance, probes: state.recovery },
+    "privacy-probes.json": {
+      schemaVersion: 1,
+      ...provenance,
+      probes: normalizeEvidenceRecords(state.privacyProbes),
+    },
+    "proof-binding.json": {
+      schemaVersion: 1,
+      ...provenance,
+      probes: normalizeEvidenceRecords(state.proofBinding),
+    },
+    "anti-grinding.json": {
+      schemaVersion: 1,
+      ...provenance,
+      probes: normalizeEvidenceRecords(state.antiGrinding),
+    },
+    "zero-total.json": {
+      schemaVersion: 1,
+      ...provenance,
+      probes: normalizeEvidenceRecords(state.zeroTotal),
+    },
+    "recovery.json": {
+      schemaVersion: 1,
+      ...provenance,
+      probes: normalizeEvidenceRecords(state.recovery),
+    },
     "performance.json": {
       schemaVersion: 1,
       ...provenance,
-      measurements: state.performance,
+      measurements: normalizeEvidenceRecords(state.performance),
       liveHcu: "NOT_DIRECTLY_OBSERVABLE_ON_LIVE_SEPOLIA unless an authoritative endpoint is added",
+      measurementTaxonomy: {
+        localHcu: "DETERMINISTIC_FOR_IDENTICAL_MOCK_OPERATION",
+        localEvmGas: "RUN_SPECIFIC",
+        liveEvmGas: "OBSERVED_SEPOLIA_RECEIPT_VALUE",
+        liveHcuDepth: "NOT_DIRECTLY_OBSERVABLE_ON_LIVE_SEPOLIA",
+      },
     },
   };
   await Promise.all(
     Object.entries(files).map(([filename, payload]) =>
-      writeFile(resolve(EVIDENCE_DIRECTORY, filename), jsonStringify(payload)),
+      writeFile(resolve(outputDirectory, filename), jsonStringify(payload)),
     ),
   );
+}
+
+async function validateFinalEvidence(outputDirectory: string, state: RunState): Promise<void> {
+  const parsed = new Map<string, JsonObject>();
+  let revisionSet: string | undefined;
+  for (const filename of FINAL_EVIDENCE_FILENAMES) {
+    const value = JSON.parse(
+      await readFile(resolve(outputDirectory, filename), "utf8"),
+    ) as JsonObject;
+    parsed.set(filename, value);
+    if (value.schemaVersion !== 1) throw new Error(`invalid schemaVersion in ${filename}`);
+    if (value.localGate0BaselineCommit !== state.localGate0BaselineCommit) {
+      throw new Error(`baseline provenance mismatch in ${filename}`);
+    }
+    if (!Array.isArray(value.liveVerificationToolingRevisions)) {
+      throw new Error(`tooling revision provenance missing in ${filename}`);
+    }
+    const currentRevisionSet = JSON.stringify(value.liveVerificationToolingRevisions);
+    revisionSet ??= currentRevisionSet;
+    if (revisionSet !== currentRevisionSet) {
+      throw new Error(`tooling revision provenance differs in ${filename}`);
+    }
+  }
+  const summary = parsed.get("run-summary.json")!;
+  assertFinalBundleSummary(summary, state.activeInvocationId ?? "");
+  const deployment = parsed.get("deployment.json")!;
+  if (
+    typeof deployment.contractAddress !== "string" ||
+    deployment.artifactRuntimeBytecodeHash !==
+      "0xa0098465cd670a0b150f52035cd9677da4fa1de34fd0d917120146a8cd57899f"
+  ) {
+    throw new Error("official deployment parity is missing");
+  }
+  const transactionEvidence = parsed.get("transactions.json")!.transactions;
+  if (!Array.isArray(transactionEvidence)) throw new Error("transaction evidence is missing");
+  for (const record of transactionEvidence) {
+    if (typeof record !== "object" || record === null)
+      throw new Error("invalid transaction record");
+    const entry = record as JsonObject;
+    if (entry.executionMode !== "STATE_CHANGING_TRANSACTION") {
+      throw new Error("transaction execution mode is missing");
+    }
+  }
+  for (const filename of ["proof-binding.json", "anti-grinding.json", "zero-total.json"]) {
+    const records = parsed.get(filename)!.probes;
+    if (!Array.isArray(records)) throw new Error(`probe evidence is missing in ${filename}`);
+    for (const record of records) {
+      if (typeof record !== "object" || record === null) throw new Error("invalid probe record");
+      const entry = record as JsonObject;
+      if (entry.actual === "REVERTED" && entry.executionMode !== "STATICCALL_REJECTION") {
+        throw new Error(`static-call execution mode is missing in ${filename}`);
+      }
+    }
+  }
+}
+
+async function publishFinalEvidence(state: RunState): Promise<void> {
+  const stagingDirectory = await mkdtemp(join(tmpdir(), "veilpot-gate0-final-"));
+  try {
+    if (state.deployment === undefined) throw new Error("primary deployment is missing");
+    await writeDeploymentManifest(state, state.deployment, stagingDirectory);
+    await emitEvidence(state, stagingDirectory);
+    await validateFinalEvidence(stagingDirectory, state);
+    await mkdir(EVIDENCE_DIRECTORY, { recursive: true });
+    await Promise.all(
+      FINAL_EVIDENCE_FILENAMES.map((filename) =>
+        rename(resolve(stagingDirectory, filename), resolve(EVIDENCE_DIRECTORY, filename)),
+      ),
+    );
+  } finally {
+    await rm(stagingDirectory, { recursive: true, force: true });
+  }
 }
 
 async function main(): Promise<void> {
@@ -1103,6 +1265,7 @@ async function main(): Promise<void> {
   await acquireLiveRunLock(LIVE_RUN_LOCK_PATH, invocation);
 
   let state: RunState | undefined;
+  let finalizationReleased = false;
   try {
     state = await readState(preflight.liveVerificationToolingCommit);
     assertAndRecordToolingRevision(state, preflight.liveVerificationToolingCommit);
@@ -1134,23 +1297,11 @@ async function main(): Promise<void> {
       await runFailureRetryDrill(state, signer.address);
     }
     if (process.env.VEILPOT_LIVE_FINALIZE === "true") {
-      if (!state.notes.includes("zero-total-complete")) {
-        throw new Error("zero-total evidence is incomplete; refusing to finalize");
-      }
-      if (!state.notes.includes("prefix-measurements-complete")) {
-        throw new Error("prefix measurement evidence is incomplete; refusing to finalize");
-      }
-      if (!state.notes.includes("interruption-resume-complete")) {
-        throw new Error("interruption/resume evidence is incomplete; refusing to finalize");
-      }
-      if (!state.notes.includes("failure-retry-drill-accepted")) {
-        throw new Error("failure-retry acceptance evidence is incomplete; refusing to finalize");
-      }
-      if (!state.notes.includes("unauthorized-user-decrypt-total-denied")) {
-        throw new Error("independent-wallet denial evidence is incomplete; refusing to finalize");
-      }
-      await writeDeploymentManifest(state, state.deployment);
-      await emitEvidence(state);
+      assertFinalizationPreconditions(state.notes);
+      await markInvocationTerminal(state, "COMPLETED", "runner-completed");
+      await publishFinalEvidence(state);
+      await clearInvocationAndRelease(state);
+      finalizationReleased = true;
     }
     const intentionallyInterrupted =
       runnerMode() === "primary-interrupt" &&
@@ -1160,15 +1311,17 @@ async function main(): Promise<void> {
       const drill = await contractAt(state.failureDrillDeployment.contractAddress);
       boundedStop = (await drill.state()) === STATE_AWAITING_CANDIDATE_BATCH;
     }
-    await completeInvocation(
-      state,
-      intentionallyInterrupted ? "INTERRUPTED" : boundedStop ? "BOUNDED_STOP" : "COMPLETED",
-      intentionallyInterrupted
-        ? "intentional-primary-interruption-after-persisted-candidate"
-        : boundedStop
-          ? "failure-drill-bounded-stop-awaiting-candidate-batch"
-          : "runner-completed",
-    );
+    if (!finalizationReleased) {
+      await completeInvocation(
+        state,
+        intentionallyInterrupted ? "INTERRUPTED" : boundedStop ? "BOUNDED_STOP" : "COMPLETED",
+        intentionallyInterrupted
+          ? "intentional-primary-interruption-after-persisted-candidate"
+          : boundedStop
+            ? "failure-drill-bounded-stop-awaiting-candidate-batch"
+            : "runner-completed",
+      );
+    }
   } catch (error: unknown) {
     await failInvocation(state, error);
     throw error;
