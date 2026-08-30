@@ -288,3 +288,18 @@ serial/balanced outputs for `m = 1, 2, 4, 8, 16`, and the independent bigint mod
 checks its small-domain coverage. Both reductions independently executed successfully on Sepolia. No
 live encrypted serial-versus-balanced equality assertion was performed; final Gate 0 wording must
 not claim one.
+
+## Evidence taxonomy hardening
+
+The mock FHEVM receipt analyzer produces deterministic global and sequential HCU counts for an
+identical operation. Receipt `evmGas` is intentionally classified as **RUN-SPECIFIC**: mock input
+handles and proofs are generated with cryptographic randomness, and their calldata zero-byte
+patterns change intrinsic EVM gas by small amounts between otherwise equivalent runs. The HCU counts
+remain the primary local computational-cost evidence; each retained gas value is an observed run
+value and is not presented as a reproducible constant.
+
+The duplicate-launch result is classified as `PASS_LOCAL_WITH_LIVE_NONMUTATION_CORROBORATION`: the
+atomic lock is a local control, while the live chain/progress showed no second invocation or
+mutation. The six-batch retry cap is `PASS_LOCAL`; the live continuation succeeded on its sixth new
+batch, so the live `BOUNDED_STOP` branch itself was not observed. These classifications are encoded
+in [`evidence-schema.json`](../evidence/gate0/sepolia/evidence-schema.json).

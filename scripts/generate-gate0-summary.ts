@@ -96,6 +96,13 @@ const testSummary = {
     assertions: hcu.testAssertions,
     allMeasurementsCompleted: hcu.measurements.every((item) => item.status === "MEASURED LOCALLY"),
   },
+  localMeasurementPolicy: {
+    globalHCU: "DETERMINISTIC_FOR_IDENTICAL_MOCK_OPERATION",
+    sequentialHCU: "DETERMINISTIC_FOR_IDENTICAL_MOCK_OPERATION",
+    evmGas: "RUN_SPECIFIC",
+    evmGasEvidence:
+      "Receipt gas is retained as an observed local run value; randomized mock handles/proofs alter calldata intrinsic gas.",
+  },
   liveSepolia:
     liveIncidents.incidents.length === 0
       ? "NOT RUN"

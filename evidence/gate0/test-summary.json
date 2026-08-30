@@ -18,6 +18,12 @@
     "assertions": 300,
     "allMeasurementsCompleted": true
   },
+  "localMeasurementPolicy": {
+    "globalHCU": "DETERMINISTIC_FOR_IDENTICAL_MOCK_OPERATION",
+    "sequentialHCU": "DETERMINISTIC_FOR_IDENTICAL_MOCK_OPERATION",
+    "evmGas": "RUN_SPECIFIC",
+    "evmGasEvidence": "Receipt gas is retained as an observed local run value; randomized mock handles/proofs alter calldata intrinsic gas."
+  },
   "liveSepolia": "PARTIAL_DIAGNOSTIC_INCIDENTS_ONLY; NOT_FINAL_GATE0_EVIDENCE",
   "finalStatus": "CONDITIONAL"
 }

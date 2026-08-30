@@ -1,7 +1,11 @@
 # VeilDraw performance
 
-All numeric rows below are **MEASURED RESULT** from the Hardhat in-process mock FHEVM using the
-plugin's transaction-receipt HCU analyzer. They are not Sepolia measurements. Raw evidence is
+All HCU rows below are **MEASURED RESULT** from the Hardhat in-process mock FHEVM using the plugin's
+transaction-receipt HCU analyzer. They are not Sepolia measurements. HCU event counts are
+deterministic for an identical mock operation. Receipt `evmGas` is retained as a **RUN-SPECIFIC**
+local observation, not as a bit-for-bit reproducible constant: the mock's encrypted-input handles
+and proofs use cryptographic randomness, changing calldata zero-byte patterns and therefore
+intrinsic EVM gas while leaving FHE operation events unchanged. Raw evidence is
 [`hcu.json`](../evidence/gate0/hcu.json). Current official documentation gives limits of 20,000,000
 global HCU and 5,000,000 sequential HCU per transaction.
 

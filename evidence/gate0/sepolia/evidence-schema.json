@@ -13,6 +13,17 @@
     "newTransactionRecordsRequire": "invocationId",
     "historicalRecordsWithoutInvocationId": "intentionally unattributed; never backfill by guess"
   },
+  "measurementTaxonomy": {
+    "localHcu": "DETERMINISTIC_FOR_IDENTICAL_MOCK_OPERATION",
+    "localEvmGas": "RUN_SPECIFIC",
+    "liveEvmGas": "OBSERVED_SEPOLIA_RECEIPT_VALUE",
+    "liveHcuDepth": "NOT_DIRECTLY_OBSERVABLE_ON_LIVE_SEPOLIA"
+  },
+  "requirementTaxonomy": {
+    "duplicateRunnerExclusion": "PASS_LOCAL_WITH_LIVE_NONMUTATION_CORROBORATION",
+    "boundedRetrySemantics": "PASS_LOCAL; live run respected the cap and stopped on success before BOUNDED_STOP",
+    "reductionEquivalence": "PASS_WITH_DISCLOSED_LIMITATION"
+  },
   "requiredFinalizationEvidence": [
     "unauthorized-user-decrypt-total: expected DENIED and actual DENIED",
     "failure-retry-drill-accepted: a naturally generated retry batch reached CandidateAccepted"

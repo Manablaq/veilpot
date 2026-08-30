@@ -336,6 +336,13 @@ describe("VeilDrawProbe Gate 0", function () {
         sequentialHCU: 5_000_000,
         classification: "VERIFIED FACT; not a local measurement",
       },
+      measurementPolicy: {
+        globalHCU: "DETERMINISTIC_FOR_IDENTICAL_MOCK_OPERATION",
+        sequentialHCU: "DETERMINISTIC_FOR_IDENTICAL_MOCK_OPERATION",
+        evmGas: "RUN_SPECIFIC",
+        evmGasVariationCause:
+          "Mock encrypted-input handles and proofs use cryptographic randomness; their calldata zero-byte pattern changes intrinsic EVM gas while FHE operation events remain fixed.",
+      },
       testAssertions: assertions,
       measurements,
       publicDecryptionLatency: "NOT MEASURED LOCALLY",
