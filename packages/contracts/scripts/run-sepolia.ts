@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -26,6 +26,7 @@ import {
   assertFinalizationPreconditions,
   assertTerminalFinalizationInvocation,
   normalizeEvidenceRecords,
+  publishStagedBundle,
 } from "./finalization-support";
 
 type Handle = `0x${string}`;
@@ -340,6 +341,7 @@ async function receiptRecord(
       confirmationMilliseconds: Math.round(performance.now() - start),
       executionMode: "STATE_CHANGING_TRANSACTION",
       ethereumTransactionBroadcast: true,
+      executionModeEvidence: "RECEIPT_BACKED_TRANSACTION",
     }),
   );
   await persist(state);
@@ -368,6 +370,7 @@ async function expectedFailure(
         actual: "REVERTED",
         executionMode: "STATICCALL_REJECTION",
         ethereumTransactionBroadcast: false,
+        executionModeEvidence: "STATICCALL_AT_EXPECTED_FAILURE_PATH",
         error: sanitizeError(error),
       }),
     );
@@ -1092,6 +1095,7 @@ const FINAL_EVIDENCE_FILENAMES = [
   "performance.json",
   "source-parity.json",
 ] as const;
+const FINAL_BUNDLE_MARKER_FILENAME = "final-bundle-manifest.json";
 
 async function emitEvidence(state: RunState, outputDirectory: string): Promise<void> {
   const provenance = provenanceFor(state);
@@ -1227,6 +1231,76 @@ async function validateFinalEvidence(outputDirectory: string, state: RunState): 
       }
     }
   }
+  const marker = JSON.parse(
+    await readFile(resolve(outputDirectory, FINAL_BUNDLE_MARKER_FILENAME), "utf8"),
+  ) as JsonObject;
+  if (marker.finalGateDecision !== "PASS" || marker.finalizationStatus !== "FINALIZED") {
+    throw new Error("final bundle marker is not PASS/FINALIZED");
+  }
+  if (marker.localGate0BaselineCommit !== state.localGate0BaselineCommit) {
+    throw new Error("final bundle marker baseline provenance is inconsistent");
+  }
+  if (
+    JSON.stringify(marker.liveVerificationToolingRevisions) !==
+    JSON.stringify(state.toolingRevisions ?? [state.liveVerificationToolingCommit])
+  ) {
+    throw new Error("final bundle marker tooling revisions are inconsistent");
+  }
+  if (marker.finalizationInvocationId !== state.activeInvocationId) {
+    throw new Error("final bundle marker invocation binding is missing");
+  }
+  if (
+    marker.toolingCommit !==
+    state.invocations?.find((invocation) => invocation.invocationId === state.activeInvocationId)
+      ?.toolingCommit
+  ) {
+    throw new Error("final bundle marker tooling commit is inconsistent");
+  }
+  const markerHashes = marker.artifactSha256;
+  if (typeof markerHashes !== "object" || markerHashes === null) {
+    throw new Error("final bundle marker hashes are missing");
+  }
+  if (marker.artifactCount !== FINAL_EVIDENCE_FILENAMES.length) {
+    throw new Error("final bundle marker artifact count is invalid");
+  }
+  for (const filename of FINAL_EVIDENCE_FILENAMES) {
+    const expectedHash = (markerHashes as JsonObject)[filename];
+    const actualHash = sha256(await readFile(resolve(outputDirectory, filename), "utf8"));
+    if (expectedHash !== actualHash) throw new Error(`final bundle hash mismatch for ${filename}`);
+  }
+}
+
+async function fileSha256(path: string): Promise<string> {
+  return sha256(await readFile(path, "utf8"));
+}
+
+async function writeFinalBundleMarker(state: RunState, outputDirectory: string): Promise<void> {
+  const finalizationInvocation = state.invocations?.find(
+    (invocation) => invocation.invocationId === state.activeInvocationId,
+  );
+  if (finalizationInvocation === undefined) throw new Error("finalization invocation is missing");
+  const artifactSha256: Record<string, string> = {};
+  for (const filename of FINAL_EVIDENCE_FILENAMES) {
+    artifactSha256[filename] = await fileSha256(resolve(outputDirectory, filename));
+  }
+  await writeFile(
+    resolve(outputDirectory, FINAL_BUNDLE_MARKER_FILENAME),
+    jsonStringify({
+      schemaVersion: 1,
+      finalGateDecision: "PASS",
+      finalizationStatus: "FINALIZED",
+      finalizationInvocationId: finalizationInvocation.invocationId,
+      toolingCommit: finalizationInvocation.toolingCommit,
+      liveVerificationToolingRevisions: state.toolingRevisions ?? [
+        state.liveVerificationToolingCommit,
+      ],
+      localGate0BaselineCommit: state.localGate0BaselineCommit,
+      createdAt: finalizationInvocation.startedAt,
+      completedAt: finalizationInvocation.completedAt,
+      artifactSha256,
+      artifactCount: FINAL_EVIDENCE_FILENAMES.length,
+    }),
+  );
 }
 
 async function publishFinalEvidence(state: RunState): Promise<void> {
@@ -1235,13 +1309,17 @@ async function publishFinalEvidence(state: RunState): Promise<void> {
     if (state.deployment === undefined) throw new Error("primary deployment is missing");
     await writeDeploymentManifest(state, state.deployment, stagingDirectory);
     await emitEvidence(state, stagingDirectory);
+    await writeFinalBundleMarker(state, stagingDirectory);
     await validateFinalEvidence(stagingDirectory, state);
     await mkdir(EVIDENCE_DIRECTORY, { recursive: true });
-    await Promise.all(
-      FINAL_EVIDENCE_FILENAMES.map((filename) =>
-        rename(resolve(stagingDirectory, filename), resolve(EVIDENCE_DIRECTORY, filename)),
-      ),
-    );
+    await publishStagedBundle({
+      stagingDirectory,
+      outputDirectory: EVIDENCE_DIRECTORY,
+      componentFilenames: FINAL_EVIDENCE_FILENAMES,
+      markerFilename: FINAL_BUNDLE_MARKER_FILENAME,
+      hashFile: fileSha256,
+      validatePublished: () => validateFinalEvidence(EVIDENCE_DIRECTORY, state),
+    });
   } finally {
     await rm(stagingDirectory, { recursive: true, force: true });
   }

@@ -78,6 +78,18 @@
       "emittedBundleRejectedBeforeCommit": true,
       "finalEvidenceCommitCreated": false,
       "gate1Started": false,
+      "rejectedArtifactSha256": {
+        "anti-grinding.json": "3d5fe1bef62692fedf54e10fab044e9a5c08fd74f46e8699a6763de797105ff2",
+        "deployment.json": "e74f04bd4ed11ec54d3a10cc252ef34a9e167b0b5c6b8bed4d3c304435a6874d",
+        "performance.json": "e32218d9581df59e584177d967e0079592c5c5ce13a54da0e5fc9a97d97c9e72",
+        "privacy-probes.json": "132d2d578e29e4cb4cace8fbff89332976064374829bce825a61972b230f0ec9",
+        "proof-binding.json": "16d4779950523dec004d8d58181d9462efd995fdf633a97c5187bd529fbaf484",
+        "recovery.json": "8c9ccb500122d34c69186da6f718b56314c74ce609e56479bbf82b7e8b63c069",
+        "run-summary.json": "f8ed41c7038ff48cd34ebad7e0349fc67cf5f11a2531bc3c0798f99716561ff7",
+        "source-parity.json": "b7ea62fe1ae03eb1929fb19dc6d0bdec3f365b6debb23c614a3f57752a3ff164",
+        "transactions.json": "11583c0b5c8cf0dc8c59b313cd6e97b5e58aee3c22b388e63eb173744590990e",
+        "zero-total.json": "24075b1177180e9b95f7833d97f3fa3250164e3150e3522088351e9529215309"
+      },
       "rootCause": "Final evidence was emitted before the finalization invocation was persisted as terminal COMPLETED; the emitter also omitted an explicit final PASS decision, execution-mode fields, and complete source-parity provenance.",
       "protocolPrivacyFairnessResult": "UNAFFECTED",
       "excludedFromFinalGate0SuccessEvidence": true,

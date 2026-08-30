@@ -1,3 +1,6 @@
+import { rename, rm } from "node:fs/promises";
+import { join } from "node:path";
+
 export type EvidenceExecutionMode = "STATE_CHANGING_TRANSACTION" | "STATICCALL_REJECTION";
 
 export type EvidenceRecord = Record<string, unknown>;
@@ -17,6 +20,7 @@ export function normalizeEvidenceRecord(record: EvidenceRecord): EvidenceRecord 
       ...record,
       executionMode: "STATE_CHANGING_TRANSACTION" satisfies EvidenceExecutionMode,
       ethereumTransactionBroadcast: true,
+      executionModeEvidence: "RECEIPT_BACKED_TRANSACTION",
     };
   }
   if (record.actual === "REVERTED") {
@@ -24,18 +28,7 @@ export function normalizeEvidenceRecord(record: EvidenceRecord): EvidenceRecord 
       ...record,
       executionMode: "STATICCALL_REJECTION" satisfies EvidenceExecutionMode,
       ethereumTransactionBroadcast: false,
-    };
-  }
-  const label = typeof record.label === "string" ? record.label : "";
-  if (
-    label.includes("valid-proof") ||
-    label.includes("proof-accepted") ||
-    label === "failure-retry-after-proven-failure"
-  ) {
-    return {
-      ...record,
-      executionMode: "STATE_CHANGING_TRANSACTION" satisfies EvidenceExecutionMode,
-      ethereumTransactionBroadcast: true,
+      executionModeEvidence: "LEGACY_EXPECTED_FAILURE_STATICCALL_PATH",
     };
   }
   return record;
@@ -79,5 +72,56 @@ export function assertFinalBundleSummary(
   }
   if (summary.finalizationInvocationId !== expectedInvocationId) {
     throw new Error("finalization invocation binding is missing");
+  }
+}
+
+export interface StagedBundlePublicationOptions {
+  readonly stagingDirectory: string;
+  readonly outputDirectory: string;
+  readonly componentFilenames: readonly string[];
+  readonly markerFilename: string;
+  readonly hashFile: (path: string) => Promise<string>;
+  readonly validatePublished: () => Promise<void>;
+  readonly renameFile?: (source: string, destination: string) => Promise<void>;
+  readonly removeFile?: (path: string) => Promise<void>;
+}
+
+/**
+ * Publishes a validated component set and writes the marker last. Removing any
+ * prior marker first ensures a failed replacement cannot leave a valid snapshot.
+ */
+export async function publishStagedBundle(options: StagedBundlePublicationOptions): Promise<void> {
+  const renameFile = options.renameFile ?? ((source, destination) => rename(source, destination));
+  const removeFile = options.removeFile ?? ((path) => rm(path, { force: true }));
+  const markerPath = join(options.outputDirectory, options.markerFilename);
+  const stagedHashes = new Map<string, string>();
+  await removeFile(markerPath);
+  try {
+    for (const filename of options.componentFilenames) {
+      stagedHashes.set(filename, await options.hashFile(join(options.stagingDirectory, filename)));
+    }
+    for (const filename of options.componentFilenames) {
+      await renameFile(
+        join(options.stagingDirectory, filename),
+        join(options.outputDirectory, filename),
+      );
+    }
+    for (const filename of options.componentFilenames) {
+      const stagedHash = stagedHashes.get(filename);
+      const publishedHash = await options.hashFile(join(options.outputDirectory, filename));
+      if (stagedHash !== publishedHash) {
+        throw new Error(`published artifact hash mismatch for ${filename}`);
+      }
+    }
+    await renameFile(join(options.stagingDirectory, options.markerFilename), markerPath);
+    try {
+      await options.validatePublished();
+    } catch (error: unknown) {
+      await removeFile(markerPath).catch(() => undefined);
+      throw error;
+    }
+  } catch (error: unknown) {
+    await removeFile(markerPath).catch(() => undefined);
+    throw error;
   }
 }

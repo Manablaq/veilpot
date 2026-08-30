@@ -14,6 +14,10 @@ execution-mode/provenance fields. That snapshot is archived in Git metadata and 
 `FINALIZATION_EVIDENCE_EMISSION_DEFECT` tooling incident. The corrected emitter is being reviewed;
 the current protocol status is `PASS_READY_TO_FINALIZE`, not yet `FINALIZED`.
 
+Final evidence publication uses `final-bundle-manifest.json` as its commit marker. Component JSON
+files without that marker, matching SHA-256 hashes, terminal finalization metadata, and a PASS
+decision are provisional and must not be treated as a finalized Gate 0 bundle.
+
 ## Tooling incident: excluded pre-official deployment
 
 **TOOLING INCIDENT — NOT A PROTOCOL FAIL.** On 2026-08-29, tooling commit

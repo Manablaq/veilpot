@@ -14,10 +14,25 @@
     "historicalRecordsWithoutInvocationId": "intentionally unattributed; never backfill by guess"
   },
   "finalBundle": {
+    "markerFilename": "final-bundle-manifest.json",
+    "requiredComponentArtifacts": [
+      "deployment.json",
+      "run-summary.json",
+      "transactions.json",
+      "privacy-probes.json",
+      "proof-binding.json",
+      "anti-grinding.json",
+      "zero-total.json",
+      "recovery.json",
+      "performance.json",
+      "source-parity.json"
+    ],
     "finalGateDecision": "PASS",
     "finalizationStatus": "FINALIZED",
     "finalizationInvocationMustBeTerminal": true,
-    "allArtifactsRequireCompleteProvenance": true
+    "allArtifactsRequireCompleteProvenance": true,
+    "componentFilesWithoutValidMarker": "NOT_A_FINAL_EVIDENCE_BUNDLE",
+    "artifactHashesMustMatchMarker": true
   },
   "executionMode": {
     "stateChangingReceipt": "STATE_CHANGING_TRANSACTION",
@@ -46,6 +61,7 @@
     "failure-retry-drill-accepted: a naturally generated retry batch reached CandidateAccepted"
   ],
   "requiredArtifacts": [
+    "final-bundle-manifest.json",
     "deployment.json",
     "run-summary.json",
     "transactions.json",

@@ -1,4 +1,5 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { access, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -24,6 +25,7 @@ import {
   assertFinalizationPreconditions,
   assertTerminalFinalizationInvocation,
   normalizeEvidenceRecord,
+  publishStagedBundle,
 } from "../scripts/finalization-support";
 
 interface Measurement {
@@ -195,6 +197,21 @@ async function expectRejected(action: () => Promise<unknown>): Promise<void> {
   }
   expect(rejected).to.equal(true);
   assertions += 1;
+}
+
+async function sha256File(path: string): Promise<string> {
+  return `0x${createHash("sha256")
+    .update(await readFile(path))
+    .digest("hex")}`;
+}
+
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 describe("VeilDrawProbe Gate 0", function () {
@@ -418,6 +435,119 @@ describe("VeilDrawProbe Gate 0", function () {
         ethereumTransactionBroadcast: false,
       });
       assertions += 2;
+    });
+
+    it("fails closed when component publication is interrupted before the marker", async function () {
+      const root = await mkdtemp(join(tmpdir(), "veilpot-bundle-failure-"));
+      const stagingDirectory = join(root, "staging");
+      const outputDirectory = join(root, "published");
+      await mkdir(stagingDirectory);
+      await mkdir(outputDirectory);
+      const lockPath = join(root, "runner.lock.json");
+      await acquireLiveRunLock(
+        lockPath,
+        createInvocation("finalize", 1, "tooling", "0x1111111111111111111111111111111111111111"),
+      );
+      const components = ["a.json", "b.json"];
+      for (const filename of components) {
+        await writeFile(join(stagingDirectory, filename), JSON.stringify({ filename }));
+      }
+      const artifactSha256: Record<string, string> = {};
+      for (const filename of components)
+        artifactSha256[filename] = await sha256File(join(stagingDirectory, filename));
+      await writeFile(
+        join(stagingDirectory, "final-bundle-manifest.json"),
+        JSON.stringify({
+          finalGateDecision: "PASS",
+          finalizationStatus: "FINALIZED",
+          finalizationInvocationId: "failure-test",
+          artifactSha256,
+          artifactCount: components.length,
+        }),
+      );
+      let renameCount = 0;
+      try {
+        await expectRejected(() =>
+          publishStagedBundle({
+            stagingDirectory,
+            outputDirectory,
+            componentFilenames: components,
+            markerFilename: "final-bundle-manifest.json",
+            hashFile: sha256File,
+            renameFile: async (source, destination) => {
+              renameCount += 1;
+              if (renameCount === 2) throw new Error("injected publication failure");
+              await rename(source, destination);
+            },
+            validatePublished: () => Promise.resolve(),
+          }),
+        );
+        expect(await fileExists(join(outputDirectory, "final-bundle-manifest.json"))).to.equal(
+          false,
+        );
+        expect(await fileExists(lockPath)).to.equal(true);
+        await expectRejected(async () => {
+          if (!(await fileExists(join(outputDirectory, "final-bundle-manifest.json")))) {
+            throw new Error("missing final marker");
+          }
+        });
+      } finally {
+        await releaseLiveRunLock(lockPath);
+        await rm(root, { recursive: true, force: true });
+      }
+      assertions += 3;
+    });
+
+    it("publishes all components before the marker and validates the complete bundle", async function () {
+      const root = await mkdtemp(join(tmpdir(), "veilpot-bundle-success-"));
+      const stagingDirectory = join(root, "staging");
+      const outputDirectory = join(root, "published");
+      await mkdir(stagingDirectory);
+      await mkdir(outputDirectory);
+      const components = ["a.json", "b.json"];
+      for (const filename of components)
+        await writeFile(join(stagingDirectory, filename), JSON.stringify({ filename }));
+      const artifactSha256: Record<string, string> = {};
+      for (const filename of components)
+        artifactSha256[filename] = await sha256File(join(stagingDirectory, filename));
+      await writeFile(
+        join(stagingDirectory, "final-bundle-manifest.json"),
+        JSON.stringify({
+          finalGateDecision: "PASS",
+          finalizationStatus: "FINALIZED",
+          finalizationInvocationId: "success-test",
+          artifactSha256,
+          artifactCount: components.length,
+        }),
+      );
+      const publicationOrder: string[] = [];
+      try {
+        await publishStagedBundle({
+          stagingDirectory,
+          outputDirectory,
+          componentFilenames: components,
+          markerFilename: "final-bundle-manifest.json",
+          hashFile: sha256File,
+          renameFile: async (source, destination) => {
+            publicationOrder.push(destination.split("/").pop() ?? "");
+            await rename(source, destination);
+          },
+          validatePublished: async () => {
+            const marker = JSON.parse(
+              await readFile(join(outputDirectory, "final-bundle-manifest.json"), "utf8"),
+            ) as Record<string, unknown>;
+            expect(marker.finalGateDecision).to.equal("PASS");
+            expect(marker.finalizationStatus).to.equal("FINALIZED");
+            expect(marker.finalizationInvocationId).to.equal("success-test");
+            for (const filename of components)
+              expect(await fileExists(join(outputDirectory, filename))).to.equal(true);
+          },
+        });
+        expect(publicationOrder.at(-1)).to.equal("final-bundle-manifest.json");
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+      assertions += 4;
     });
   });
 
