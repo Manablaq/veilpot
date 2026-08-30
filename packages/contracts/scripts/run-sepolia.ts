@@ -144,7 +144,8 @@ function assertPreflight(): Preflight {
 
 /**
  * Initializes the installed FHEVM CLI API for a real Sepolia process before
- * the runner creates encrypted inputs or asks the relayer to decrypt values.
+ * the runner deploys the probe, creates encrypted inputs, or asks the relayer
+ * to decrypt values.
  * Plugin 0.4.2 performs its supported-network, address, and relayer-instance
  * setup inside this idempotent API.
  */
@@ -153,9 +154,6 @@ async function initializeLiveFhevm(): Promise<void> {
   if (hre.fhevm.isMock) {
     throw new Error("FHEVM CLI initialization resolved a mock environment instead of Sepolia");
   }
-  // This read-only supported API call requires the initialized relayer
-  // configuration. It intentionally records and prints no metadata.
-  await hre.fhevm.getRelayerMetadata();
 }
 
 function sha256(value: string): string {

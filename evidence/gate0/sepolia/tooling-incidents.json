@@ -18,6 +18,24 @@
       "excludedFromFinalGate0SuccessEvidence": true,
       "activeProgressArchivedInGitMetadata": ".git/veilpot-gate0-sepolia-progress.failed-tooling-7a1b228.json",
       "secretValuesRecorded": false
+    },
+    {
+      "classification": "TOOLING_INCIDENT",
+      "toolingCommit": "97ddc31881e4b03465ecba9909f88453e6fd6abf",
+      "chainId": 11155111,
+      "freshDeploymentPerformed": false,
+      "protocolTransactionBroadcast": false,
+      "activeProgressCreated": false,
+      "initializationCLIApiReached": true,
+      "realSepoliaEnvironmentConfirmed": true,
+      "encryptedInputObjectCreated": true,
+      "failingStage": "getRelayerMetadata",
+      "rootCause": "Installed plugin 0.4.2 routes getRelayerMetadata through a mock custom-RPC handler that requires a relayer signer field not assigned for Ethereum/Sepolia initialization. The metadata guard was therefore unsuitable and removed from real-Sepolia readiness.",
+      "observedErrorCategory": "HardhatFhevmError",
+      "observedError": "Relayer signer address is not defined",
+      "runSetupClassification": "D_UNRESOLVED_NO_IMPLEMENTATION_OR_PUBLIC_API_IN_INSTALLED_STACK",
+      "protocolPrivacyFairnessResult": "NOT_TESTED",
+      "secretValuesRecorded": false
     }
   ]
 }

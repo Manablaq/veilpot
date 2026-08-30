@@ -23,13 +23,46 @@ record is [`tooling-incidents.json`](../evidence/gate0/sepolia/tooling-incidents
 stale mutable progress was archived only in `.git` metadata as
 `.git/veilpot-gate0-sepolia-progress.failed-tooling-7a1b228.json`.
 
-**VERIFIED FACT (installed `@fhevm/hardhat-plugin` 0.4.2):** `hre.fhevm.initializeCLIApi()` is the
-typed public API. It is idempotent per process and, on Sepolia, resolves the supported FHEVM
-addresses and constructs the relayer SDK instance. The corrected runner calls it after local
-provenance/credential and chain checks, but before deployment or any encrypted-input/decryption
-operation; it then requires `hre.fhevm.isMock === false` and a successful read-only
-`getRelayerMetadata()` call. A new tooling commit and a fresh probe deployment are mandatory for the
-official run.
+## Tooling incident: unsupported metadata guard in the frozen stack
+
+**TOOLING INCIDENT — NOT A PROTOCOL FAIL.** On tooling commit
+`97ddc31881e4b03465ecba9909f88453e6fd6abf`, the transaction-free Sepolia sanity check reached
+`initializeCLIApi()`, confirmed `isMock === false`, and created an encrypted-input object. It sent
+no protocol transaction, deployed no fresh probe, and created no active progress record. Its final
+`getRelayerMetadata()` guard then failed with sanitized `HardhatFhevmError`:
+`Relayer signer address is not defined`.
+
+**VERIFIED FACT (installed `@fhevm/hardhat-plugin` 0.4.2):** there is no `runSetup()` function,
+signature, or public API in the installed plugin, mock-utils package, or bundled type declarations;
+the only occurrence is stale text in that error. Therefore it is classified as **D — unresolved / no
+callable implementation** and was not called. The plugin's `initializeCLIApi()` is the typed public,
+idempotent per-process API. It initializes the Sepolia provider, resolves FHEVM addresses, builds a
+contracts repository, and constructs the relayer SDK instance. `createEncryptedInput()` then
+succeeds locally without an on-chain transaction.
+
+The same source shows why the metadata guard is invalid for this frozen stack: the public
+`getRelayerMetadata()` calls a mock-utils custom RPC method. The plugin provider handles that method
+whenever `useEmbeddedMockEngine` is true, then requests `_relayerSignerAddress`; that field is only
+assigned on non-Ethereum mock setup, not the Sepolia Ethereum branch. This is not a missing operator
+setup action and cannot be repaired by calling a nonexistent `runSetup()` API. The current official
+Hardhat template was also checked: its test suite skips Sepolia and does not supply a `runSetup()`
+lifecycle call for this plugin family.
+
+Accordingly, `getRelayerMetadata()` is removed as an invalid readiness requirement; it is not worked
+around and `runSetup()` is not called. The source-backed real-Sepolia readiness sequence is:
+provenance/credential preflight → chain ID 11155111 → `initializeCLIApi()` → reject `isMock` →
+create a domain-bound encrypted-input builder → `add128()` → `encrypt()` → verify one returned
+handle and a non-empty input proof. The second incident is recorded separately in
+[`tooling-incidents.json`](../evidence/gate0/sepolia/tooling-incidents.json).
+
+**VERIFIED FACT (installed `@zama-fhe/relayer-sdk` 0.4.1):** an encrypted builder's `encrypt()`
+locally produces the TFHE ciphertext and ZK proof, then invokes the relayer provider's HTTP
+`fetchPostInputProofWithZKProof` request and locally verifies the returned signatures. This path
+does not call an Ethers signer or an Ethereum JSON-RPC transaction method. It is therefore
+classified as **A — transaction-free encryption/readiness activity**, while still being a real
+networked relayer operation. The checker uses the excluded diagnostic deployment only as this
+input's domain-binding target and never submits its handle or proof to that contract. It discards
+the returned handle and proof immediately and records neither protected plaintext nor proof.
 
 ## Baseline
 
@@ -127,9 +160,11 @@ Finalization refuses to write evidence if the zero-total or proven-failure retry
 missing. Mutable progress remains outside the working tree, so every broadcast still begins from a
 clean Git state.
 
-Before a fresh official deployment, run the transaction-free initialization check. It requires all
-three Hardhat variables, confirms Sepolia, initializes the real CLI API, rejects a mock environment,
-and confirms the initialized relayer metadata path without logging metadata or secrets:
+Before a fresh official deployment, the transaction-free initialization command must complete the
+source-backed encrypted-input flow above. It prints only the public deployer address, safe readiness
+flags, returned-handle count, proof-presence boolean, and confirmed transaction count before/after.
+The count must remain unchanged; the command does not deploy a probe, invoke a contract, decrypt
+data, or emit tracked live protocol evidence:
 
 ```bash
 pnpm --filter @veilpot/contracts live:sepolia:check-init

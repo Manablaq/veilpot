@@ -179,18 +179,47 @@ async function expectRejected(action: () => Promise<unknown>): Promise<void> {
 
 describe("VeilDrawProbe Gate 0", function () {
   describe("live runner initialization ordering", function () {
-    it("initializes the CLI before deploying or invoking FHE-dependent runner steps", async function () {
+    it("performs preflight and chain checks before CLI initialization and deploys only afterward", async function () {
       const runner = await readFile(resolve(process.cwd(), "scripts/run-sepolia.ts"), "utf8");
+      const checker = await readFile(
+        resolve(process.cwd(), "scripts/check-sepolia-initialization.ts"),
+        "utf8",
+      );
       const main = runner.slice(runner.indexOf("async function main(): Promise<void>"));
-      expect(main.indexOf("const preflight = assertPreflight()")).to.be.greaterThan(-1);
-      expect(main.indexOf("await initializeLiveFhevm()")).to.be.greaterThan(
-        main.indexOf("const preflight = assertPreflight()"),
+      const preflight = main.indexOf("const preflight = assertPreflight()");
+      const chainCheck = main.indexOf("const network = await hre.ethers.provider.getNetwork()");
+      const initialization = main.indexOf("await initializeLiveFhevm()");
+      const deployment = main.indexOf("state.deployment = await deployProbe");
+      const primaryFheWork = main.indexOf("await preparePrimary(state, primary, signer.address)");
+      const initializer = runner.slice(
+        runner.indexOf("async function initializeLiveFhevm"),
+        runner.indexOf("function sha256"),
       );
-      expect(main.indexOf("await initializeLiveFhevm()")).to.be.lessThan(
-        main.indexOf("state.deployment = await deployProbe"),
+      expect(preflight).to.be.greaterThan(-1);
+      expect(chainCheck).to.be.greaterThan(preflight);
+      expect(initialization).to.be.greaterThan(chainCheck);
+      expect(deployment).to.be.greaterThan(initialization);
+      expect(primaryFheWork).to.be.greaterThan(deployment);
+      expect(initializer).to.include("await hre.fhevm.initializeCLIApi()");
+      expect(initializer).to.include("hre.fhevm.isMock");
+      expect(initializer).not.to.include("getRelayerMetadata");
+      const checkerPreflight = checker.indexOf('stage = "credential-preflight"');
+      const checkerChain = checker.indexOf('stage = "chain-verification"');
+      const checkerInitialization = checker.indexOf('stage = "initialize-cli-api"');
+      const checkerInput = checker.indexOf('stage = "create-encrypted-input"');
+      const checkerEncrypt = checker.indexOf('stage = "encrypt"');
+      const checkerNonceVerification = checker.indexOf('stage = "transaction-count-verification"');
+      expect(checkerChain).to.be.greaterThan(checkerPreflight);
+      expect(checkerInitialization).to.be.greaterThan(checkerChain);
+      expect(checkerInput).to.be.greaterThan(checkerInitialization);
+      expect(checkerEncrypt).to.be.greaterThan(checkerInput);
+      expect(checkerNonceVerification).to.be.greaterThan(checkerEncrypt);
+      expect(checker).to.include("const encrypted = await input.encrypt()");
+      expect(checker).to.include(
+        "confirmedTransactionCountAfter !== confirmedTransactionCountBefore",
       );
-      expect(runner).to.include("await hre.fhevm.initializeCLIApi()");
-      assertions += 4;
+      expect(checker).not.to.include("getRelayerMetadata");
+      assertions += 16;
     });
   });
 

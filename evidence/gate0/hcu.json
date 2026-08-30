@@ -12,12 +12,12 @@
     "sequentialHCU": 5000000,
     "classification": "VERIFIED FACT; not a local measurement"
   },
-  "testAssertions": 266,
+  "testAssertions": 278,
   "measurements": [
     {
       "operation": "encrypted-total-ingest",
       "status": "MEASURED LOCALLY",
-      "evmGas": "185809",
+      "evmGas": "185797",
       "globalHCU": 0,
       "sequentialHCU": 0
     },
@@ -152,7 +152,7 @@
       "operation": "prefix-selection",
       "participantCount": 1,
       "status": "MEASURED LOCALLY",
-      "evmGas": "435928",
+      "evmGas": "435952",
       "globalHCU": 976096,
       "sequentialHCU": 758064
     },
@@ -160,7 +160,7 @@
       "operation": "prefix-selection",
       "participantCount": 2,
       "status": "MEASURED LOCALLY",
-      "evmGas": "583514",
+      "evmGas": "583502",
       "globalHCU": 1952128,
       "sequentialHCU": 1017064
     },
@@ -168,7 +168,7 @@
       "operation": "prefix-selection",
       "participantCount": 4,
       "status": "MEASURED LOCALLY",
-      "evmGas": "881573",
+      "evmGas": "881537",
       "globalHCU": 3904192,
       "sequentialHCU": 1535064
     },
@@ -176,7 +176,7 @@
       "operation": "prefix-selection",
       "participantCount": 8,
       "status": "MEASURED LOCALLY",
-      "evmGas": "1489449",
+      "evmGas": "1489437",
       "globalHCU": 7808320,
       "sequentialHCU": 2571064
     },
@@ -184,7 +184,7 @@
       "operation": "prefix-selection",
       "participantCount": 16,
       "status": "MEASURED LOCALLY",
-      "evmGas": "2752594",
+      "evmGas": "2752558",
       "globalHCU": 15616576,
       "sequentialHCU": 4643064
     }
