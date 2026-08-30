@@ -9,6 +9,18 @@ import { vars } from "hardhat/config";
 import { ethers } from "ethers";
 import * as hre from "hardhat";
 
+import {
+  acquireLiveRunLock,
+  appendToolingRevision,
+  createInvocation,
+  nextFailureDrillAction,
+  releaseLiveRunLock,
+  updateLiveRunLock,
+  type InvocationStatus,
+  type LiveInvocation,
+  type RunnerMode,
+} from "./live-run-support";
+
 type Handle = `0x${string}`;
 type JsonObject = Record<string, unknown>;
 
@@ -35,6 +47,7 @@ interface ProbeContract {
     [weights: Handle[], weightsProof: string, target: Handle, targetProof: string]
   >;
   state(): Promise<bigint>;
+  batchId(): Promise<bigint>;
   drawStarted(): Promise<boolean>;
   serialReduced(): Promise<boolean>;
   balancedReduced(): Promise<boolean>;
@@ -64,7 +77,11 @@ interface RunState {
   readonly network: "sepolia";
   readonly chainId: 11155111;
   readonly localGate0BaselineCommit: string;
+  /** Original tooling commit for historical transactions; never overwritten. */
   readonly liveVerificationToolingCommit: string;
+  toolingRevisions?: string[];
+  invocations?: LiveInvocation[];
+  activeInvocationId?: string;
   deployment?: DeploymentRecord;
   secondaryDeployment?: DeploymentRecord;
   failureDrillDeployment?: DeploymentRecord;
@@ -83,6 +100,7 @@ const PROGRESS_STATE_PATH = resolve(
   process.cwd(),
   "../../.git/veilpot-gate0-sepolia-progress.json",
 );
+const LIVE_RUN_LOCK_PATH = resolve(process.cwd(), "../../.git/veilpot-gate0-sepolia-run.lock.json");
 const LOCAL_GATE0_BASELINE_COMMIT = "5b8483569b8ca63b821e7eb5ef5333ff86917b79";
 const PRIMARY_BATCH_SIZE = 8;
 const STATE_AWAITING_BUCKET = 0n;
@@ -93,6 +111,7 @@ const STATE_CANDIDATE_ACCEPTED = 4n;
 const STATE_NO_ELIGIBLE_WEIGHT = 5n;
 const PRIMARY_TOTAL = 1n << 20n;
 const FAILURE_DRILL_TOTAL = 129n;
+const FAILURE_DRILL_MAX_NEW_BATCHES_PER_INVOCATION = 6;
 
 function gitCommit(): string {
   return execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
@@ -140,6 +159,83 @@ function assertPreflight(): Preflight {
     throw new Error("unauthorized test wallet must differ from the deployer wallet");
   }
   return { liveVerificationToolingCommit, deployerAddress, unauthorizedAddress };
+}
+
+function runnerMode(): RunnerMode {
+  if (process.env.VEILPOT_LIVE_FINALIZE === "true") return "finalize";
+  if (process.env.VEILPOT_LIVE_RUN_FAILURE_DRILL === "true") return "failure-retry-drill";
+  if (process.env.VEILPOT_LIVE_STOP_AFTER === "batch-generated") return "primary-interrupt";
+  return "primary";
+}
+
+function assertAndRecordToolingRevision(state: RunState, currentToolingCommit: string): void {
+  if (state.localGate0BaselineCommit !== LOCAL_GATE0_BASELINE_COMMIT) {
+    throw new Error("persisted local Gate 0 baseline does not match the immutable baseline");
+  }
+  if (
+    !commandSucceeds("git", [
+      "merge-base",
+      "--is-ancestor",
+      state.liveVerificationToolingCommit,
+      currentToolingCommit,
+    ])
+  ) {
+    throw new Error("current live tooling is not a descendant of persisted live evidence tooling");
+  }
+  state.toolingRevisions = appendToolingRevision(
+    state.toolingRevisions,
+    state.liveVerificationToolingCommit,
+    currentToolingCommit,
+  );
+}
+
+function recordWithInvocation(state: RunState, record: JsonObject): JsonObject {
+  return state.activeInvocationId === undefined
+    ? record
+    : { ...record, invocationId: state.activeInvocationId };
+}
+
+function activeInvocation(state: RunState): LiveInvocation {
+  const invocation = state.invocations?.find(
+    (candidate) => candidate.invocationId === state.activeInvocationId,
+  );
+  if (invocation === undefined) throw new Error("active live invocation is not persisted");
+  return invocation;
+}
+
+async function setInvocationStage(state: RunState, stage: string): Promise<void> {
+  const invocation = activeInvocation(state);
+  invocation.stage = stage;
+  await updateLiveRunLock(LIVE_RUN_LOCK_PATH, invocation);
+  await persist(state);
+}
+
+async function completeInvocation(
+  state: RunState,
+  status: Exclude<InvocationStatus, "RUNNING" | "FAILED">,
+  stage: string,
+): Promise<void> {
+  const invocation = activeInvocation(state);
+  invocation.status = status;
+  invocation.stage = stage;
+  invocation.completedAt = new Date().toISOString();
+  await updateLiveRunLock(LIVE_RUN_LOCK_PATH, invocation);
+  await persist(state);
+  delete state.activeInvocationId;
+  await persist(state);
+  await releaseLiveRunLock(LIVE_RUN_LOCK_PATH);
+}
+
+async function failInvocation(state: RunState | undefined, error: unknown): Promise<void> {
+  if (state?.activeInvocationId === undefined) return;
+  const invocation = activeInvocation(state);
+  invocation.status = "FAILED";
+  invocation.stage = "failed-requires-explicit-lock-inspection";
+  invocation.completedAt = new Date().toISOString();
+  invocation.failure = sanitizeError(error);
+  // Keep the lock in place after an abnormal exit. A future runner must fail closed.
+  await updateLiveRunLock(LIVE_RUN_LOCK_PATH, invocation);
+  await persist(state);
 }
 
 /**
@@ -215,30 +311,44 @@ async function receiptRecord(
   const response = await transaction;
   const receipt = await response.wait();
   if (receipt === null) throw new Error(`missing receipt for ${label}`);
-  state.transactions.push({
-    label,
-    transactionHash: response.hash,
-    blockNumber: receipt.blockNumber,
-    status: receipt.status === 1 ? "SUCCESS" : "FAILED",
-    gasUsed: receipt.gasUsed.toString(),
-    confirmationMilliseconds: Math.round(performance.now() - start),
-  });
+  state.transactions.push(
+    recordWithInvocation(state, {
+      label,
+      transactionHash: response.hash,
+      blockNumber: receipt.blockNumber,
+      status: receipt.status === 1 ? "SUCCESS" : "FAILED",
+      gasUsed: receipt.gasUsed.toString(),
+      confirmationMilliseconds: Math.round(performance.now() - start),
+    }),
+  );
   await persist(state);
   return receipt;
 }
 
 async function expectedFailure(
+  state: RunState,
   records: JsonObject[],
   label: string,
   action: () => Promise<unknown>,
 ): Promise<void> {
   try {
     await action();
-    records.push({ label, expected: "REVERT", actual: "UNEXPECTED_SUCCESS" });
+    records.push(
+      recordWithInvocation(state, { label, expected: "REVERT", actual: "UNEXPECTED_SUCCESS" }),
+    );
+    await persist(state);
     throw new Error(`${label} unexpectedly succeeded`);
   } catch (error: unknown) {
     if (error instanceof Error && error.message === `${label} unexpectedly succeeded`) throw error;
-    records.push({ label, expected: "REVERT", actual: "REVERTED", error: sanitizeError(error) });
+    records.push(
+      recordWithInvocation(state, {
+        label,
+        expected: "REVERT",
+        actual: "REVERTED",
+        error: sanitizeError(error),
+      }),
+    );
+    await persist(state);
   }
 }
 
@@ -299,25 +409,29 @@ async function recordProtectedPublicDecrypt(
   const started = performance.now();
   try {
     await hre.fhevm.publicDecrypt([handle]);
-    state.privacyProbes.push({
-      label,
-      expected: "DENIED",
-      actual: "UNEXPECTED_PUBLIC_DECRYPTION_SUCCESS",
-      durationMilliseconds: Math.round(performance.now() - started),
-      cleartextRecorded: false,
-    });
+    state.privacyProbes.push(
+      recordWithInvocation(state, {
+        label,
+        expected: "DENIED",
+        actual: "UNEXPECTED_PUBLIC_DECRYPTION_SUCCESS",
+        durationMilliseconds: Math.round(performance.now() - started),
+        cleartextRecorded: false,
+      }),
+    );
     await persist(state);
     throw new Error(`${label} was publicly decrypted; protected cleartext intentionally discarded`);
   } catch (error: unknown) {
     if (error instanceof Error && error.message.startsWith(`${label} was publicly decrypted`))
       throw error;
-    state.privacyProbes.push({
-      label,
-      expected: "DENIED",
-      actual: "DENIED",
-      durationMilliseconds: Math.round(performance.now() - started),
-      error: sanitizeError(error),
-    });
+    state.privacyProbes.push(
+      recordWithInvocation(state, {
+        label,
+        expected: "DENIED",
+        actual: "DENIED",
+        durationMilliseconds: Math.round(performance.now() - started),
+        error: sanitizeError(error),
+      }),
+    );
     await persist(state);
   }
 }
@@ -340,14 +454,16 @@ async function recordUnauthorizedUserDecrypt(
       await contract.getAddress(),
       signer,
     );
-    state.privacyProbes.push({
-      label: "unauthorized-user-decrypt-total",
-      unauthorizedAddress,
-      expected: "DENIED",
-      actual: "UNEXPECTED_DECRYPTION_SUCCESS",
-      durationMilliseconds: Math.round(performance.now() - started),
-      cleartextRecorded: false,
-    });
+    state.privacyProbes.push(
+      recordWithInvocation(state, {
+        label: "unauthorized-user-decrypt-total",
+        unauthorizedAddress,
+        expected: "DENIED",
+        actual: "UNEXPECTED_DECRYPTION_SUCCESS",
+        durationMilliseconds: Math.round(performance.now() - started),
+        cleartextRecorded: false,
+      }),
+    );
     await persist(state);
     throw new Error("unauthorized user decryption unexpectedly succeeded");
   } catch (error: unknown) {
@@ -357,14 +473,16 @@ async function recordUnauthorizedUserDecrypt(
     ) {
       throw error;
     }
-    state.privacyProbes.push({
-      label: "unauthorized-user-decrypt-total",
-      unauthorizedAddress,
-      expected: "DENIED",
-      actual: "DENIED",
-      durationMilliseconds: Math.round(performance.now() - started),
-      error: sanitizeError(error),
-    });
+    state.privacyProbes.push(
+      recordWithInvocation(state, {
+        label: "unauthorized-user-decrypt-total",
+        unauthorizedAddress,
+        expected: "DENIED",
+        actual: "DENIED",
+        durationMilliseconds: Math.round(performance.now() - started),
+        error: sanitizeError(error),
+      }),
+    );
     if (!state.notes.includes("unauthorized-user-decrypt-total-denied")) {
       state.notes.push("unauthorized-user-decrypt-total-denied");
     }
@@ -411,6 +529,9 @@ async function writeDeploymentManifest(
     deployerAddress: (await hre.ethers.getSigners())[0]?.address ?? null,
     localGate0BaselineCommit: state.localGate0BaselineCommit,
     liveVerificationToolingCommit: state.liveVerificationToolingCommit,
+    liveVerificationToolingRevisions: state.toolingRevisions ?? [
+      state.liveVerificationToolingCommit,
+    ],
     solidityCompilerVersion: "0.8.27",
     optimizer: { enabled: true, runs: 800 },
     metadata: { bytecodeHash: "none" },
@@ -468,12 +589,14 @@ async function preparePrimary(
     }
     const started = performance.now();
     const evidence = await decryptBucketEvidence(contract);
-    state.performance.push({
-      operation: "primary:bucket-public-decrypt",
-      observedSepolia: true,
-      durationMilliseconds: Math.round(performance.now() - started),
-    });
-    await expectedFailure(state.proofBinding, "bucket-wrong-cleartext", async () =>
+    state.performance.push(
+      recordWithInvocation(state, {
+        operation: "primary:bucket-public-decrypt",
+        observedSepolia: true,
+        durationMilliseconds: Math.round(performance.now() - started),
+      }),
+    );
+    await expectedFailure(state, state.proofBinding, "bucket-wrong-cleartext", async () =>
       contract.submitBucketEvidence.staticCall(
         evidence.exponent + 1n,
         evidence.zero,
@@ -481,7 +604,7 @@ async function preparePrimary(
         evidence.proof,
       ),
     );
-    await expectedFailure(state.proofBinding, "bucket-empty-proof", async () =>
+    await expectedFailure(state, state.proofBinding, "bucket-empty-proof", async () =>
       contract.submitBucketEvidence.staticCall(
         evidence.exponent,
         evidence.zero,
@@ -490,7 +613,7 @@ async function preparePrimary(
       ),
     );
     const secondaryEvidence = await prepareSecondaryBucketEvidence(state, signerAddress);
-    await expectedFailure(state.proofBinding, "bucket-proof-from-another-draw", async () =>
+    await expectedFailure(state, state.proofBinding, "bucket-proof-from-another-draw", async () =>
       contract.submitBucketEvidence.staticCall(
         evidence.exponent,
         evidence.zero,
@@ -508,14 +631,16 @@ async function preparePrimary(
         evidence.proof,
       ),
     );
-    state.proofBinding.push({
-      label: "bucket-valid-proof",
-      actual: "ACCEPTED",
-      publicBucketExponent: evidence.exponent.toString(),
-      publicZero: evidence.zero,
-      publicSupported: evidence.supported,
-    });
-    await expectedFailure(state.proofBinding, "bucket-stale-proof", async () =>
+    state.proofBinding.push(
+      recordWithInvocation(state, {
+        label: "bucket-valid-proof",
+        actual: "ACCEPTED",
+        publicBucketExponent: evidence.exponent.toString(),
+        publicZero: evidence.zero,
+        publicSupported: evidence.supported,
+      }),
+    );
+    await expectedFailure(state, state.proofBinding, "bucket-stale-proof", async () =>
       contract.submitBucketEvidence.staticCall(
         evidence.exponent,
         evidence.zero,
@@ -569,17 +694,21 @@ async function executePrimaryM8(
       "primary:generate-m8",
       contract.generateCandidateBatch(PRIMARY_BATCH_SIZE),
     );
-    state.recovery.push({
-      label: "candidate-batch-generated",
-      state: "AwaitingBatchProof",
-      resumeRequired: true,
-    });
+    state.recovery.push(
+      recordWithInvocation(state, {
+        label: "candidate-batch-generated",
+        state: "AwaitingBatchProof",
+        resumeRequired: true,
+      }),
+    );
     await persist(state);
     if (process.env.VEILPOT_LIVE_STOP_AFTER === "batch-generated") {
-      state.recovery.push({
-        label: "intentional-interruption",
-        actual: "STOPPED_AFTER_BATCH_GENERATION",
-      });
+      state.recovery.push(
+        recordWithInvocation(state, {
+          label: "intentional-interruption",
+          actual: "STOPPED_AFTER_BATCH_GENERATION",
+        }),
+      );
       await persist(state);
       return;
     }
@@ -610,17 +739,19 @@ async function executePrimaryM8(
   );
   const started = performance.now();
   const publicResult = await hre.fhevm.publicDecrypt([reductions[1]]);
-  state.performance.push({
-    operation: "primary:batch-success-public-decrypt",
-    observedSepolia: true,
-    durationMilliseconds: Math.round(performance.now() - started),
-  });
+  state.performance.push(
+    recordWithInvocation(state, {
+      operation: "primary:batch-success-public-decrypt",
+      observedSepolia: true,
+      durationMilliseconds: Math.round(performance.now() - started),
+    }),
+  );
   const success = publicResult.clearValues[reductions[1]] as boolean;
   if (!success)
     throw new Error(
       "power-of-two primary total unexpectedly produced an invalid bounded candidate",
     );
-  await expectedFailure(state.proofBinding, "batch-wrong-cleartext", async () =>
+  await expectedFailure(state, state.proofBinding, "batch-wrong-cleartext", async () =>
     contract.submitBatchEvidence.staticCall(false, publicResult.decryptionProof),
   );
   await receiptRecord(
@@ -633,25 +764,29 @@ async function executePrimaryM8(
     "public-decrypt-accepted-target",
     await contract.acceptedTargetHandle(),
   );
-  await expectedFailure(state.antiGrinding, "successful-batch-reroll", async () =>
+  await expectedFailure(state, state.antiGrinding, "successful-batch-reroll", async () =>
     contract.generateCandidateBatch.staticCall(PRIMARY_BATCH_SIZE),
   );
-  await expectedFailure(state.proofBinding, "batch-replayed-proof", async () =>
+  await expectedFailure(state, state.proofBinding, "batch-replayed-proof", async () =>
     contract.submitBatchEvidence.staticCall(true, publicResult.decryptionProof),
   );
-  state.antiGrinding.push({
-    label: "primary-success-irreversible",
-    actualState: (await contract.state()).toString(),
-    expectedState: STATE_CANDIDATE_ACCEPTED.toString(),
-  });
+  state.antiGrinding.push(
+    recordWithInvocation(state, {
+      label: "primary-success-irreversible",
+      actualState: (await contract.state()).toString(),
+      expectedState: STATE_CANDIDATE_ACCEPTED.toString(),
+    }),
+  );
   if (
     state.recovery.some((record) => record.label === "intentional-interruption") &&
     !state.notes.includes("interruption-resume-complete")
   ) {
-    state.recovery.push({
-      label: "interruption-resume",
-      actual: "RESUMED_WITHOUT_NEW_CANDIDATE_BATCH",
-    });
+    state.recovery.push(
+      recordWithInvocation(state, {
+        label: "interruption-resume",
+        actual: "RESUMED_WITHOUT_NEW_CANDIDATE_BATCH",
+      }),
+    );
     state.notes.push("interruption-resume-complete");
   }
   await persist(state);
@@ -678,13 +813,15 @@ async function runPrefixMeasurements(
       ),
     );
     const latest = state.transactions.at(-1);
-    state.performance.push({
-      operation: "prefix-selection",
-      participantCount,
-      observedSepolia: true,
-      gasUsed: latest?.gasUsed ?? null,
-      liveHcuDepth: "NOT_DIRECTLY_OBSERVABLE_ON_LIVE_SEPOLIA",
-    });
+    state.performance.push(
+      recordWithInvocation(state, {
+        operation: "prefix-selection",
+        participantCount,
+        observedSepolia: true,
+        gasUsed: latest?.gasUsed ?? null,
+        liveHcuDepth: "NOT_DIRECTLY_OBSERVABLE_ON_LIVE_SEPOLIA",
+      }),
+    );
     await persist(state);
   }
   state.notes.push("prefix-measurements-complete");
@@ -714,30 +851,26 @@ async function runZeroTotal(state: RunState, signerAddress: string): Promise<voi
       evidence.proof,
     ),
   );
-  await expectedFailure(state.zeroTotal, "zero-total-candidate-generation", async () =>
+  await expectedFailure(state, state.zeroTotal, "zero-total-candidate-generation", async () =>
     contract.generateCandidateBatch.staticCall(1),
   );
-  state.zeroTotal.push({
-    terminalState: (await contract.state()).toString(),
-    expectedTerminalState: STATE_NO_ELIGIBLE_WEIGHT.toString(),
-    randomCandidateGenerated: false,
-  });
+  state.zeroTotal.push(
+    recordWithInvocation(state, {
+      terminalState: (await contract.state()).toString(),
+      expectedTerminalState: STATE_NO_ELIGIBLE_WEIGHT.toString(),
+      randomCandidateGenerated: false,
+    }),
+  );
   state.notes.push("zero-total-complete");
   await persist(state);
 }
 
 async function runFailureRetryDrill(state: RunState, signerAddress: string): Promise<void> {
-  if (state.notes.includes("failure-retry-drill-complete")) return;
   if (state.failureDrillDeployment === undefined) {
     state.failureDrillDeployment = await deployProbe(state, "failure-retry-drill");
     await persist(state);
   }
-  let contract = await contractAt(state.failureDrillDeployment.contractAddress);
-  if ((await contract.state()) === STATE_CANDIDATE_ACCEPTED) {
-    state.failureDrillDeployment = await deployProbe(state, "failure-retry-drill-replacement");
-    await persist(state);
-    contract = await contractAt(state.failureDrillDeployment.contractAddress);
-  }
+  const contract = await contractAt(state.failureDrillDeployment.contractAddress);
   if (!(await contract.drawStarted())) {
     const encrypted = await encrypt128(contract, signerAddress, [FAILURE_DRILL_TOTAL]);
     await receiptRecord(
@@ -767,101 +900,156 @@ async function runFailureRetryDrill(state: RunState, signerAddress: string): Pro
       ),
     );
   }
-  if ((await contract.state()) === STATE_BUCKET_READY) {
+  let generatedThisInvocation = 0;
+  let priorFailureProof: string | undefined;
+
+  for (;;) {
+    const currentState = await contract.state();
+    const action = nextFailureDrillAction(
+      currentState,
+      generatedThisInvocation,
+      FAILURE_DRILL_MAX_NEW_BATCHES_PER_INVOCATION,
+    );
+    if (action === "STOP_ACCEPTED") {
+      await expectedFailure(
+        state,
+        state.antiGrinding,
+        "failure-retry-drill-successful-batch-reroll",
+        async () => contract.generateCandidateBatch.staticCall(1),
+      );
+      if (!state.notes.includes("failure-retry-drill-accepted")) {
+        state.notes.push("failure-retry-drill-accepted");
+      }
+      await persist(state);
+      return;
+    }
+    if (action === "BOUNDED_STOP") {
+      state.recovery.push(
+        recordWithInvocation(state, {
+          label: "failure-retry-drill-bounded-stop",
+          maximumNewBatches: FAILURE_DRILL_MAX_NEW_BATCHES_PER_INVOCATION,
+          state: STATE_AWAITING_CANDIDATE_BATCH.toString(),
+        }),
+      );
+      await persist(state);
+      return;
+    }
+    if (action === "GENERATE_NEXT_BATCH") {
+      const nextBatchId = (await contract.batchId()) + 1n;
+      await setInvocationStage(
+        state,
+        `failure-drill:before-generate-batch-${nextBatchId.toString()}`,
+      );
+      await receiptRecord(
+        state,
+        `failure-retry-drill:generate-m1-batch-${nextBatchId.toString()}`,
+        contract.generateCandidateBatch(1),
+      );
+      generatedThisInvocation += 1;
+      await setInvocationStage(state, `failure-drill:generated-batch-${nextBatchId.toString()}`);
+      continue;
+    }
+
+    const batchId = await contract.batchId();
+    await setInvocationStage(state, `failure-drill:process-batch-${batchId.toString()}`);
+    if (!(await contract.serialReduced())) {
+      await receiptRecord(
+        state,
+        `failure-retry-drill:reduce-serial-batch-${batchId.toString()}`,
+        contract.reduceSerial(),
+      );
+    }
+    if (!(await contract.balancedReduced())) {
+      await receiptRecord(
+        state,
+        `failure-retry-drill:reduce-balanced-batch-${batchId.toString()}`,
+        contract.reduceBalanced(),
+      );
+    }
+    if (!(await contract.batchEvidencePrepared())) {
+      await receiptRecord(
+        state,
+        `failure-retry-drill:prepare-batch-evidence-${batchId.toString()}`,
+        contract.prepareBatchEvidence(),
+      );
+    }
+    const reductions = await contract.reductionHandles();
+    const decryptStarted = performance.now();
+    const result = await hre.fhevm.publicDecrypt([reductions[1]]);
+    state.performance.push(
+      recordWithInvocation(state, {
+        operation: "failure-retry-drill:batch-success-public-decrypt",
+        batchId: batchId.toString(),
+        observedSepolia: true,
+        durationMilliseconds: Math.round(performance.now() - decryptStarted),
+      }),
+    );
+    const success = result.clearValues[reductions[1]] as boolean;
+    if (success) {
+      await receiptRecord(
+        state,
+        `failure-retry-drill:submit-success-batch-${batchId.toString()}`,
+        contract.submitBatchEvidence(true, result.decryptionProof),
+      );
+      if ((await contract.state()) !== STATE_CANDIDATE_ACCEPTED) {
+        throw new Error("proven successful failure-drill batch did not enter CandidateAccepted");
+      }
+      continue;
+    }
+
+    await expectedFailure(
+      state,
+      state.proofBinding,
+      `failure-retry-drill:wrong-cleartext-batch-${batchId.toString()}`,
+      async () => contract.submitBatchEvidence.staticCall(true, result.decryptionProof),
+    );
+    await expectedFailure(
+      state,
+      state.proofBinding,
+      `failure-retry-drill:empty-proof-batch-${batchId.toString()}`,
+      async () => contract.submitBatchEvidence.staticCall(false, "0x"),
+    );
+    if (priorFailureProof !== undefined) {
+      await expectedFailure(
+        state,
+        state.proofBinding,
+        `failure-retry-drill:prior-batch-proof-batch-${batchId.toString()}`,
+        async () => contract.submitBatchEvidence.staticCall(false, priorFailureProof!),
+      );
+    }
+    await expectedFailure(
+      state,
+      state.antiGrinding,
+      `failure-retry-drill:retry-before-valid-failure-proof-batch-${batchId.toString()}`,
+      async () => contract.generateCandidateBatch.staticCall(1),
+    );
     await receiptRecord(
       state,
-      "failure-retry-drill:generate-first-m1",
-      contract.generateCandidateBatch(1),
+      `failure-retry-drill:submit-proven-failure-batch-${batchId.toString()}`,
+      contract.submitBatchEvidence(false, result.decryptionProof),
     );
-  }
-  if ((await contract.state()) !== STATE_AWAITING_BATCH_PROOF) return;
-  if (!(await contract.serialReduced())) {
-    await receiptRecord(state, "failure-retry-drill:reduce-first-serial", contract.reduceSerial());
-  }
-  if (!(await contract.balancedReduced())) {
-    await receiptRecord(
-      state,
-      "failure-retry-drill:reduce-first-balanced",
-      contract.reduceBalanced(),
+    if ((await contract.state()) !== STATE_AWAITING_CANDIDATE_BATCH) {
+      throw new Error("proven failed batch did not enter AwaitingCandidateBatch");
+    }
+    priorFailureProof = result.decryptionProof;
+    state.antiGrinding.push(
+      recordWithInvocation(state, {
+        label: `failure-retry-drill:failure-proof-accepted-batch-${batchId.toString()}`,
+        actual: "PASSED",
+        protectedCleartextRecorded: false,
+      }),
     );
-  }
-  if (!(await contract.batchEvidencePrepared())) {
-    await receiptRecord(
-      state,
-      "failure-retry-drill:prepare-first-proof",
-      contract.prepareBatchEvidence(),
-    );
-  }
-  const firstReduction = await contract.reductionHandles();
-  const firstProof = await hre.fhevm.publicDecrypt([firstReduction[1]]);
-  const firstSuccess = firstProof.clearValues[firstReduction[1]] as boolean;
-  if (firstSuccess) {
-    await receiptRecord(
-      state,
-      "failure-retry-drill:submit-natural-success",
-      contract.submitBatchEvidence(true, firstProof.decryptionProof),
-    );
-    state.antiGrinding.push({
-      label: "failure-retry-drill",
-      actual:
-        "NATURAL_FIRST_BATCH_SUCCESS; failure path not observed; use a new explicit drill deployment",
-      cleartextRecorded: false,
-    });
     await persist(state);
-    return;
   }
-  await expectedFailure(state.antiGrinding, "failure-retry-before-valid-failure-proof", async () =>
-    contract.generateCandidateBatch.staticCall(1),
-  );
-  await receiptRecord(
-    state,
-    "failure-retry-drill:submit-proven-failure",
-    contract.submitBatchEvidence(false, firstProof.decryptionProof),
-  );
-  if ((await contract.state()) !== STATE_AWAITING_CANDIDATE_BATCH) {
-    throw new Error("proven failed batch did not enter AwaitingCandidateBatch");
-  }
-  await receiptRecord(
-    state,
-    "failure-retry-drill:generate-second-m1",
-    contract.generateCandidateBatch(1),
-  );
-  await receiptRecord(state, "failure-retry-drill:reduce-second-serial", contract.reduceSerial());
-  await receiptRecord(
-    state,
-    "failure-retry-drill:reduce-second-balanced",
-    contract.reduceBalanced(),
-  );
-  await receiptRecord(
-    state,
-    "failure-retry-drill:prepare-second-proof",
-    contract.prepareBatchEvidence(),
-  );
-  await expectedFailure(state.proofBinding, "batch-proof-from-prior-batch", async () =>
-    contract.submitBatchEvidence.staticCall(false, firstProof.decryptionProof),
-  );
-  const secondReduction = await contract.reductionHandles();
-  const secondProof = await hre.fhevm.publicDecrypt([secondReduction[1]]);
-  const secondSuccess = secondProof.clearValues[secondReduction[1]] as boolean;
-  await receiptRecord(
-    state,
-    "failure-retry-drill:submit-second-proof",
-    contract.submitBatchEvidence(secondSuccess, secondProof.decryptionProof),
-  );
-  state.antiGrinding.push({
-    label: "failure-retry-after-proven-failure",
-    actual: "PASSED",
-    firstBatchCleartextRecorded: false,
-    secondBatchCleartextRecorded: false,
-  });
-  state.notes.push("failure-retry-drill-complete");
-  await persist(state);
 }
 
 async function emitEvidence(state: RunState): Promise<void> {
   const provenance = {
     localGate0BaselineCommit: state.localGate0BaselineCommit,
     liveVerificationToolingCommit: state.liveVerificationToolingCommit,
+    liveVerificationToolingRevisions: state.toolingRevisions ?? [
+      state.liveVerificationToolingCommit,
+    ],
   };
   const files: Readonly<Record<string, unknown>> = {
     "run-summary.json": {
@@ -869,9 +1057,15 @@ async function emitEvidence(state: RunState): Promise<void> {
       ...provenance,
       status: "IN_PROGRESS_OR_COMPLETE_PER_RECORDED_SCENARIOS",
       primaryDeployment: state.deployment ?? null,
+      invocations: state.invocations ?? [],
       noSecretValuesRecorded: true,
     },
-    "transactions.json": { schemaVersion: 1, ...provenance, transactions: state.transactions },
+    "transactions.json": {
+      schemaVersion: 1,
+      ...provenance,
+      transactions: state.transactions,
+      note: "Historical transactions without invocationId are intentionally unattributed.",
+    },
     "privacy-probes.json": { schemaVersion: 1, ...provenance, probes: state.privacyProbes },
     "proof-binding.json": { schemaVersion: 1, ...provenance, probes: state.proofBinding },
     "anti-grinding.json": { schemaVersion: 1, ...provenance, probes: state.antiGrinding },
@@ -893,54 +1087,91 @@ async function emitEvidence(state: RunState): Promise<void> {
 
 async function main(): Promise<void> {
   const preflight = assertPreflight();
-  const state = await readState(preflight.liveVerificationToolingCommit);
-  if (
-    state.localGate0BaselineCommit !== LOCAL_GATE0_BASELINE_COMMIT ||
-    state.liveVerificationToolingCommit !== preflight.liveVerificationToolingCommit
-  ) {
-    throw new Error("persisted live evidence provenance does not match the clean tooling commit");
-  }
   const network = await hre.ethers.provider.getNetwork();
   if (network.chainId !== 11_155_111n)
     throw new Error(`expected Sepolia chain 11155111, got ${network.chainId.toString()}`);
-  await initializeLiveFhevm();
-  const signer = (await hre.ethers.getSigners())[0];
-  if (signer === undefined) throw new Error("no deployer signer configured");
-  if (signer.address.toLowerCase() !== preflight.deployerAddress.toLowerCase()) {
-    throw new Error("configured deployer address does not match the preflight wallet");
-  }
-  if (state.deployment === undefined) {
-    state.deployment = await deployProbe(state, "primary");
+  const startingConfirmedNonce = await hre.ethers.provider.getTransactionCount(
+    preflight.deployerAddress,
+    "latest",
+  );
+  const invocation = createInvocation(
+    runnerMode(),
+    startingConfirmedNonce,
+    preflight.liveVerificationToolingCommit,
+    preflight.deployerAddress,
+  );
+  await acquireLiveRunLock(LIVE_RUN_LOCK_PATH, invocation);
+
+  let state: RunState | undefined;
+  try {
+    state = await readState(preflight.liveVerificationToolingCommit);
+    assertAndRecordToolingRevision(state, preflight.liveVerificationToolingCommit);
+    state.invocations ??= [];
+    state.invocations.push(invocation);
+    state.activeInvocationId = invocation.invocationId;
     await persist(state);
-  }
-  const primary = await contractAt(state.deployment.contractAddress);
-  await preparePrimary(state, primary, signer.address);
-  await executePrimaryM8(state, primary, preflight.unauthorizedAddress);
-  if ((await primary.state()) === STATE_CANDIDATE_ACCEPTED) {
-    await runPrefixMeasurements(state, primary, signer.address);
-    await runZeroTotal(state, signer.address);
-  }
-  if (process.env.VEILPOT_LIVE_RUN_FAILURE_DRILL === "true") {
-    await runFailureRetryDrill(state, signer.address);
-  }
-  if (process.env.VEILPOT_LIVE_FINALIZE === "true") {
-    if (!state.notes.includes("zero-total-complete")) {
-      throw new Error("zero-total evidence is incomplete; refusing to finalize");
+    await setInvocationStage(state, "preflight-complete-before-fhevm-initialization");
+    await initializeLiveFhevm();
+    await setInvocationStage(state, "fhevm-initialized");
+    const signer = (await hre.ethers.getSigners())[0];
+    if (signer === undefined) throw new Error("no deployer signer configured");
+    if (signer.address.toLowerCase() !== preflight.deployerAddress.toLowerCase()) {
+      throw new Error("configured deployer address does not match the preflight wallet");
     }
-    if (!state.notes.includes("prefix-measurements-complete")) {
-      throw new Error("prefix measurement evidence is incomplete; refusing to finalize");
+    if (state.deployment === undefined) {
+      await setInvocationStage(state, "before-primary-deployment");
+      state.deployment = await deployProbe(state, "primary");
+      await persist(state);
     }
-    if (!state.notes.includes("interruption-resume-complete")) {
-      throw new Error("interruption/resume evidence is incomplete; refusing to finalize");
+    const primary = await contractAt(state.deployment.contractAddress);
+    await preparePrimary(state, primary, signer.address);
+    await executePrimaryM8(state, primary, preflight.unauthorizedAddress);
+    if ((await primary.state()) === STATE_CANDIDATE_ACCEPTED) {
+      await runPrefixMeasurements(state, primary, signer.address);
+      await runZeroTotal(state, signer.address);
     }
-    if (!state.notes.includes("failure-retry-drill-complete")) {
-      throw new Error("failure-retry evidence is incomplete; refusing to finalize");
+    if (process.env.VEILPOT_LIVE_RUN_FAILURE_DRILL === "true") {
+      await runFailureRetryDrill(state, signer.address);
     }
-    if (!state.notes.includes("unauthorized-user-decrypt-total-denied")) {
-      throw new Error("independent-wallet denial evidence is incomplete; refusing to finalize");
+    if (process.env.VEILPOT_LIVE_FINALIZE === "true") {
+      if (!state.notes.includes("zero-total-complete")) {
+        throw new Error("zero-total evidence is incomplete; refusing to finalize");
+      }
+      if (!state.notes.includes("prefix-measurements-complete")) {
+        throw new Error("prefix measurement evidence is incomplete; refusing to finalize");
+      }
+      if (!state.notes.includes("interruption-resume-complete")) {
+        throw new Error("interruption/resume evidence is incomplete; refusing to finalize");
+      }
+      if (!state.notes.includes("failure-retry-drill-accepted")) {
+        throw new Error("failure-retry acceptance evidence is incomplete; refusing to finalize");
+      }
+      if (!state.notes.includes("unauthorized-user-decrypt-total-denied")) {
+        throw new Error("independent-wallet denial evidence is incomplete; refusing to finalize");
+      }
+      await writeDeploymentManifest(state, state.deployment);
+      await emitEvidence(state);
     }
-    await writeDeploymentManifest(state, state.deployment);
-    await emitEvidence(state);
+    const intentionallyInterrupted =
+      runnerMode() === "primary-interrupt" &&
+      state.recovery.some((record) => record.label === "intentional-interruption");
+    let boundedStop = false;
+    if (runnerMode() === "failure-retry-drill" && state.failureDrillDeployment !== undefined) {
+      const drill = await contractAt(state.failureDrillDeployment.contractAddress);
+      boundedStop = (await drill.state()) === STATE_AWAITING_CANDIDATE_BATCH;
+    }
+    await completeInvocation(
+      state,
+      intentionallyInterrupted ? "INTERRUPTED" : boundedStop ? "BOUNDED_STOP" : "COMPLETED",
+      intentionallyInterrupted
+        ? "intentional-primary-interruption-after-persisted-candidate"
+        : boundedStop
+          ? "failure-drill-bounded-stop-awaiting-candidate-batch"
+          : "runner-completed",
+    );
+  } catch (error: unknown) {
+    await failInvocation(state, error);
+    throw error;
   }
 }
 

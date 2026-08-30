@@ -92,7 +92,7 @@ const testSummary = {
   statisticalSanity: { passed: statistical.passed },
   solidityMock: {
     passed: true,
-    mochaTests: 27,
+    mochaTests: 30,
     assertions: hcu.testAssertions,
     allMeasurementsCompleted: hcu.measurements.every((item) => item.status === "MEASURED LOCALLY"),
   },

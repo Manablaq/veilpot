@@ -1,11 +1,24 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 
 import { FhevmType } from "@fhevm/hardhat-plugin";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { expect } from "chai";
 import { ethers } from "ethers";
 import * as hre from "hardhat";
+
+import {
+  STATE_AWAITING_BATCH_PROOF,
+  STATE_AWAITING_CANDIDATE_BATCH,
+  STATE_BUCKET_READY,
+  STATE_CANDIDATE_ACCEPTED,
+  acquireLiveRunLock,
+  appendToolingRevision,
+  createInvocation,
+  nextFailureDrillAction,
+  releaseLiveRunLock,
+} from "../scripts/live-run-support";
 
 interface Measurement {
   readonly operation: string;
@@ -41,6 +54,7 @@ type ProbeContract = ethers.Contract & {
     targetProof: string,
   ): Transaction;
   state(): Promise<bigint>;
+  batchId(): Promise<bigint>;
   bucketEvidenceHandles(): Promise<[Handle, Handle, Handle]>;
   totalHandle(): Promise<Handle>;
   candidateHandle(index: number): Promise<Handle>;
@@ -178,6 +192,59 @@ async function expectRejected(action: () => Promise<unknown>): Promise<void> {
 }
 
 describe("VeilDrawProbe Gate 0", function () {
+  describe("failure-drill runner resumability and invocation attribution", function () {
+    it("selects a proof-before-retry action for every resumable state and stops at the cap", function () {
+      expect(nextFailureDrillAction(STATE_BUCKET_READY, 0, 6)).to.equal("GENERATE_NEXT_BATCH");
+      expect(nextFailureDrillAction(STATE_AWAITING_BATCH_PROOF, 0, 6)).to.equal(
+        "PROCESS_CURRENT_BATCH",
+      );
+      expect(nextFailureDrillAction(STATE_AWAITING_CANDIDATE_BATCH, 0, 6)).to.equal(
+        "GENERATE_NEXT_BATCH",
+      );
+      expect(nextFailureDrillAction(STATE_AWAITING_CANDIDATE_BATCH, 6, 6)).to.equal("BOUNDED_STOP");
+      expect(nextFailureDrillAction(STATE_CANDIDATE_ACCEPTED, 0, 6)).to.equal("STOP_ACCEPTED");
+      assertions += 5;
+    });
+
+    it("atomically rejects a duplicate or unresolved live-run lock", async function () {
+      const directory = await mkdtemp(join(tmpdir(), "veilpot-live-lock-"));
+      const lockPath = join(directory, "runner.lock.json");
+      const first = createInvocation(
+        "failure-retry-drill",
+        100,
+        "tooling-commit",
+        "0x1111111111111111111111111111111111111111",
+      );
+      const second = createInvocation(
+        "failure-retry-drill",
+        101,
+        "tooling-commit",
+        "0x1111111111111111111111111111111111111111",
+      );
+      try {
+        await acquireLiveRunLock(lockPath, first);
+        await expectRejected(() => acquireLiveRunLock(lockPath, second));
+        await releaseLiveRunLock(lockPath);
+        await writeFile(lockPath, '{"status":"RUNNING"}\n', "utf8");
+        await expectRejected(() => acquireLiveRunLock(lockPath, second));
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+      assertions += 2;
+    });
+
+    it("preserves historical tooling provenance without attributing old transactions", function () {
+      expect(appendToolingRevision(undefined, "historical", "corrected")).to.deep.equal([
+        "historical",
+        "corrected",
+      ]);
+      expect(
+        appendToolingRevision(["historical", "corrected"], "historical", "corrected"),
+      ).to.deep.equal(["historical", "corrected"]);
+      assertions += 2;
+    });
+  });
+
   describe("live runner initialization ordering", function () {
     it("performs preflight and chain checks before CLI initialization and deploys only afterward", async function () {
       const runner = await readFile(resolve(process.cwd(), "scripts/run-sepolia.ts"), "utf8");
@@ -407,6 +474,7 @@ describe("VeilDrawProbe Gate 0", function () {
 
       const failedCandidate = await debugUint128(await failed.prepared.contract.candidateHandle(0));
       expect(failedCandidate >= 129n).to.equal(true);
+      expect(await failed.prepared.contract.batchId()).to.equal(1n);
       await expect(
         failed.prepared.contract.generateCandidateBatch(1),
       ).to.be.revertedWithCustomError(failed.prepared.contract, "InvalidState");
@@ -414,15 +482,16 @@ describe("VeilDrawProbe Gate 0", function () {
         .reverted;
       await receiptOf(failed.prepared.contract.submitBatchEvidence(false, failed.failureProof));
       expect(await failed.prepared.contract.state()).to.equal(2n);
-      assertions += 4;
+      assertions += 5;
 
       await receiptOf(failed.prepared.contract.generateCandidateBatch(1));
+      expect(await failed.prepared.contract.batchId()).to.equal(2n);
       await receiptOf(failed.prepared.contract.reduceSerial());
       await receiptOf(failed.prepared.contract.reduceBalanced());
       await receiptOf(failed.prepared.contract.prepareBatchEvidence());
       await expect(failed.prepared.contract.submitBatchEvidence(false, failed.failureProof)).to.be
         .reverted;
-      assertions += 1;
+      assertions += 2;
 
       const nextReductions = await failed.prepared.contract.reductionHandles();
       const nextResult = await hre.fhevm.publicDecrypt([nextReductions[1]]);

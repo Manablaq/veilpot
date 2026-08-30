@@ -2,11 +2,10 @@
 
 ## Status
 
-**UNRESOLVED — NO COMPLETE OFFICIAL LIVE EVIDENCE EXISTS.** This record contains a reproducible
-live-probe plan, tooling incidents, and limited diagnostic transactions; it is not evidence of a
-completed Sepolia execution. Gate 0 remains `CONDITIONAL` until the generated
-`evidence/gate0/sepolia/` artifacts contain actual transaction references and all required scenarios
-pass.
+**CONDITIONAL — PARTIAL OFFICIAL LIVE EVIDENCE EXISTS, BUT IS NOT FINALIZED.** This record contains
+the reproducible live-probe plan, tooling incidents, and measured partial Sepolia results. Gate 0
+remains `CONDITIONAL` until the generated `evidence/gate0/sepolia/` artifacts contain all required
+transaction references and every mandatory scenario is complete.
 
 ## Tooling incident: excluded pre-official deployment
 
@@ -180,15 +179,16 @@ pnpm --filter @veilpot/contracts live:sepolia
 
 The first command stops after m=8 batch generation; the second must resume reduction/proof work
 without another candidate-generation transaction. The failure-retry drill is intentionally opt-in
-because it uses a separate live probe and never loops to seek a desired random outcome:
+because it uses a separate live probe and a recorded per-invocation batch bound rather than an
+unlimited retry loop:
 
 ```bash
 pnpm --filter @veilpot/contracts live:sepolia:failure-drill
 ```
 
-If its single `m=1`, `T=129` batch is naturally successful, it records that the failure path was not
-observed; do not relabel it as a failure test. A later explicitly requested new drill is then needed
-for the failure/retry condition.
+For `m=1`, `T=129`, a naturally successful batch is recorded honestly and never relabelled as a
+failure test. A naturally failed batch can be resumed on the same probe only after its valid false
+proof is accepted; a bounded continuation then generates the next batch.
 
 Only after the primary, zero-total, interruption/resume, and failure-retry drills are all complete,
 emit the commit-ready evidence bundle without new protocol work:
@@ -243,3 +243,48 @@ from the preceding batch cannot advance the next batch. Prefix benchmark calls c
 No Sepolia assertion above is currently a measured result. Any missing live scenario, unavailable
 relayer behavior, parity mismatch, protected-value disclosure, proof-binding failure, reroll path,
 or impractical cost must keep Gate 0 `CONDITIONAL` or change it to `FAIL` based on the evidence.
+
+## Partial live failure/retry evidence and resumability correction
+
+**MEASURED RESULT — PARTIAL, NOT FINALIZED.** Under tooling commit
+`10742cd4de1330970b4e38a87d4f7dded4b0fb97`, dedicated probe
+`0x90aA8B2C43387E9FEE60b5500A34D0a7350b7065` produced two real natural `m=1` failures with `T=129`
+and public bucket `B=256`. Batch 1 was generated once, its real false proof was accepted, and only
+then was batch 2 generated. Batch 2 also failed naturally and its real false proof was accepted. The
+contract is therefore correctly in `AwaitingCandidateBatch`, with `batchId=2`; no batch 3 exists.
+This is valid partial proof-before-retry evidence, not a protocol failure.
+
+The historical runner recorded no durable process invocation identity. Consequently, the chain
+proves the ordered transactions but cannot attribute its later batch-2 reduction/proof transactions
+to one of two visible local invocations. Historical transaction records deliberately remain without
+an `invocationId`; they are not backfilled with guesses.
+
+**TOOLING CORRECTION:** subsequent runner revisions preserve the original live tooling commit while
+recording an explicit tooling-revision history. Every new mutating invocation atomically acquires a
+non-secret lock under `.git`, records `invocationId`, runner mode, start time, starting confirmed
+nonce, public deployer address, tooling commit, stage, and completion status, and tags new
+transaction/probe records with that `invocationId`. A pre-existing or failed lock is fail-closed and
+requires explicit operator inspection; it is never silently removed. Normal completion, intentional
+interruption, and bounded-stop completion release the lock only after their state is persisted.
+
+The corrected failure-drill runner is resumable on the _same_ probe from `BucketReady`,
+`AwaitingBatchProof`, and `AwaitingCandidateBatch`. It never redeploys a probe merely because a
+retry failed. It permits at most six newly generated m=1 batches per invocation and stops honestly
+when the bound is exhausted. For every false result it performs applicable exact-state rejection
+simulations before submitting the valid false proof: wrong clear value, empty proof, prior-batch
+proof when available in-process, and retry before proof. Protected candidate values and raw proofs
+are never persisted.
+
+The correction does not alter `VeilDrawProbe.sol`; the existing probe can be resumed directly
+because retry authorization is on-chain state (`AwaitingCandidateBatch`) rather than runner-local
+state. Future evidence must identify the provenance transition explicitly: historical drill
+transactions belong to tooling `10742cd…`; subsequent records carry the corrected tooling commit and
+an invocation ID.
+
+## Reduction-equivalence disclosure
+
+**SUFFICIENT FOR GATE 0 WITH DISCLOSED LIMITATION.** Local FHE tests directly decrypt and compare
+serial/balanced outputs for `m = 1, 2, 4, 8, 16`, and the independent bigint model exhaustively
+checks its small-domain coverage. Both reductions independently executed successfully on Sepolia. No
+live encrypted serial-versus-balanced equality assertion was performed; final Gate 0 wording must
+not claim one.

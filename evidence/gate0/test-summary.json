@@ -14,8 +14,8 @@
   },
   "solidityMock": {
     "passed": true,
-    "mochaTests": 27,
-    "assertions": 287,
+    "mochaTests": 30,
+    "assertions": 300,
     "allMeasurementsCompleted": true
   },
   "liveSepolia": "PARTIAL_DIAGNOSTIC_INCIDENTS_ONLY; NOT_FINAL_GATE0_EVIDENCE",
