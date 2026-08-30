@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import { FhevmType } from "@fhevm/hardhat-plugin";
@@ -178,6 +178,22 @@ async function expectRejected(action: () => Promise<unknown>): Promise<void> {
 }
 
 describe("VeilDrawProbe Gate 0", function () {
+  describe("live runner initialization ordering", function () {
+    it("initializes the CLI before deploying or invoking FHE-dependent runner steps", async function () {
+      const runner = await readFile(resolve(process.cwd(), "scripts/run-sepolia.ts"), "utf8");
+      const main = runner.slice(runner.indexOf("async function main(): Promise<void>"));
+      expect(main.indexOf("const preflight = assertPreflight()")).to.be.greaterThan(-1);
+      expect(main.indexOf("await initializeLiveFhevm()")).to.be.greaterThan(
+        main.indexOf("const preflight = assertPreflight()"),
+      );
+      expect(main.indexOf("await initializeLiveFhevm()")).to.be.lessThan(
+        main.indexOf("state.deployment = await deployProbe"),
+      );
+      expect(runner).to.include("await hre.fhevm.initializeCLIApi()");
+      assertions += 4;
+    });
+  });
+
   this.timeout(300_000);
 
   after(async function () {

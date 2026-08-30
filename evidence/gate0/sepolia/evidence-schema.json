@@ -1,6 +1,9 @@
 {
   "schemaVersion": 1,
   "generatedOnlyAfterLiveExecution": true,
+  "diagnosticArtifacts": [
+    "tooling-incidents.json"
+  ],
   "requiredProvenanceFields": [
     "localGate0BaselineCommit",
     "liveVerificationToolingCommit"

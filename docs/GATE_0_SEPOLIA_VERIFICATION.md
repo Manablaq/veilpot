@@ -2,10 +2,34 @@
 
 ## Status
 
-**UNRESOLVED — NO LIVE TRANSACTIONS HAVE BEEN BROADCAST.** This record is a reproducible live-probe
-plan and runner specification, not evidence of a Sepolia execution. Gate 0 remains `CONDITIONAL`
-until the generated `evidence/gate0/sepolia/` artifacts contain actual transaction references and
-all required scenarios pass.
+**UNRESOLVED — OFFICIAL LIVE EVIDENCE HAS NOT STARTED.** This record is a reproducible live-probe
+plan and runner specification, not evidence of a completed Sepolia execution. Gate 0 remains
+`CONDITIONAL` until the generated `evidence/gate0/sepolia/` artifacts contain actual transaction
+references and all required scenarios pass.
+
+## Tooling incident: excluded pre-official deployment
+
+**TOOLING INCIDENT — NOT A PROTOCOL FAIL.** On 2026-08-29, tooling commit
+`7a1b228f91849b8ebd5ad22929eff35d38391774` deployed diagnostic probe
+`0x815D3Ad40AC60A43971A9e64918D0B83faEdcf3F` in transaction
+`0xcd52bc9c93891c6c469d919eb79c0e96d55021463bf3faf00149b247b7c3a537` on Sepolia (chain ID 11155111).
+It stopped before encrypted input creation because the runner had not called the installed plugin's
+supported `initializeCLIApi()` API. The observed state was `AwaitingBucket` (0), `drawStarted` was
+false, and no candidate batch was generated.
+
+The deployment is permanently excluded from final Gate 0 success evidence: VeilDraw privacy,
+fairness, randomness, proof binding, and liveness were **NOT TESTED** by it. Its non-secret machine
+record is [`tooling-incidents.json`](../evidence/gate0/sepolia/tooling-incidents.json), and its
+stale mutable progress was archived only in `.git` metadata as
+`.git/veilpot-gate0-sepolia-progress.failed-tooling-7a1b228.json`.
+
+**VERIFIED FACT (installed `@fhevm/hardhat-plugin` 0.4.2):** `hre.fhevm.initializeCLIApi()` is the
+typed public API. It is idempotent per process and, on Sepolia, resolves the supported FHEVM
+addresses and constructs the relayer SDK instance. The corrected runner calls it after local
+provenance/credential and chain checks, but before deployment or any encrypted-input/decryption
+operation; it then requires `hre.fhevm.isMock === false` and a successful read-only
+`getRelayerMetadata()` call. A new tooling commit and a fresh probe deployment are mandatory for the
+official run.
 
 ## Baseline
 
@@ -18,7 +42,7 @@ runs, `cancun` EVM, `@fhevm/solidity` 0.11.1, `@fhevm/hardhat-plugin` 0.4.2, and
 The runner treats that hash as the immutable `localGate0BaselineCommit`; it does not derive it from
 the current `HEAD`. Immediately before any RPC access or broadcast it derives the clean current
 `HEAD` as `liveVerificationToolingCommit`, verifies that the baseline exists and is its ancestor,
-requires a clean working tree and both required Hardhat variables, then verifies chain ID
+requires a clean working tree and all three required Hardhat variables, then verifies chain ID
 `11155111`. Both provenance values are written to every generated deployment/evidence manifest.
 
 ## Verified live integration facts
@@ -102,6 +126,14 @@ pnpm --filter @veilpot/contracts live:sepolia:finalize
 Finalization refuses to write evidence if the zero-total or proven-failure retry condition is still
 missing. Mutable progress remains outside the working tree, so every broadcast still begins from a
 clean Git state.
+
+Before a fresh official deployment, run the transaction-free initialization check. It requires all
+three Hardhat variables, confirms Sepolia, initializes the real CLI API, rejects a mock environment,
+and confirms the initialized relayer metadata path without logging metadata or secrets:
+
+```bash
+pnpm --filter @veilpot/contracts live:sepolia:check-init
+```
 
 ## Required generated evidence
 

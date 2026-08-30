@@ -142,6 +142,22 @@ function assertPreflight(): Preflight {
   return { liveVerificationToolingCommit, deployerAddress, unauthorizedAddress };
 }
 
+/**
+ * Initializes the installed FHEVM CLI API for a real Sepolia process before
+ * the runner creates encrypted inputs or asks the relayer to decrypt values.
+ * Plugin 0.4.2 performs its supported-network, address, and relayer-instance
+ * setup inside this idempotent API.
+ */
+async function initializeLiveFhevm(): Promise<void> {
+  await hre.fhevm.initializeCLIApi();
+  if (hre.fhevm.isMock) {
+    throw new Error("FHEVM CLI initialization resolved a mock environment instead of Sepolia");
+  }
+  // This read-only supported API call requires the initialized relayer
+  // configuration. It intentionally records and prints no metadata.
+  await hre.fhevm.getRelayerMetadata();
+}
+
 function sha256(value: string): string {
   return `0x${createHash("sha256").update(value).digest("hex")}`;
 }
@@ -888,6 +904,7 @@ async function main(): Promise<void> {
   const network = await hre.ethers.provider.getNetwork();
   if (network.chainId !== 11_155_111n)
     throw new Error(`expected Sepolia chain 11155111, got ${network.chainId.toString()}`);
+  await initializeLiveFhevm();
   const signer = (await hre.ethers.getSigners())[0];
   if (signer === undefined) throw new Error("no deployer signer configured");
   if (signer.address.toLowerCase() !== preflight.deployerAddress.toLowerCase()) {

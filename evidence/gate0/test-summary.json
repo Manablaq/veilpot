@@ -15,7 +15,7 @@
   "solidityMock": {
     "passed": true,
     "mochaTests": 26,
-    "assertions": 262,
+    "assertions": 266,
     "allMeasurementsCompleted": true
   },
   "liveSepolia": "NOT RUN",

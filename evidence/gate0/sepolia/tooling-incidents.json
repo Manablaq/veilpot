@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "incidents": [
+    {
+      "classification": "TOOLING_INCIDENT",
+      "occurredAt": "2026-08-29T19:45:01.382Z",
+      "chainId": 11155111,
+      "toolingCommit": "7a1b228f91849b8ebd5ad22929eff35d38391774",
+      "contractAddress": "0x815D3Ad40AC60A43971A9e64918D0B83faEdcf3F",
+      "deploymentTransactionHash": "0xcd52bc9c93891c6c469d919eb79c0e96d55021463bf3faf00149b247b7c3a537",
+      "state": "AwaitingBucket",
+      "stateValue": 0,
+      "drawStarted": false,
+      "candidateBatchesGenerated": 0,
+      "rootCause": "FHEVM Hardhat plugin not initialized before createEncryptedInput",
+      "observedErrorCategory": "HardhatFhevmError",
+      "protocolPrivacyFairnessResult": "NOT_TESTED",
+      "excludedFromFinalGate0SuccessEvidence": true,
+      "activeProgressArchivedInGitMetadata": ".git/veilpot-gate0-sepolia-progress.failed-tooling-7a1b228.json",
+      "secretValuesRecorded": false
+    }
+  ]
+}

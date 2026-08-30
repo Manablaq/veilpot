@@ -8,6 +8,7 @@
     "test": "hardhat test",
     "test:gate0": "hardhat test test/VeilDrawProbe.test.ts",
     "live:sepolia": "hardhat run --network sepolia scripts/run-sepolia.ts",
+    "live:sepolia:check-init": "hardhat run --network sepolia scripts/check-sepolia-initialization.ts",
     "live:sepolia:interrupt": "cross-env VEILPOT_LIVE_STOP_AFTER=batch-generated hardhat run --network sepolia scripts/run-sepolia.ts",
     "live:sepolia:failure-drill": "cross-env VEILPOT_LIVE_RUN_FAILURE_DRILL=true hardhat run --network sepolia scripts/run-sepolia.ts",
     "live:sepolia:finalize": "cross-env VEILPOT_LIVE_FINALIZE=true hardhat run --network sepolia scripts/run-sepolia.ts"
