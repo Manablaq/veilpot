@@ -18,6 +18,10 @@ interface HcuEvidence {
   readonly measurements: readonly { readonly status: string }[];
 }
 
+interface ToolingIncidents {
+  readonly incidents: readonly unknown[];
+}
+
 const root = process.cwd();
 const evidenceDirectory = resolve(root, "evidence/gate0");
 
@@ -76,6 +80,9 @@ const statistical = await readJson<PassedEvidence>(
   resolve(evidenceDirectory, "statistical-sanity.json"),
 );
 const hcu = await readJson<HcuEvidence>(resolve(evidenceDirectory, "hcu.json"));
+const liveIncidents = await readJson<ToolingIncidents>(
+  resolve(evidenceDirectory, "sepolia/tooling-incidents.json"),
+);
 
 const testSummary = {
   schemaVersion: 1,
@@ -85,11 +92,14 @@ const testSummary = {
   statisticalSanity: { passed: statistical.passed },
   solidityMock: {
     passed: true,
-    mochaTests: 26,
+    mochaTests: 27,
     assertions: hcu.testAssertions,
     allMeasurementsCompleted: hcu.measurements.every((item) => item.status === "MEASURED LOCALLY"),
   },
-  liveSepolia: "NOT RUN",
+  liveSepolia:
+    liveIncidents.incidents.length === 0
+      ? "NOT RUN"
+      : "PARTIAL_DIAGNOSTIC_INCIDENTS_ONLY; NOT_FINAL_GATE0_EVIDENCE",
   finalStatus: "CONDITIONAL",
 };
 

@@ -26,7 +26,13 @@ not inherit the older relayer SDK solely because the Hardhat plugin uses it for 
 ## Runtime and compiler
 
 - **DESIGN DECISION:** Node is constrained to `>=22 <23`, `.nvmrc` contains `22`, pnpm is pinned to
-  10.18.3, Solidity is pinned to 0.8.27, and EVM output targets Cancun.
+  10.18.3, Solidity is pinned to 0.8.27, EVM output targets Cancun, optimizer is enabled with 800
+  runs, and Solidity metadata uses `bytecodeHash = "none"`.
+- **MEASURED RESULT:** the plugin substitutes a Sepolia-specific KMS verifier address in
+  `ZamaConfig.sol`; with default IPFS metadata this changed only the deployed metadata trailer, not
+  executable code. The chosen `bytecodeHash = "none"` policy makes clean default and Sepolia
+  compilation produce the same full runtime hash. See
+  [`bytecode-reproducibility.json`](../evidence/gate0/bytecode-reproducibility.json).
 - **MEASURED RESULT:** final local Gate 0 commands ran with Node 22.23.2 from the official Node.js
   macOS arm64 archive, unpacked into ignored `.tooling/`. The host's preinstalled Node 24.15.0 is
   not used for the recorded final verification.

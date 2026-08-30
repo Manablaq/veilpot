@@ -25,7 +25,11 @@ const config: HardhatUserConfig = {
     version: "0.8.27",
     settings: {
       evmVersion: "cancun",
-      optimizer: { enabled: true, runs: 200 },
+      // The plugin injects a chain-specific ZamaConfig source for Sepolia.
+      // Omitting Solidity's source-derived metadata hash keeps the deployed
+      // runtime hash reproducible across otherwise identical compilation paths.
+      metadata: { bytecodeHash: "none" },
+      optimizer: { enabled: true, runs: 800 },
     },
   },
   paths: {

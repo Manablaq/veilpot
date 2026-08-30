@@ -2,10 +2,11 @@
 
 ## Status
 
-**UNRESOLVED — OFFICIAL LIVE EVIDENCE HAS NOT STARTED.** This record is a reproducible live-probe
-plan and runner specification, not evidence of a completed Sepolia execution. Gate 0 remains
-`CONDITIONAL` until the generated `evidence/gate0/sepolia/` artifacts contain actual transaction
-references and all required scenarios pass.
+**UNRESOLVED — NO COMPLETE OFFICIAL LIVE EVIDENCE EXISTS.** This record contains a reproducible
+live-probe plan, tooling incidents, and limited diagnostic transactions; it is not evidence of a
+completed Sepolia execution. Gate 0 remains `CONDITIONAL` until the generated
+`evidence/gate0/sepolia/` artifacts contain actual transaction references and all required scenarios
+pass.
 
 ## Tooling incident: excluded pre-official deployment
 
@@ -64,13 +65,53 @@ networked relayer operation. The checker uses the excluded diagnostic deployment
 input's domain-binding target and never submits its handle or proof to that contract. It discards
 the returned handle and proof immediately and records neither protected plaintext nor proof.
 
+## Tooling incident: premature Phase A interruption and artifact-hash investigation
+
+**TOOLING INCIDENT — NOT A PROTOCOL FAIL.** On tooling commit
+`8d729489f4a0a7d042bacb34a33f5acd13d97995`, a fresh diagnostic-only probe
+`0x80852aDa4673eC934ed310739b326a58baf79dFb` was deployed in
+`0x044e045a5820b6cce902ee86f302be03c4e5420389ae78223229b383073fbc33`. It successfully received an
+encrypted total, prepared/proved its bucket, and reached `BucketReady` (`1`), but its `batchId` and
+`batchSize` remained zero. No candidate value was generated, decrypted, or selected.
+
+The root cause was runner control flow: `main()` returned on
+`VEILPOT_LIVE_STOP_AFTER=batch-generated` immediately after bucket preparation, before calling
+`executePrimaryM8()`. The probe and its persisted progress are excluded from final success evidence;
+the active progress was archived in `.git` as
+`.git/veilpot-gate0-sepolia-progress.failed-interrupt-8d729489.json`.
+
+The incident also exposed a reproducibility issue. Default compilation produced full runtime hash
+`0x1b4a70043435b230bcca8f50135082c7ee969e661b5c6c007dc032c38fa45533`, while the Sepolia build and
+deployment produced `0x0899bb09e16b75bdb0db03f09a001d7abf40f3ecdbe0e9d2a60cc17ca444f51e`. The full
+forensic comparison and compiler-baseline decision are recorded in
+[`bytecode-reproducibility.json`](../evidence/gate0/bytecode-reproducibility.json). This incident
+tested neither VeilDraw randomness nor fairness.
+
+**MEASURED RESULT (clean Node 22 paths):** the historical default and Sepolia compiler inputs
+differed only in `@fhevm/solidity/config/ZamaConfig.sol`: the plugin substituted the Sepolia KMS
+verifier address for the default-network address. With Solidity's default IPFS metadata enabled,
+that source hash changed only the 51-byte CBOR metadata trailer. The first differing byte was offset
+8,992; the 8,982-byte executable bodies had identical hash
+`0x76a6e2d1554f64cd0f28a634f56e94cd90f32abf3d2c3649e99d6be203c1e3f0`. This is therefore metadata
+only—not a library link, optimizer, source-code, or executable FHEVM transformation difference.
+
+**DESIGN DECISION:** adopt the current official Zama template's compiler settings that apply to this
+stack: Solidity 0.8.27, Cancun, optimizer enabled at 800 runs, and `metadata.bytecodeHash = "none"`.
+The original 200-run optimizer setting was an undocumented Hardhat default rather than a Veilpot
+design decision. The metadata setting is necessary to make the full deployed runtime hash stable
+across the plugin's legitimate Sepolia `ZamaConfig` input substitution. Clean default and
+`hardhat run --network sepolia` builds now produce the identical full runtime hash
+`0xa0098465cd670a0b150f52035cd9677da4fa1de34fd0d917120146a8cd57899f`. The 800-run change creates a
+new artifact baseline, so all local measurements are regenerated before any fresh deployment.
+
 ## Baseline
 
 The local baseline commit is `5b8483569b8ca63b821e7eb5ef5333ff86917b79`
 (`gate0: establish conditional VeilDraw feasibility baseline`). It was checked under Node 22.23.2
-before the live runner was added. The probe remains Solidity 0.8.27, optimizer enabled with 200
-runs, `cancun` EVM, `@fhevm/solidity` 0.11.1, `@fhevm/hardhat-plugin` 0.4.2, and
-`@zama-fhe/relayer-sdk` 0.4.1. No dependency version changed for live preparation.
+before the live runner was added. The probe remains Solidity 0.8.27, optimizer enabled with 800
+runs, `metadata.bytecodeHash = "none"`, `cancun` EVM, `@fhevm/solidity` 0.11.1,
+`@fhevm/hardhat-plugin` 0.4.2, and `@zama-fhe/relayer-sdk` 0.4.1. No dependency version changed for
+live preparation.
 
 The runner treats that hash as the immutable `localGate0BaselineCommit`; it does not derive it from
 the current `HEAD`. Immediately before any RPC access or broadcast it derives the clean current

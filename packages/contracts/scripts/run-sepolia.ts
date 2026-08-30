@@ -412,7 +412,8 @@ async function writeDeploymentManifest(
     localGate0BaselineCommit: state.localGate0BaselineCommit,
     liveVerificationToolingCommit: state.liveVerificationToolingCommit,
     solidityCompilerVersion: "0.8.27",
-    optimizer: { enabled: true, runs: 200 },
+    optimizer: { enabled: true, runs: 800 },
+    metadata: { bytecodeHash: "none" },
     evmVersion: "cancun",
     abiHash: sha256(JSON.stringify(artifact.abi)),
     creationBytecodeHash: ethers.keccak256(artifact.bytecode),
@@ -914,9 +915,6 @@ async function main(): Promise<void> {
   }
   const primary = await contractAt(state.deployment.contractAddress);
   await preparePrimary(state, primary, signer.address);
-  if (process.env.VEILPOT_LIVE_STOP_AFTER === "batch-generated") {
-    return;
-  }
   await executePrimaryM8(state, primary, preflight.unauthorizedAddress);
   if ((await primary.state()) === STATE_CANDIDATE_ACCEPTED) {
     await runPrefixMeasurements(state, primary, signer.address);

@@ -185,6 +185,7 @@ describe("VeilDrawProbe Gate 0", function () {
         resolve(process.cwd(), "scripts/check-sepolia-initialization.ts"),
         "utf8",
       );
+      const hardhatConfig = await readFile(resolve(process.cwd(), "hardhat.config.ts"), "utf8");
       const main = runner.slice(runner.indexOf("async function main(): Promise<void>"));
       const preflight = main.indexOf("const preflight = assertPreflight()");
       const chainCheck = main.indexOf("const network = await hre.ethers.provider.getNetwork()");
@@ -219,7 +220,33 @@ describe("VeilDrawProbe Gate 0", function () {
         "confirmedTransactionCountAfter !== confirmedTransactionCountBefore",
       );
       expect(checker).not.to.include("getRelayerMetadata");
-      assertions += 16;
+      const primaryExecution = runner.slice(
+        runner.indexOf("async function executePrimaryM8"),
+        runner.indexOf("async function runPrefixMeasurements"),
+      );
+      const candidateGeneration = primaryExecution.indexOf(
+        "contract.generateCandidateBatch(PRIMARY_BATCH_SIZE)",
+      );
+      const generatedProgress = primaryExecution.indexOf('label: "candidate-batch-generated"');
+      const persistAfterGeneration = primaryExecution.indexOf(
+        "await persist(state)",
+        generatedProgress,
+      );
+      const interruptionStop = primaryExecution.indexOf(
+        'process.env.VEILPOT_LIVE_STOP_AFTER === "batch-generated"',
+      );
+      const serialReduction = primaryExecution.indexOf("contract.reduceSerial()");
+      const balancedReduction = primaryExecution.indexOf("contract.reduceBalanced()");
+      expect(candidateGeneration).to.be.greaterThan(-1);
+      expect(generatedProgress).to.be.greaterThan(candidateGeneration);
+      expect(persistAfterGeneration).to.be.greaterThan(generatedProgress);
+      expect(interruptionStop).to.be.greaterThan(persistAfterGeneration);
+      expect(serialReduction).to.be.greaterThan(interruptionStop);
+      expect(balancedReduction).to.be.greaterThan(serialReduction);
+      expect(main).not.to.include('process.env.VEILPOT_LIVE_STOP_AFTER === "batch-generated"');
+      expect(hardhatConfig).to.include('metadata: { bytecodeHash: "none" }');
+      expect(hardhatConfig).to.include("optimizer: { enabled: true, runs: 800 }");
+      assertions += 25;
     });
   });
 

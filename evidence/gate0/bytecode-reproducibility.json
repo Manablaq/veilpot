@@ -1,0 +1,164 @@
+{
+  "schemaVersion": 1,
+  "classification": "MEASURED RESULT from clean Node 22 Hardhat compilation paths",
+  "historicalMismatch": {
+    "defaultCompilation": {
+      "fullHash": "0x1b4a70043435b230bcca8f50135082c7ee969e661b5c6c007dc032c38fa45533",
+      "fullBytes": 9035,
+      "executableBodyHash": "0x76a6e2d1554f64cd0f28a634f56e94cd90f32abf3d2c3649e99d6be203c1e3f0",
+      "executableBodyBytes": 8982,
+      "metadataLength": 51,
+      "metadataHash": "0x97279fa46c1b9f99033ce0dfb2ef3ac5d6cae74956f703930b0717f1f60ad40b",
+      "compilerVersion": "0.8.27+commit.40a35a09",
+      "compilerInputHash": "0x8bd3dec05445f91d6bd6b2ac801f558e4a777bba5cf1640617269129d2fce515",
+      "settings": {
+        "evmVersion": "cancun",
+        "optimizer": {
+          "enabled": true,
+          "runs": 200
+        },
+        "outputSelection": {
+          "*": {
+            "*": [
+              "abi",
+              "evm.bytecode",
+              "evm.deployedBytecode",
+              "evm.methodIdentifiers",
+              "metadata"
+            ],
+            "": [
+              "ast"
+            ]
+          }
+        }
+      }
+    },
+    "sepoliaCompilation": {
+      "fullHash": "0x0899bb09e16b75bdb0db03f09a001d7abf40f3ecdbe0e9d2a60cc17ca444f51e",
+      "fullBytes": 9035,
+      "executableBodyHash": "0x76a6e2d1554f64cd0f28a634f56e94cd90f32abf3d2c3649e99d6be203c1e3f0",
+      "executableBodyBytes": 8982,
+      "metadataLength": 51,
+      "metadataHash": "0x93428bcfcc09832203558bc329e8f9d3af3db405a5dd9ed98e284c17b28f21b7",
+      "compilerVersion": "0.8.27+commit.40a35a09",
+      "compilerInputHash": "0x622d66253808de748bdd0351d10f18fd8b680b02880a96b87519b725905ec5b3",
+      "settings": {
+        "evmVersion": "cancun",
+        "optimizer": {
+          "enabled": true,
+          "runs": 200
+        },
+        "outputSelection": {
+          "*": {
+            "*": [
+              "abi",
+              "evm.bytecode",
+              "evm.deployedBytecode",
+              "evm.methodIdentifiers",
+              "metadata"
+            ],
+            "": [
+              "ast"
+            ]
+          }
+        }
+      }
+    },
+    "fullRuntimeMatch": false,
+    "executableBodyMatch": true,
+    "metadataTrailerMatch": false,
+    "firstDifferingByteOffset": 8992,
+    "sourceDifferences": [
+      {
+        "path": "@fhevm/solidity/config/ZamaConfig.sol",
+        "defaultSourceHash": "0x79c8520987eb5e091932909c7fdceed19436af4683afeca6631d1869047fffb2",
+        "sepoliaSourceHash": "0x288c80aebc141da2f32a38c8a407897cec607ccd3c4391103df6653143b71b31",
+        "defaultSourceBytes": 3974,
+        "sepoliaSourceBytes": 3974
+      }
+    ]
+  },
+  "selectedCompilerBaseline": {
+    "defaultCompilation": {
+      "fullHash": "0xa0098465cd670a0b150f52035cd9677da4fa1de34fd0d917120146a8cd57899f",
+      "fullBytes": 9473,
+      "executableBodyHash": "0x9c83d2bdd5499d70aed5bb40966619b98f48897f2513ba912995ca5b0177dfe6",
+      "executableBodyBytes": 9461,
+      "metadataLength": 10,
+      "metadataHash": "0xde3084d917e9d885737d2f4aa73bcdfccf5448c0f65613aa8afe79909d552a2b",
+      "compilerVersion": "0.8.27+commit.40a35a09",
+      "compilerInputHash": "0xafc442db80b9574b41025c935aacff181d36db166d7fde645a12eb453502ddf2",
+      "settings": {
+        "evmVersion": "cancun",
+        "metadata": {
+          "bytecodeHash": "none"
+        },
+        "optimizer": {
+          "enabled": true,
+          "runs": 800
+        },
+        "outputSelection": {
+          "*": {
+            "*": [
+              "abi",
+              "evm.bytecode",
+              "evm.deployedBytecode",
+              "evm.methodIdentifiers",
+              "metadata"
+            ],
+            "": [
+              "ast"
+            ]
+          }
+        }
+      }
+    },
+    "sepoliaCompilation": {
+      "fullHash": "0xa0098465cd670a0b150f52035cd9677da4fa1de34fd0d917120146a8cd57899f",
+      "fullBytes": 9473,
+      "executableBodyHash": "0x9c83d2bdd5499d70aed5bb40966619b98f48897f2513ba912995ca5b0177dfe6",
+      "executableBodyBytes": 9461,
+      "metadataLength": 10,
+      "metadataHash": "0xde3084d917e9d885737d2f4aa73bcdfccf5448c0f65613aa8afe79909d552a2b",
+      "compilerVersion": "0.8.27+commit.40a35a09",
+      "compilerInputHash": "0x7bf3835418da90e507d6aab0c3ac00433e0bf456897cb1c99479d7864794e1a4",
+      "settings": {
+        "evmVersion": "cancun",
+        "metadata": {
+          "bytecodeHash": "none"
+        },
+        "optimizer": {
+          "enabled": true,
+          "runs": 800
+        },
+        "outputSelection": {
+          "*": {
+            "*": [
+              "abi",
+              "evm.bytecode",
+              "evm.deployedBytecode",
+              "evm.methodIdentifiers",
+              "metadata"
+            ],
+            "": [
+              "ast"
+            ]
+          }
+        }
+      }
+    },
+    "fullRuntimeMatch": true,
+    "executableBodyMatch": true,
+    "metadataTrailerMatch": true,
+    "firstDifferingByteOffset": null,
+    "sourceDifferences": [
+      {
+        "path": "@fhevm/solidity/config/ZamaConfig.sol",
+        "defaultSourceHash": "0x79c8520987eb5e091932909c7fdceed19436af4683afeca6631d1869047fffb2",
+        "sepoliaSourceHash": "0x288c80aebc141da2f32a38c8a407897cec607ccd3c4391103df6653143b71b31",
+        "defaultSourceBytes": 3974,
+        "sepoliaSourceBytes": 3974
+      }
+    ]
+  }
+}

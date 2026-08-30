@@ -36,6 +36,29 @@
       "runSetupClassification": "D_UNRESOLVED_NO_IMPLEMENTATION_OR_PUBLIC_API_IN_INSTALLED_STACK",
       "protocolPrivacyFairnessResult": "NOT_TESTED",
       "secretValuesRecorded": false
+    },
+    {
+      "classification": "TOOLING_INCIDENT",
+      "toolingCommit": "8d729489f4a0a7d042bacb34a33f5acd13d97995",
+      "chainId": 11155111,
+      "contractAddress": "0x80852aDa4673eC934ed310739b326a58baf79dFb",
+      "deploymentTransactionHash": "0x044e045a5820b6cce902ee86f302be03c4e5420389ae78223229b383073fbc33",
+      "encryptedTotalTransactionHash": "0x425c5267fb290cb6590b79380bae2239e0b719c771ded113f71001b992c2238c",
+      "bucketPreparationTransactionHash": "0x1a4af6f388ffac02d31681441b1f7a9da734c6c8a5fad98ea558c376160e0549",
+      "validBucketProofTransactionHash": "0xa079b0a5358a69fbd3c7650efe24449dc031f5718d69717f4bac593db2b67757",
+      "state": "BucketReady",
+      "stateValue": 1,
+      "drawStarted": true,
+      "batchId": 0,
+      "candidateBatchesGenerated": 0,
+      "rootCause": "The VEILPOT_LIVE_STOP_AFTER=batch-generated guard in main() returned before executePrimaryM8(), so the intended interruption boundary was never reached.",
+      "runtimeArtifactAndOnChainHash": "0x0899bb09e16b75bdb0db03f09a001d7abf40f3ecdbe0e9d2a60cc17ca444f51e",
+      "priorExpectedRuntimeHash": "0x1b4a70043435b230bcca8f50135082c7ee969e661b5c6c007dc032c38fa45533",
+      "runtimeHashDiscrepancy": "UNRESOLVED_AT_TIME_OF_INCIDENT",
+      "protocolRandomnessFairnessResult": "NOT_TESTED",
+      "excludedFromFinalGate0SuccessEvidence": true,
+      "activeProgressArchivedInGitMetadata": ".git/veilpot-gate0-sepolia-progress.failed-interrupt-8d729489.json",
+      "secretValuesRecorded": false
     }
   ]
 }
