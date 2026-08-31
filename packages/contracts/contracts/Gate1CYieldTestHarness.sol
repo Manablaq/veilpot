@@ -19,6 +19,8 @@ import {IVeilpotPrizeReserveFunding} from "./interfaces/IVeilpotPrizeReserveFund
 
 interface IGate1CYieldAdapterHarness {
     function recognizeDrawYield(uint256 drawId, euint128 rawTotalTwab) external;
+
+    function sweepYield(uint256 drawId) external;
 }
 
 contract Gate1CYieldPoolHarness is ZamaEthereumConfig {
@@ -55,6 +57,50 @@ contract Gate1CYieldReserveHarness is ZamaEthereumConfig {
         euint64 actualTransferred
     ) external returns (bytes4 acknowledgement) {
         require(FHE.isAllowed(actualTransferred, address(this)), "MISSING_RESERVE_ACL");
+
+        euint64 current = _received[drawId];
+
+        if (!FHE.isInitialized(current)) {
+            current = FHE.asEuint64(0);
+        }
+
+        _received[drawId] = FHE.add(current, actualTransferred);
+
+        FHE.allowThis(_received[drawId]);
+
+        return IVeilpotPrizeReserveFunding.recordYield.selector;
+    }
+
+    function receivedHandle(uint256 drawId) external view returns (euint64) {
+        return _received[drawId];
+    }
+}
+
+contract Gate1CYieldReentrantReserveHarness is ZamaEthereumConfig {
+    mapping(uint256 => euint64) private _received;
+
+    address public adapter;
+    bool public reentryEnabled;
+    bool public lastReentrySucceeded;
+
+    function configureReentry(address adapter_, bool enabled) external {
+        adapter = adapter_;
+        reentryEnabled = enabled;
+    }
+
+    function recordYield(
+        uint256 drawId,
+        euint64 actualTransferred
+    ) external returns (bytes4 acknowledgement) {
+        require(FHE.isAllowed(actualTransferred, address(this)), "MISSING_RESERVE_ACL");
+
+        if (reentryEnabled && adapter != address(0)) {
+            try IGate1CYieldAdapterHarness(adapter).sweepYield(drawId) {
+                lastReentrySucceeded = true;
+            } catch {
+                lastReentrySucceeded = false;
+            }
+        }
 
         euint64 current = _received[drawId];
 

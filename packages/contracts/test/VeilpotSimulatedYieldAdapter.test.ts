@@ -35,6 +35,11 @@ interface ReserveHarness extends ethers.BaseContract {
   receivedHandle(drawId: bigint): Promise<Handle>;
 }
 
+interface ReentrantReserveHarness extends ReserveHarness {
+  configureReentry(adapter: string, enabled: boolean): Tx;
+  lastReentrySucceeded(): Promise<boolean>;
+}
+
 interface YieldAdapter extends ethers.BaseContract {
   fundYieldLiquidity(
     encryptedAmount: Handle,
@@ -456,6 +461,146 @@ describe("VeilpotSimulatedYieldAdapter Gate 1C.1", function () {
     expect(await decrypt64(draw[3])).to.equal(0n);
 
     expect(await settleSweep(adapter, 4n)).to.equal(true);
+  });
+
+  it("preserves the entire recognized residual when ERC-7984 reports zero actual transfer", async function () {
+    const { owner, token, partialToken, pool, reserve, adapter } = await fixture(200n);
+
+    if (partialToken === undefined) {
+      throw new Error("partial token fixture missing");
+    }
+
+    await fundAdapter(owner, token, adapter, 100n);
+
+    await recognize(owner, pool, adapter, 22n, 1_000_000n * 86_400n);
+
+    expect(await settleRecognition(adapter, 22n)).to.equal(false);
+
+    await receipt(partialToken.setPartialCap(0n));
+
+    await receipt(adapter.sweepYield(22n));
+
+    const reserveHandle = await reserve.receivedHandle(22n);
+
+    expect(await decrypt64(reserveHandle)).to.equal(0n);
+
+    let draw = await adapter.drawYieldHandles(22n);
+
+    expect(draw[6]).to.equal(1n);
+    expect(await decrypt64(draw[3])).to.equal(100n);
+
+    let liquidity = await adapter.liquidityHandles();
+
+    expect(await decrypt64(liquidity[0])).to.equal(0n);
+    expect(await decrypt64(liquidity[1])).to.equal(100n);
+
+    expect(await settleSweep(adapter, 22n)).to.equal(false);
+
+    draw = await adapter.drawYieldHandles(22n);
+
+    expect(draw[0]).to.equal(2n);
+    expect(draw[6]).to.equal(1n);
+    expect(await decrypt64(draw[3])).to.equal(100n);
+
+    liquidity = await adapter.liquidityHandles();
+
+    expect(await decrypt64(liquidity[1])).to.equal(100n);
+  });
+
+  it("rejects stale sweep proofs across attempt nonces and proof contexts", async function () {
+    const { owner, token, partialToken, pool, adapter } = await fixture(200n);
+
+    if (partialToken === undefined) {
+      throw new Error("partial token fixture missing");
+    }
+
+    await fundAdapter(owner, token, adapter, 100n);
+
+    await recognize(owner, pool, adapter, 23n, 1_000_000n * 86_400n);
+
+    expect(await settleRecognition(adapter, 23n)).to.equal(false);
+
+    await receipt(partialToken.setPartialCap(0n));
+
+    await receipt(adapter.sweepYield(23n));
+
+    const firstAttempt = await adapter.drawYieldHandles(23n);
+
+    expect(firstAttempt[6]).to.equal(1n);
+    expect(await decrypt64(firstAttempt[3])).to.equal(100n);
+
+    const staleProof = await publicStage(firstAttempt[4], firstAttempt[5]);
+
+    expect(staleProof.status).to.equal(false);
+
+    await receipt(
+      adapter.settleSweepCompletion(23n, firstAttempt[6], staleProof.status, staleProof.proof),
+    );
+
+    await receipt(partialToken.setPartialCap(100n));
+
+    await receipt(adapter.sweepYield(23n));
+
+    const secondAttempt = await adapter.drawYieldHandles(23n);
+
+    expect(secondAttempt[6]).to.equal(2n);
+    expect(await decrypt64(secondAttempt[3])).to.equal(0n);
+
+    await expect(
+      adapter.settleSweepCompletion(23n, firstAttempt[6], staleProof.status, staleProof.proof),
+    ).to.be.revertedWithCustomError(adapter, "SweepAttemptMismatch");
+
+    await expect(
+      adapter.settleSweepCompletion(23n, secondAttempt[6], staleProof.status, staleProof.proof),
+    ).to.be.reverted;
+
+    const currentProof = await publicStage(secondAttempt[4], secondAttempt[5]);
+
+    expect(currentProof.status).to.equal(true);
+
+    await receipt(
+      adapter.settleSweepCompletion(23n, secondAttempt[6], currentProof.status, currentProof.proof),
+    );
+
+    const finalized = await adapter.drawYieldHandles(23n);
+
+    expect(finalized[0]).to.equal(4n);
+  });
+
+  it("blocks reserve callback reentrancy while preserving the successful outer sweep", async function () {
+    const { owner, token, pool, reserve, adapter } = await fixture(
+      undefined,
+      "Gate1CYieldReentrantReserveHarness",
+    );
+
+    const reentrantReserve = reserve as ReentrantReserveHarness;
+
+    await fundAdapter(owner, token, adapter, 100n);
+
+    await recognize(owner, pool, adapter, 24n, 1_000_000n * 86_400n);
+
+    expect(await settleRecognition(adapter, 24n)).to.equal(false);
+
+    await receipt(reentrantReserve.configureReentry(await adapter.getAddress(), true));
+
+    await receipt(adapter.sweepYield(24n));
+
+    expect(await reentrantReserve.lastReentrySucceeded()).to.equal(false);
+
+    const reserveHandle = await reentrantReserve.receivedHandle(24n);
+
+    expect(await decrypt64(reserveHandle)).to.equal(100n);
+
+    let draw = await adapter.drawYieldHandles(24n);
+
+    expect(draw[6]).to.equal(1n);
+    expect(await decrypt64(draw[3])).to.equal(0n);
+
+    expect(await settleSweep(adapter, 24n)).to.equal(true);
+
+    draw = await adapter.drawYieldHandles(24n);
+
+    expect(draw[0]).to.equal(4n);
   });
 
   it("rejects proof replay across different draw recognition contexts", async function () {
