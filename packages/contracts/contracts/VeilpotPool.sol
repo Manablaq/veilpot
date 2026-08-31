@@ -56,6 +56,13 @@ contract VeilpotPool is ZamaEthereumConfig {
         bool snapshotSealed;
     }
 
+    struct HistoricalBeneficiary {
+        address owner;
+        uint256 registrationVersion;
+        uint256 reservationNonce;
+        bool bound;
+    }
+
     IERC7984 public immutable confidentialToken;
     Participant[128] private _participants;
     mapping(address => uint256) private _participantIndexPlusOne;
@@ -85,6 +92,12 @@ contract VeilpotPool is ZamaEthereumConfig {
     mapping(uint256 => uint256) private _snapshotCutoffs;
     mapping(uint256 => uint256) private _snapshotBounds;
     mapping(uint256 => bool) private _snapshotFinalized;
+    mapping(uint256 => mapping(uint256 => HistoricalBeneficiary)) private _epochBeneficiaries;
+    mapping(uint256 => mapping(uint256 => euint128)) private _epochSnapshotWeights;
+    mapping(uint256 => mapping(uint256 => bool)) private _epochSnapshotWeightBound;
+    mapping(uint256 => uint256) private _epochParticipantBounds;
+    mapping(uint256 => uint256) private _snapshotEpochs;
+    uint256[128] private _slotReusableAfter;
     uint256 private _entered;
 
     error InvalidToken();
@@ -115,6 +128,7 @@ contract VeilpotPool is ZamaEthereumConfig {
     error SnapshotNotInProgress();
     error SnapshotCursorMismatch();
     error SnapshotIncomplete();
+    error HistoricalBeneficiaryMismatch();
 
     event ParticipantReserved(
         address indexed participant,
@@ -189,6 +203,7 @@ contract VeilpotPool is ZamaEthereumConfig {
         for (uint256 index = 0; index < MAX_PARTICIPANTS; ++index) {
             Participant storage candidate = _participants[index];
             if (snapshotInProgress && _snapshotLocked[currentSnapshotId][index]) continue;
+            if (block.timestamp <= _slotReusableAfter[index]) continue;
             if (
                 candidate.state != ParticipantState.FREE &&
                 candidate.state != ParticipantState.TOMBSTONED
@@ -365,7 +380,18 @@ contract VeilpotPool is ZamaEthereumConfig {
             participant.twabAccumulator = FHE.asEuint128(0);
             participant.pendingSnapshotWeight = FHE.asEuint128(0);
             participant.lastTwabTimestamp = block.timestamp;
-            participant.twabEpoch = activeEpochId;
+            // Clock A: if snapshot N is late, epoch N+1 still begins at N's
+            // immutable cutoff. A post-cutoff activation therefore starts in
+            // the logical next epoch even before startSnapshot() advances the
+            // public activeEpochId.
+            if (!snapshotInProgress && block.timestamp > activeEpochEnd) {
+                if (block.timestamp > activeEpochEnd + MAX_DRAW_DURATION_SECONDS) {
+                    revert DrawDurationExceeded();
+                }
+                participant.twabEpoch = activeEpochId + 1;
+            } else {
+                participant.twabEpoch = activeEpochId;
+            }
             participant.pendingSnapshotEpoch = 0;
             participant.snapshotSealed = false;
             FHE.allowThis(participant.twabAccumulator);
@@ -457,7 +483,7 @@ contract VeilpotPool is ZamaEthereumConfig {
         FHE.allowTransient(eligibleRequest, address(confidentialToken));
 
         // Checkpoint with the old principal before any principal mutation.
-        _checkpointParticipant(participant);
+        _checkpointParticipant(slotIndexPlusOne - 1, participant);
         euint64 actualWithdrawn = confidentialToken.confidentialTransfer(
             msg.sender,
             eligibleRequest
@@ -484,7 +510,10 @@ contract VeilpotPool is ZamaEthereumConfig {
         uint256 snapshotId = ++nextSnapshotId;
         currentSnapshotId = snapshotId;
         snapshotCutoffTimestamp = activeEpochEnd;
-        snapshotParticipantCount = _highestOccupiedSlotPlusOne();
+        _snapshotEpochs[snapshotId] = activeEpochId;
+        uint256 liveBound = _highestOccupiedSlotPlusOne();
+        uint256 historicalBound = _epochParticipantBounds[activeEpochId];
+        snapshotParticipantCount = liveBound > historicalBound ? liveBound : historicalBound;
         snapshotCursor = 0;
         snapshotInProgress = true;
         snapshotReady = false;
@@ -506,21 +535,26 @@ contract VeilpotPool is ZamaEthereumConfig {
         uint256 end = start + SNAPSHOT_CHUNK_SIZE;
         if (end > snapshotParticipantCount) end = snapshotParticipantCount;
         uint256 snapshotId = currentSnapshotId;
+        uint256 closingEpochId = _snapshotEpochs[snapshotId];
         for (uint256 index = start; index < end; ++index) {
             if (_snapshotProcessed[snapshotId][index]) revert SnapshotCursorMismatch();
             Participant storage participant = _participants[index];
             euint128 weight = FHE.asEuint128(0);
+            bool preSealed = _epochSnapshotWeightBound[closingEpochId][index];
             bool eligible =
-                _snapshotLocked[snapshotId][index] ||
+                preSealed ||
+                    _snapshotLocked[snapshotId][index] ||
                     (participant.state == ParticipantState.ACTIVE &&
                         participant.activationStartedAt <= snapshotCutoffTimestamp &&
-                        (participant.twabEpoch == activeEpochId - 1 ||
+                        (participant.twabEpoch == closingEpochId ||
                             (participant.snapshotSealed &&
-                                participant.pendingSnapshotEpoch == activeEpochId - 1)));
+                                participant.pendingSnapshotEpoch == closingEpochId)));
             _snapshotEligible[snapshotId][index] = eligible;
             if (eligible) {
-                _sealParticipantForSnapshot(participant);
-                weight = participant.pendingSnapshotWeight;
+                if (!preSealed) {
+                    _sealParticipantForSnapshot(index, participant, closingEpochId);
+                }
+                weight = _epochSnapshotWeights[closingEpochId][index];
             }
             _snapshotWeights[snapshotId][index] = weight;
             FHE.allowThis(_snapshotWeights[snapshotId][index]);
@@ -589,9 +623,6 @@ contract VeilpotPool is ZamaEthereumConfig {
         bool clearZero,
         bytes calldata decryptionProof
     ) external nonReentrant {
-        if (!snapshotInProgress && block.timestamp >= activeEpochEnd) {
-            revert DrawDurationExceeded();
-        }
         Participant storage participant = _participant(slotIndex);
         if (participant.state != ParticipantState.ACTIVE) revert DeregistrationNotActive();
         bytes32[] memory handles = new bytes32[](1);
@@ -738,6 +769,88 @@ contract VeilpotPool is ZamaEthereumConfig {
         return _snapshotTotals[snapshotId];
     }
 
+    /// @notice Return a pre-snapshot historical encrypted weight handle for reviewability.
+    function epochSnapshotWeightHandle(
+        uint256 epochId,
+        uint256 slotIndex
+    ) external view returns (euint128) {
+        if (slotIndex >= MAX_PARTICIPANTS) revert InvalidParticipant();
+        return _epochSnapshotWeights[epochId][slotIndex];
+    }
+
+    /// @notice Return whether a closing epoch slot has an immutable staged weight.
+    function epochSnapshotWeightBound(
+        uint256 epochId,
+        uint256 slotIndex
+    ) external view returns (bool) {
+        if (slotIndex >= MAX_PARTICIPANTS) revert InvalidParticipant();
+        return _epochSnapshotWeightBound[epochId][slotIndex];
+    }
+
+    /// @notice Return the immutable high-water participant bound for a closing epoch.
+    function epochParticipantBound(uint256 epochId) external view returns (uint256) {
+        return _epochParticipantBounds[epochId];
+    }
+
+    /// @notice Return the timestamp after which a historically occupied slot may be reused.
+    function slotReusableAfter(uint256 slotIndex) external view returns (uint256) {
+        if (slotIndex >= MAX_PARTICIPANTS) revert InvalidParticipant();
+        return _slotReusableAfter[slotIndex];
+    }
+
+    /// @notice Return the immutable historical registration identity for a snapshot slot.
+    function snapshotBeneficiary(
+        uint256 snapshotId,
+        uint256 slotIndex
+    )
+        external
+        view
+        returns (address owner, uint256 registrationVersion, uint256 reservationNonce, bool bound)
+    {
+        if (snapshotId == 0 || snapshotId > nextSnapshotId || slotIndex >= MAX_PARTICIPANTS) {
+            revert InvalidParticipant();
+        }
+        HistoricalBeneficiary storage beneficiary = _epochBeneficiaries[
+            _snapshotEpochs[snapshotId]
+        ][slotIndex];
+        return (
+            beneficiary.owner,
+            beneficiary.registrationVersion,
+            beneficiary.reservationNonce,
+            beneficiary.bound
+        );
+    }
+
+    /// @notice Return the immutable closing epoch consumed by a finalized or active snapshot.
+    function snapshotEpoch(uint256 snapshotId) external view returns (uint256) {
+        if (snapshotId == 0 || snapshotId > nextSnapshotId) revert InvalidParticipant();
+        return _snapshotEpochs[snapshotId];
+    }
+
+    /// @notice Return a pre-snapshot historical registration identity for reviewability.
+    function epochBeneficiary(
+        uint256 epochId,
+        uint256 slotIndex
+    )
+        external
+        view
+        returns (address owner, uint256 registrationVersion, uint256 reservationNonce, bool bound)
+    {
+        if (slotIndex >= MAX_PARTICIPANTS) revert InvalidParticipant();
+        HistoricalBeneficiary storage beneficiary = _epochBeneficiaries[epochId][slotIndex];
+        return (
+            beneficiary.owner,
+            beneficiary.registrationVersion,
+            beneficiary.reservationNonce,
+            beneficiary.bound
+        );
+    }
+
+    /// @notice Return the encrypted zero-balance deregistration predicate handle.
+    function deregistrationZeroHandle(uint256 slotIndex) external view returns (ebool) {
+        return _participant(slotIndex).deregistrationZero;
+    }
+
     function _participant(
         uint256 slotIndex
     ) internal view returns (Participant storage participant) {
@@ -751,7 +864,7 @@ contract VeilpotPool is ZamaEthereumConfig {
         emit BondRefundCredited(owner, amount);
     }
 
-    function _checkpointParticipant(Participant storage participant) internal {
+    function _checkpointParticipant(uint256 slotIndex, Participant storage participant) internal {
         // Once the next epoch is open, do not create a valid interval longer
         // than the frozen envelope. Before a late snapshot start, one extra
         // window is allowed so the old epoch can be sealed and the next epoch
@@ -770,7 +883,13 @@ contract VeilpotPool is ZamaEthereumConfig {
             participant.activationStartedAt <= activeEpochEnd &&
             participant.twabEpoch == activeEpochId
         ) {
-            _sealParticipantAt(participant, activeEpochId, activeEpochId + 1, activeEpochEnd);
+            _sealParticipantAt(
+                slotIndex,
+                participant,
+                activeEpochId,
+                activeEpochId + 1,
+                activeEpochEnd
+            );
         }
         if (
             snapshotInProgress &&
@@ -778,7 +897,7 @@ contract VeilpotPool is ZamaEthereumConfig {
             participant.activationStartedAt <= snapshotCutoffTimestamp &&
             participant.twabEpoch == activeEpochId - 1
         ) {
-            _sealParticipantForSnapshot(participant);
+            _sealParticipantForSnapshot(slotIndex, participant, activeEpochId - 1);
         }
         if (participant.twabEpoch < activeEpochId) {
             participant.twabEpoch = activeEpochId;
@@ -805,14 +924,24 @@ contract VeilpotPool is ZamaEthereumConfig {
         return 0;
     }
 
-    function _sealParticipantForSnapshot(Participant storage participant) internal {
-        uint256 closedEpoch = activeEpochId - 1;
+    function _sealParticipantForSnapshot(
+        uint256 slotIndex,
+        Participant storage participant,
+        uint256 closedEpoch
+    ) internal {
         if (participant.snapshotSealed && participant.pendingSnapshotEpoch == closedEpoch) return;
         if (participant.twabEpoch != closedEpoch) revert SnapshotCursorMismatch();
-        _sealParticipantAt(participant, closedEpoch, activeEpochId, snapshotCutoffTimestamp);
+        _sealParticipantAt(
+            slotIndex,
+            participant,
+            closedEpoch,
+            activeEpochId,
+            snapshotCutoffTimestamp
+        );
     }
 
     function _sealParticipantAt(
+        uint256 slotIndex,
         Participant storage participant,
         uint256 closedEpoch,
         uint256 nextEpoch,
@@ -820,11 +949,16 @@ contract VeilpotPool is ZamaEthereumConfig {
     ) internal {
         if (participant.snapshotSealed && participant.pendingSnapshotEpoch == closedEpoch) return;
         if (participant.twabEpoch != closedEpoch) revert SnapshotCursorMismatch();
+        _bindEpochBeneficiary(closedEpoch, slotIndex, participant);
         uint256 elapsed = cutoff - participant.lastTwabTimestamp;
         euint128 principal128 = FHE.asEuint128(participant.principal);
         euint128 delta = FHE.mul(principal128, uint128(elapsed));
         participant.twabAccumulator = FHE.add(participant.twabAccumulator, delta);
         participant.pendingSnapshotWeight = participant.twabAccumulator;
+        _stageEpochSnapshotWeight(closedEpoch, slotIndex, participant.twabAccumulator);
+        if (cutoff > _slotReusableAfter[slotIndex]) {
+            _slotReusableAfter[slotIndex] = cutoff;
+        }
         participant.pendingSnapshotEpoch = closedEpoch;
         participant.snapshotSealed = true;
         participant.twabAccumulator = FHE.asEuint128(0);
@@ -834,25 +968,120 @@ contract VeilpotPool is ZamaEthereumConfig {
         FHE.allowThis(participant.twabAccumulator);
     }
 
+    function _bindEpochBeneficiary(
+        uint256 closingEpochId,
+        uint256 slotIndex,
+        Participant storage participant
+    ) internal {
+        if (participant.owner == address(0)) revert InvalidParticipant();
+        HistoricalBeneficiary storage existing = _epochBeneficiaries[closingEpochId][slotIndex];
+        if (!existing.bound) {
+            existing.owner = participant.owner;
+            existing.registrationVersion = participant.registrationVersion;
+            existing.reservationNonce = participant.reservationNonce;
+            existing.bound = true;
+            return;
+        }
+        if (
+            existing.owner != participant.owner ||
+            existing.registrationVersion != participant.registrationVersion ||
+            existing.reservationNonce != participant.reservationNonce
+        ) revert HistoricalBeneficiaryMismatch();
+    }
+
+    function _stageEpochSnapshotWeight(
+        uint256 closingEpochId,
+        uint256 slotIndex,
+        euint128 weight
+    ) internal {
+        if (_epochSnapshotWeightBound[closingEpochId][slotIndex]) return;
+        _epochSnapshotWeights[closingEpochId][slotIndex] = weight;
+        _epochSnapshotWeightBound[closingEpochId][slotIndex] = true;
+        FHE.allowThis(_epochSnapshotWeights[closingEpochId][slotIndex]);
+        uint256 requiredBound = slotIndex + 1;
+        if (requiredBound > _epochParticipantBounds[closingEpochId]) {
+            _epochParticipantBounds[closingEpochId] = requiredBound;
+        }
+    }
+
     function _releaseBond(Participant storage participant, address owner) internal {
         if (!participant.bondHeld) return;
         participant.bondHeld = false;
         _creditBond(owner, REGISTRATION_BOND_WEI);
     }
 
-    function _clearParticipant(uint256 slotIndex, address owner, ParticipantState state) internal {
-        if (snapshotInProgress && _participants[slotIndex].state == ParticipantState.ACTIVE) {
+    function _sealParticipantHistoryBeforeClear(
+        uint256 slotIndex,
+        Participant storage participant
+    ) internal {
+        if (participant.state != ParticipantState.ACTIVE || participant.activationStartedAt == 0) {
+            return;
+        }
+
+        if (!snapshotInProgress) {
+            // Before a late snapshot starts, activeEpochId still names the
+            // unmaterialized closing epoch. The participant may either still
+            // be in that epoch, or may already be accruing its logical N+1
+            // epoch after a post-cutoff checkpoint.
+            if (
+                participant.twabEpoch == activeEpochId &&
+                participant.activationStartedAt <= activeEpochEnd
+            ) {
+                _sealParticipantAt(
+                    slotIndex,
+                    participant,
+                    activeEpochId,
+                    activeEpochId + 1,
+                    activeEpochEnd
+                );
+                return;
+            }
+
+            if (participant.twabEpoch == activeEpochId + 1 && block.timestamp > activeEpochEnd) {
+                _sealParticipantAt(
+                    slotIndex,
+                    participant,
+                    activeEpochId + 1,
+                    activeEpochId + 2,
+                    activeEpochEnd + MAX_DRAW_DURATION_SECONDS
+                );
+            }
+            return;
+        }
+
+        uint256 closingEpochId = _snapshotEpochs[currentSnapshotId];
+        if (participant.activationStartedAt <= snapshotCutoffTimestamp) {
+            if (!_epochSnapshotWeightBound[closingEpochId][slotIndex]) {
+                _sealParticipantForSnapshot(slotIndex, participant, closingEpochId);
+            }
             _snapshotLocked[currentSnapshotId][slotIndex] = true;
         }
-        if (
-            activeParticipantCount > 0 && _participants[slotIndex].state == ParticipantState.ACTIVE
-        ) {
+
+        // Snapshot N may still be processing while the participant is already
+        // accruing N+1. Deregistration is proof-gated on zero principal, so
+        // sealing N+1 forward to its immutable cutoff adds no phantom area and
+        // preserves any area accrued before the balance became zero.
+        if (participant.twabEpoch == activeEpochId) {
+            _sealParticipantAt(
+                slotIndex,
+                participant,
+                activeEpochId,
+                activeEpochId + 1,
+                activeEpochEnd
+            );
+        }
+    }
+
+    function _clearParticipant(uint256 slotIndex, address owner, ParticipantState state) internal {
+        Participant storage participant = _participants[slotIndex];
+        _sealParticipantHistoryBeforeClear(slotIndex, participant);
+        if (activeParticipantCount > 0 && participant.state == ParticipantState.ACTIVE) {
             --activeParticipantCount;
         }
         _participantIndexPlusOne[owner] = 0;
-        _participants[slotIndex].state = state;
-        _participants[slotIndex].owner = address(0);
-        _participants[slotIndex].bondHeld = false;
+        participant.state = state;
+        participant.owner = address(0);
+        participant.bondHeld = false;
         emit ParticipantStateChanged(owner, slotIndex, state);
     }
 }
