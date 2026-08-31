@@ -17,7 +17,10 @@ contract VeilpotPool is ZamaEthereumConfig {
     uint256 public constant REGISTRATION_ACTIVATION_PROOF_TTL_SECONDS = 86_400;
     uint256 public constant REGISTRATION_BOND_WEI = 1_000_000_000_000_000;
     uint64 public constant MIN_REGISTRATION_DEPOSIT_BASE_UNITS = 1_000_000;
+    uint64 public constant MAX_USER_PRINCIPAL_BASE_UNITS = 1_000_000_000_000;
     uint256 public constant SUPPORTED_REGISTRATION_VERSION = 1;
+    uint256 public constant MAX_DRAW_DURATION_SECONDS = 2_592_000;
+    uint256 public constant SNAPSHOT_CHUNK_SIZE = 8;
 
     enum ParticipantState {
         FREE,
@@ -45,18 +48,43 @@ contract VeilpotPool is ZamaEthereumConfig {
         ebool deregistrationZero;
         euint64 refundRemaining;
         ebool refundComplete;
+        euint128 twabAccumulator;
+        euint128 pendingSnapshotWeight;
+        uint256 lastTwabTimestamp;
+        uint256 twabEpoch;
+        uint256 pendingSnapshotEpoch;
+        bool snapshotSealed;
     }
 
     IERC7984 public immutable confidentialToken;
     Participant[128] private _participants;
     mapping(address => uint256) private _participantIndexPlusOne;
     mapping(address => uint256) public nextDepositNonce;
+    mapping(address => uint256) public nextWithdrawNonce;
     mapping(address => uint256) public pendingBondRefund;
     uint256 public nextReservationNonce;
     uint256 public activeParticipantCount;
     euint128 private _aggregatePrincipal;
     euint128 private _aggregatePending;
     euint128 private _canonicalReceived;
+    uint256 public activeEpochId;
+    uint256 public activeEpochStart;
+    uint256 public activeEpochEnd;
+    uint256 public nextSnapshotId;
+    uint256 public currentSnapshotId;
+    uint256 public snapshotCutoffTimestamp;
+    uint256 public snapshotParticipantCount;
+    uint256 public snapshotCursor;
+    bool public snapshotInProgress;
+    bool public snapshotReady;
+    mapping(uint256 => mapping(uint256 => bool)) private _snapshotEligible;
+    mapping(uint256 => mapping(uint256 => bool)) private _snapshotLocked;
+    mapping(uint256 => mapping(uint256 => bool)) private _snapshotProcessed;
+    mapping(uint256 => mapping(uint256 => euint128)) private _snapshotWeights;
+    mapping(uint256 => euint128) private _snapshotTotals;
+    mapping(uint256 => uint256) private _snapshotCutoffs;
+    mapping(uint256 => uint256) private _snapshotBounds;
+    mapping(uint256 => bool) private _snapshotFinalized;
     uint256 private _entered;
 
     error InvalidToken();
@@ -80,6 +108,13 @@ contract VeilpotPool is ZamaEthereumConfig {
     error Reentrancy();
     error InvalidRecipient();
     error DeregistrationNotActive();
+    error WithdrawalNotActive();
+    error WithdrawalNonceMismatch();
+    error DrawDurationExceeded();
+    error SnapshotInProgress();
+    error SnapshotNotInProgress();
+    error SnapshotCursorMismatch();
+    error SnapshotIncomplete();
 
     event ParticipantReserved(
         address indexed participant,
@@ -107,6 +142,18 @@ contract VeilpotPool is ZamaEthereumConfig {
         uint256 indexed slot,
         uint256 refundAttemptNonce
     );
+    event SnapshotStarted(
+        uint256 indexed snapshotId,
+        uint256 cutoffTimestamp,
+        uint256 participantCount
+    );
+    event SnapshotChunkProcessed(uint256 indexed snapshotId, uint256 start, uint256 end);
+    event SnapshotReady(
+        uint256 indexed snapshotId,
+        uint256 cutoffTimestamp,
+        uint256 participantCount
+    );
+    event WithdrawalProcessed(address indexed participant, uint256 indexed withdrawalNonce);
 
     modifier nonReentrant() {
         if (_entered != 0) revert Reentrancy();
@@ -121,6 +168,8 @@ contract VeilpotPool is ZamaEthereumConfig {
         _aggregatePrincipal = FHE.asEuint128(0);
         _aggregatePending = FHE.asEuint128(0);
         _canonicalReceived = FHE.asEuint128(0);
+        activeEpochStart = block.timestamp;
+        activeEpochEnd = block.timestamp + MAX_DRAW_DURATION_SECONDS;
         FHE.allowThis(_aggregatePrincipal);
         FHE.allowThis(_aggregatePending);
         FHE.allowThis(_canonicalReceived);
@@ -139,6 +188,7 @@ contract VeilpotPool is ZamaEthereumConfig {
 
         for (uint256 index = 0; index < MAX_PARTICIPANTS; ++index) {
             Participant storage candidate = _participants[index];
+            if (snapshotInProgress && _snapshotLocked[currentSnapshotId][index]) continue;
             if (
                 candidate.state != ParticipantState.FREE &&
                 candidate.state != ParticipantState.TOMBSTONED
@@ -160,12 +210,20 @@ contract VeilpotPool is ZamaEthereumConfig {
             candidate.deregistrationZero = FHE.asEbool(false);
             candidate.refundRemaining = FHE.asEuint64(0);
             candidate.refundComplete = FHE.asEbool(false);
+            candidate.twabAccumulator = FHE.asEuint128(0);
+            candidate.pendingSnapshotWeight = FHE.asEuint128(0);
+            candidate.lastTwabTimestamp = block.timestamp;
+            candidate.twabEpoch = activeEpochId;
+            candidate.pendingSnapshotEpoch = 0;
+            candidate.snapshotSealed = false;
             FHE.allowThis(candidate.pendingAmount);
             FHE.allowThis(candidate.thresholdSatisfied);
             FHE.allowThis(candidate.principal);
             FHE.allowThis(candidate.deregistrationZero);
             FHE.allowThis(candidate.refundRemaining);
             FHE.allowThis(candidate.refundComplete);
+            FHE.allowThis(candidate.twabAccumulator);
+            FHE.allowThis(candidate.pendingSnapshotWeight);
             _participantIndexPlusOne[msg.sender] = index + 1;
             emit ParticipantReserved(
                 msg.sender,
@@ -249,10 +307,12 @@ contract VeilpotPool is ZamaEthereumConfig {
         participant.activationStartedAt = block.timestamp;
         participant.activationDeadline =
             block.timestamp + REGISTRATION_ACTIVATION_PROOF_TTL_SECONDS;
-        participant.thresholdSatisfied = FHE.ge(
-            actualTransferred,
-            MIN_REGISTRATION_DEPOSIT_BASE_UNITS
-        );
+        // The public predicate intentionally combines the minimum and maximum
+        // registration envelope.  Over-cap deposits are refundable and cannot
+        // become ACTIVE principal, while the exact amount remains encrypted.
+        ebool meetsMinimum = FHE.ge(actualTransferred, MIN_REGISTRATION_DEPOSIT_BASE_UNITS);
+        ebool withinMaximum = FHE.le(actualTransferred, MAX_USER_PRINCIPAL_BASE_UNITS);
+        participant.thresholdSatisfied = FHE.and(meetsMinimum, withinMaximum);
         FHE.allowThis(participant.pendingAmount);
         FHE.allowThis(participant.thresholdSatisfied);
         FHE.makePubliclyDecryptable(participant.thresholdSatisfied);
@@ -302,6 +362,14 @@ contract VeilpotPool is ZamaEthereumConfig {
             FHE.allowThis(participant.principal);
             participant.pendingAmount = FHE.asEuint64(0);
             FHE.allowThis(participant.pendingAmount);
+            participant.twabAccumulator = FHE.asEuint128(0);
+            participant.pendingSnapshotWeight = FHE.asEuint128(0);
+            participant.lastTwabTimestamp = block.timestamp;
+            participant.twabEpoch = activeEpochId;
+            participant.pendingSnapshotEpoch = 0;
+            participant.snapshotSealed = false;
+            FHE.allowThis(participant.twabAccumulator);
+            FHE.allowThis(participant.pendingSnapshotWeight);
             participant.state = ParticipantState.ACTIVE;
             ++activeParticipantCount;
             emit ParticipantStateChanged(owner, slotIndex, ParticipantState.ACTIVE);
@@ -363,6 +431,117 @@ contract VeilpotPool is ZamaEthereumConfig {
         );
     }
 
+    /// @notice Withdraw confidential principal to the calling participant.
+    /// @dev Withdrawal replay binding is address-scoped and survives slot reuse.
+    function withdraw(
+        externalEuint64 encryptedRequestedAmount,
+        bytes calldata inputProof,
+        uint256 registrationVersion,
+        uint256 reservationNonce,
+        uint256 withdrawalNonce
+    ) external nonReentrant {
+        uint256 slotIndexPlusOne = _participantIndexPlusOne[msg.sender];
+        if (slotIndexPlusOne == 0) revert InvalidParticipant();
+        Participant storage participant = _participants[slotIndexPlusOne - 1];
+        if (participant.state != ParticipantState.ACTIVE) revert WithdrawalNotActive();
+        if (
+            registrationVersion != SUPPORTED_REGISTRATION_VERSION ||
+            registrationVersion != participant.registrationVersion
+        ) revert RegistrationVersionMismatch();
+        if (reservationNonce != participant.reservationNonce) revert ReservationNonceMismatch();
+        if (withdrawalNonce != nextWithdrawNonce[msg.sender]) revert WithdrawalNonceMismatch();
+
+        euint64 requested = FHE.fromExternal(encryptedRequestedAmount, inputProof);
+        euint64 eligibleRequest = FHE.min(requested, participant.principal);
+        FHE.allowThis(eligibleRequest);
+        FHE.allowTransient(eligibleRequest, address(confidentialToken));
+
+        // Checkpoint with the old principal before any principal mutation.
+        _checkpointParticipant(participant);
+        euint64 actualWithdrawn = confidentialToken.confidentialTransfer(
+            msg.sender,
+            eligibleRequest
+        );
+        FHE.allowThis(actualWithdrawn);
+
+        participant.principal = FHE.sub(participant.principal, actualWithdrawn);
+        FHE.allowThis(participant.principal);
+        _aggregatePrincipal = FHE.sub(_aggregatePrincipal, FHE.asEuint128(actualWithdrawn));
+        FHE.allowThis(_aggregatePrincipal);
+        participant.deregistrationZero = FHE.eq(participant.principal, FHE.asEuint64(0));
+        FHE.allowThis(participant.deregistrationZero);
+        FHE.makePubliclyDecryptable(participant.deregistrationZero);
+        nextWithdrawNonce[msg.sender] = withdrawalNonce + 1;
+        emit WithdrawalProcessed(msg.sender, withdrawalNonce);
+    }
+
+    /// @notice Start one immutable raw-TWAB snapshot at the configured epoch boundary.
+    function startSnapshot() external nonReentrant {
+        if (snapshotInProgress) revert SnapshotInProgress();
+        // The cutoff is the configured epoch end; the permissionless invocation may be late.
+        if (block.timestamp < activeEpochEnd) revert DrawDurationExceeded();
+
+        uint256 snapshotId = ++nextSnapshotId;
+        currentSnapshotId = snapshotId;
+        snapshotCutoffTimestamp = activeEpochEnd;
+        snapshotParticipantCount = _highestOccupiedSlotPlusOne();
+        snapshotCursor = 0;
+        snapshotInProgress = true;
+        snapshotReady = false;
+        _snapshotTotals[snapshotId] = FHE.asEuint128(0);
+        _snapshotCutoffs[snapshotId] = snapshotCutoffTimestamp;
+        _snapshotBounds[snapshotId] = snapshotParticipantCount;
+        FHE.allowThis(_snapshotTotals[snapshotId]);
+        activeEpochId += 1;
+        activeEpochStart = snapshotCutoffTimestamp;
+        activeEpochEnd = activeEpochStart + MAX_DRAW_DURATION_SECONDS;
+        emit SnapshotStarted(snapshotId, snapshotCutoffTimestamp, snapshotParticipantCount);
+    }
+
+    /// @notice Process the next bounded participant snapshot chunk permissionlessly.
+    function processSnapshotChunk() external nonReentrant {
+        if (!snapshotInProgress || snapshotReady) revert SnapshotNotInProgress();
+        uint256 start = snapshotCursor;
+        if (start >= snapshotParticipantCount) revert SnapshotIncomplete();
+        uint256 end = start + SNAPSHOT_CHUNK_SIZE;
+        if (end > snapshotParticipantCount) end = snapshotParticipantCount;
+        uint256 snapshotId = currentSnapshotId;
+        for (uint256 index = start; index < end; ++index) {
+            if (_snapshotProcessed[snapshotId][index]) revert SnapshotCursorMismatch();
+            Participant storage participant = _participants[index];
+            euint128 weight = FHE.asEuint128(0);
+            bool eligible =
+                _snapshotLocked[snapshotId][index] ||
+                    (participant.state == ParticipantState.ACTIVE &&
+                        participant.activationStartedAt <= snapshotCutoffTimestamp &&
+                        (participant.twabEpoch == activeEpochId - 1 ||
+                            (participant.snapshotSealed &&
+                                participant.pendingSnapshotEpoch == activeEpochId - 1)));
+            _snapshotEligible[snapshotId][index] = eligible;
+            if (eligible) {
+                _sealParticipantForSnapshot(participant);
+                weight = participant.pendingSnapshotWeight;
+            }
+            _snapshotWeights[snapshotId][index] = weight;
+            FHE.allowThis(_snapshotWeights[snapshotId][index]);
+            _snapshotTotals[snapshotId] = FHE.add(_snapshotTotals[snapshotId], weight);
+            FHE.allowThis(_snapshotTotals[snapshotId]);
+            _snapshotProcessed[snapshotId][index] = true;
+        }
+        snapshotCursor = end;
+        emit SnapshotChunkProcessed(snapshotId, start, end);
+    }
+
+    /// @notice Mark an immutable snapshot ready once every bound slot was processed.
+    function finalizeSnapshot() external nonReentrant {
+        if (!snapshotInProgress || snapshotReady) revert SnapshotNotInProgress();
+        if (snapshotCursor != snapshotParticipantCount) revert SnapshotIncomplete();
+        snapshotInProgress = false;
+        snapshotReady = true;
+        _snapshotFinalized[currentSnapshotId] = true;
+        emit SnapshotReady(currentSnapshotId, snapshotCutoffTimestamp, snapshotParticipantCount);
+    }
+
     /// @notice Settle one immutable refund-completion handle with a bound KMS proof.
     function settleRefundCompletion(
         uint256 slotIndex,
@@ -410,6 +589,9 @@ contract VeilpotPool is ZamaEthereumConfig {
         bool clearZero,
         bytes calldata decryptionProof
     ) external nonReentrant {
+        if (!snapshotInProgress && block.timestamp >= activeEpochEnd) {
+            revert DrawDurationExceeded();
+        }
         Participant storage participant = _participant(slotIndex);
         if (participant.state != ParticipantState.ACTIVE) revert DeregistrationNotActive();
         bytes32[] memory handles = new bytes32[](1);
@@ -489,6 +671,73 @@ contract VeilpotPool is ZamaEthereumConfig {
         return _canonicalReceived;
     }
 
+    function twabAccumulatorHandle(uint256 slotIndex) external view returns (euint128) {
+        return _participant(slotIndex).twabAccumulator;
+    }
+
+    function twabMetadata(
+        uint256 slotIndex
+    )
+        external
+        view
+        returns (
+            euint128 accumulator,
+            uint256 lastCheckpoint,
+            uint256 epoch,
+            euint128 pendingWeight,
+            uint256 pendingEpoch,
+            bool isSealed
+        )
+    {
+        Participant storage participant = _participant(slotIndex);
+        return (
+            participant.twabAccumulator,
+            participant.lastTwabTimestamp,
+            participant.twabEpoch,
+            participant.pendingSnapshotWeight,
+            participant.pendingSnapshotEpoch,
+            participant.snapshotSealed
+        );
+    }
+
+    function snapshotMetadata(
+        uint256 snapshotId
+    )
+        external
+        view
+        returns (
+            uint256 cutoff,
+            uint256 participantCount,
+            uint256 cursor,
+            bool inProgress,
+            bool ready
+        )
+    {
+        if (snapshotId == 0 || snapshotId > nextSnapshotId) revert InvalidParticipant();
+        return (
+            _snapshotCutoffs[snapshotId],
+            _snapshotBounds[snapshotId],
+            _snapshotFinalized[snapshotId]
+                ? _snapshotBounds[snapshotId]
+                : (snapshotId == currentSnapshotId ? snapshotCursor : 0),
+            snapshotId == currentSnapshotId && snapshotInProgress,
+            _snapshotFinalized[snapshotId]
+        );
+    }
+
+    function snapshotWeightHandle(
+        uint256 snapshotId,
+        uint256 slotIndex
+    ) external view returns (euint128) {
+        if (slotIndex >= MAX_PARTICIPANTS || snapshotId == 0) revert InvalidParticipant();
+        return _snapshotWeights[snapshotId][slotIndex];
+    }
+
+    function snapshotTotalHandle(uint256 snapshotId) external view returns (euint128) {
+        if (snapshotId == 0 || snapshotId > nextSnapshotId) revert InvalidParticipant();
+        return _snapshotTotals[snapshotId];
+    }
+
     function _participant(
         uint256 slotIndex
     ) internal view returns (Participant storage participant) {
@@ -502,6 +751,89 @@ contract VeilpotPool is ZamaEthereumConfig {
         emit BondRefundCredited(owner, amount);
     }
 
+    function _checkpointParticipant(Participant storage participant) internal {
+        // Once the next epoch is open, do not create a valid interval longer
+        // than the frozen envelope. Before a late snapshot start, one extra
+        // window is allowed so the old epoch can be sealed and the next epoch
+        // can accrue up to its own deadline.
+        if (
+            snapshotInProgress
+                ? block.timestamp > activeEpochEnd
+                : block.timestamp > activeEpochEnd + MAX_DRAW_DURATION_SECONDS
+        ) {
+            revert DrawDurationExceeded();
+        }
+        if (
+            !snapshotInProgress &&
+            block.timestamp > activeEpochEnd &&
+            participant.activationStartedAt != 0 &&
+            participant.activationStartedAt <= activeEpochEnd &&
+            participant.twabEpoch == activeEpochId
+        ) {
+            _sealParticipantAt(participant, activeEpochId, activeEpochId + 1, activeEpochEnd);
+        }
+        if (
+            snapshotInProgress &&
+            participant.activationStartedAt != 0 &&
+            participant.activationStartedAt <= snapshotCutoffTimestamp &&
+            participant.twabEpoch == activeEpochId - 1
+        ) {
+            _sealParticipantForSnapshot(participant);
+        }
+        if (participant.twabEpoch < activeEpochId) {
+            participant.twabEpoch = activeEpochId;
+            participant.twabAccumulator = FHE.asEuint128(0);
+            participant.lastTwabTimestamp =
+                participant.activationStartedAt > activeEpochStart
+                    ? participant.activationStartedAt
+                    : activeEpochStart;
+            FHE.allowThis(participant.twabAccumulator);
+        }
+        uint256 elapsed = block.timestamp - participant.lastTwabTimestamp;
+        if (elapsed == 0) return;
+        euint128 principal128 = FHE.asEuint128(participant.principal);
+        euint128 delta = FHE.mul(principal128, uint128(elapsed));
+        participant.twabAccumulator = FHE.add(participant.twabAccumulator, delta);
+        participant.lastTwabTimestamp = block.timestamp;
+        FHE.allowThis(participant.twabAccumulator);
+    }
+
+    function _highestOccupiedSlotPlusOne() internal view returns (uint256 bound) {
+        for (uint256 index = MAX_PARTICIPANTS; index > 0; --index) {
+            if (_participants[index - 1].owner != address(0)) return index;
+        }
+        return 0;
+    }
+
+    function _sealParticipantForSnapshot(Participant storage participant) internal {
+        uint256 closedEpoch = activeEpochId - 1;
+        if (participant.snapshotSealed && participant.pendingSnapshotEpoch == closedEpoch) return;
+        if (participant.twabEpoch != closedEpoch) revert SnapshotCursorMismatch();
+        _sealParticipantAt(participant, closedEpoch, activeEpochId, snapshotCutoffTimestamp);
+    }
+
+    function _sealParticipantAt(
+        Participant storage participant,
+        uint256 closedEpoch,
+        uint256 nextEpoch,
+        uint256 cutoff
+    ) internal {
+        if (participant.snapshotSealed && participant.pendingSnapshotEpoch == closedEpoch) return;
+        if (participant.twabEpoch != closedEpoch) revert SnapshotCursorMismatch();
+        uint256 elapsed = cutoff - participant.lastTwabTimestamp;
+        euint128 principal128 = FHE.asEuint128(participant.principal);
+        euint128 delta = FHE.mul(principal128, uint128(elapsed));
+        participant.twabAccumulator = FHE.add(participant.twabAccumulator, delta);
+        participant.pendingSnapshotWeight = participant.twabAccumulator;
+        participant.pendingSnapshotEpoch = closedEpoch;
+        participant.snapshotSealed = true;
+        participant.twabAccumulator = FHE.asEuint128(0);
+        participant.twabEpoch = nextEpoch;
+        participant.lastTwabTimestamp = cutoff;
+        FHE.allowThis(participant.pendingSnapshotWeight);
+        FHE.allowThis(participant.twabAccumulator);
+    }
+
     function _releaseBond(Participant storage participant, address owner) internal {
         if (!participant.bondHeld) return;
         participant.bondHeld = false;
@@ -509,6 +841,9 @@ contract VeilpotPool is ZamaEthereumConfig {
     }
 
     function _clearParticipant(uint256 slotIndex, address owner, ParticipantState state) internal {
+        if (snapshotInProgress && _participants[slotIndex].state == ParticipantState.ACTIVE) {
+            _snapshotLocked[currentSnapshotId][slotIndex] = true;
+        }
         if (
             activeParticipantCount > 0 && _participants[slotIndex].state == ParticipantState.ACTIVE
         ) {
