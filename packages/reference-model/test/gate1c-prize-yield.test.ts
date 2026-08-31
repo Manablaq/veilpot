@@ -104,7 +104,9 @@ describe("Gate 1C prize/yield production accounting oracle", function () {
 
     adapter.beginSweep(1n, 10n);
 
-    expect(() => adapter.settleSweep(1n, true)).to.throw("invalid yield sweep completion proof");
+    expect(() => {
+      adapter.settleSweep(1n, true);
+    }).to.throw("invalid yield sweep completion proof");
   });
 
   it("does not turn direct token donations into recognized yield backing", function () {
@@ -123,7 +125,9 @@ describe("Gate 1C prize/yield production accounting oracle", function () {
   it("records only adapter-returned actual yield and keeps sponsor funding distinct", function () {
     const reserve = new Gate1CPrizeReserveModel(CHAIN_ID, RESERVE, POOL, ADAPTER);
 
-    expect(() => reserve.recordYield("attacker", 7n, 25n)).to.throw("unauthorized yield source");
+    expect(() => {
+      reserve.recordYield("attacker", 7n, 25n);
+    }).to.throw("unauthorized yield source");
 
     reserve.recordYield(ADAPTER, 7n, 25n);
     reserve.fundSponsorForDraw(7n, 10n);
@@ -144,14 +148,18 @@ describe("Gate 1C prize/yield production accounting oracle", function () {
     expect(reserve.rawTokenBalance).to.equal(1_025n);
     expect(reserve.accountedReserveAssets).to.equal(25n);
 
-    expect(() => reserve.preparePrize(7n, false)).to.throw("adapter funding not finalized");
+    expect(() => {
+      reserve.preparePrize(7n, false);
+    }).to.throw("adapter funding not finalized");
 
     reserve.preparePrize(7n, true);
 
     expect(reserve.snapshot(7n).remaining).to.equal(25n);
     expect(reserve.outstandingPrizeLiabilities).to.equal(25n);
 
-    expect(() => reserve.fundSponsorForDraw(7n, 1n)).to.throw("funding already frozen");
+    expect(() => {
+      reserve.fundSponsorForDraw(7n, 1n);
+    }).to.throw("funding already frozen");
   });
 
   it("has a proof-backed zero-prize terminal path", function () {
@@ -161,7 +169,9 @@ describe("Gate 1C prize/yield production accounting oracle", function () {
 
     expect(reserve.snapshot(9n).state).to.equal("StatusProofPending");
 
-    expect(() => reserve.settlePrizeStatus(9n, false)).to.throw("invalid prize status proof");
+    expect(() => {
+      reserve.settlePrizeStatus(9n, false);
+    }).to.throw("invalid prize status proof");
 
     reserve.settlePrizeStatus(9n, true);
 
@@ -191,9 +201,9 @@ describe("Gate 1C prize/yield production accounting oracle", function () {
     ];
 
     for (const changed of mutations) {
-      expect(() => reserve.beginClaim(changed, expectedIdentity, true, 10n, 2n)).to.throw(
-        "invalid claim authorization",
-      );
+      expect(() => {
+        reserve.beginClaim(changed, expectedIdentity, true, 10n, 2n);
+      }).to.throw("invalid claim authorization");
     }
   });
 
@@ -210,9 +220,9 @@ describe("Gate 1C prize/yield production accounting oracle", function () {
 
     expect(reserve.nextClaimNonce("alice")).to.equal(1n);
 
-    expect(() => reserve.beginClaim(authorization(0n), expectedIdentity, true, 10n, 3n)).to.throw(
-      "invalid claim nonce",
-    );
+    expect(() => {
+      reserve.beginClaim(authorization(0n), expectedIdentity, true, 10n, 3n);
+    }).to.throw("invalid claim nonce");
   });
 
   it("cannot let a nonwinner reduce or close another participant's prize", function () {
@@ -228,9 +238,9 @@ describe("Gate 1C prize/yield production accounting oracle", function () {
     expect(reserve.snapshot(7n).remaining).to.equal(100n);
     expect(reserve.outstandingPrizeLiabilities).to.equal(100n);
 
-    expect(() => reserve.settleClaim(7n, "alice", 0n, true)).to.throw(
-      "invalid claim completion proof",
-    );
+    expect(() => {
+      reserve.settleClaim(7n, "alice", 0n, true);
+    }).to.throw("invalid claim completion proof");
 
     reserve.settleClaim(7n, "alice", 0n, false);
 
