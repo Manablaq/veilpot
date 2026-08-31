@@ -114,6 +114,7 @@ contract VeilpotPool is ZamaEthereumConfig {
     }
 
     IERC7984 public immutable confidentialToken;
+    address public immutable prizeReserve;
     Participant[128] private _participants;
     mapping(address => uint256) private _participantIndexPlusOne;
     mapping(address => uint256) public nextDepositNonce;
@@ -156,6 +157,9 @@ contract VeilpotPool is ZamaEthereumConfig {
     uint256 private _entered;
 
     error InvalidToken();
+    error InvalidPrizeReserve();
+    error OnlyPrizeReserve();
+    error MissingPrizeAcl();
     error InvalidBond();
     error AlreadyRegistered();
     error CapacityFull();
@@ -273,9 +277,11 @@ contract VeilpotPool is ZamaEthereumConfig {
         _entered = 0;
     }
 
-    constructor(IERC7984 token) {
+    constructor(IERC7984 token, address prizeReserve_) {
         if (address(token) == address(0)) revert InvalidToken();
+        if (prizeReserve_ == address(0)) revert InvalidPrizeReserve();
         confidentialToken = token;
+        prizeReserve = prizeReserve_;
         _aggregatePrincipal = FHE.asEuint128(0);
         _aggregatePending = FHE.asEuint128(0);
         _canonicalReceived = FHE.asEuint128(0);
@@ -1340,6 +1346,28 @@ contract VeilpotPool is ZamaEthereumConfig {
         return (draw.runningPrefix, draw.winnerCount);
     }
 
+    /// @notice Derive one encrypted prize entitlement without exposing the winner selector.
+    /// @dev Only the immutable canonical reserve may request this transient ciphertext handoff.
+    function derivePrizeEntitlement(
+        uint256 drawId,
+        uint256 slotIndex,
+        euint64 prizeAmount
+    ) external returns (euint64 entitlement) {
+        if (msg.sender != prizeReserve) revert OnlyPrizeReserve();
+        Draw storage draw = _drawExisting(drawId);
+        if (draw.state != DrawState.FINALIZED) {
+            revert InvalidDrawState(DrawState.FINALIZED, draw.state);
+        }
+        if (slotIndex >= draw.participantCount) revert InvalidDrawIndex();
+        if (!FHE.isAllowed(prizeAmount, address(this))) revert MissingPrizeAcl();
+
+        entitlement = FHE.select(
+            _drawWinnerPredicates[drawId][slotIndex],
+            prizeAmount,
+            FHE.asEuint64(0)
+        );
+        FHE.allowTransient(entitlement, msg.sender);
+    }
     /// @notice Return one encrypted winner selector paired with its immutable historical beneficiary.
     /// @dev This path never consults the current participant occupying the slot.
     function drawWinnerRecord(

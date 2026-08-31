@@ -32,6 +32,9 @@ contract VeilpotPrizeReserve is ZamaEthereumConfig, IVeilpotPrizeReserveFunding 
     /// @notice Maximum frozen participant bound supported by the Veilpot pool.
     uint256 public constant MAX_PARTICIPANTS = 128;
 
+    /// @notice Fixed permissionless entitlement-assignment chunk size.
+    uint256 public constant ASSIGNMENT_CHUNK_SIZE = 8;
+
     /// @notice Maximum supported VeilDraw bucket exponent inherited from the frozen pool envelope.
     uint8 public constant MAX_DRAW_BUCKET_EXPONENT = 69;
 
@@ -50,6 +53,7 @@ contract VeilpotPrizeReserve is ZamaEthereumConfig, IVeilpotPrizeReserveFunding 
     struct Prize {
         PrizeState state;
         bool initialized;
+        uint256 snapshotId;
         uint256 participantCount;
         uint256 assignmentCursor;
         uint256 statusAttemptNonce;
@@ -57,8 +61,18 @@ contract VeilpotPrizeReserve is ZamaEthereumConfig, IVeilpotPrizeReserveFunding 
         euint64 yieldFunding;
         euint64 sponsorFunding;
         euint64 remaining;
+        euint128 assignedTotal;
         ebool statusPredicate;
         euint256 proofContext;
+    }
+
+    struct PrizeEntitlement {
+        bool initialized;
+        bool beneficiaryBound;
+        address owner;
+        uint256 registrationVersion;
+        uint256 reservationNonce;
+        euint64 amount;
     }
 
     /// @notice Immutable Veilpot pool whose finalized draws define prize eligibility.
@@ -73,6 +87,7 @@ contract VeilpotPrizeReserve is ZamaEthereumConfig, IVeilpotPrizeReserveFunding 
     /// @notice Next application-level sponsor-funding nonce accepted for each funder.
     mapping(address => uint256) public nextSponsorFundingNonce;
     mapping(uint256 => Prize) private _prizes;
+    mapping(uint256 => mapping(uint256 => PrizeEntitlement)) private _entitlements;
 
     euint128 private _accountedReserveAssets;
     euint128 private _outstandingPrizeLiabilities;
@@ -96,6 +111,12 @@ contract VeilpotPrizeReserve is ZamaEthereumConfig, IVeilpotPrizeReserveFunding 
     error SponsorFundingNonceMismatch();
     error StatusAttemptMismatch();
     error StatusProofNotExpired();
+    error AssignmentCursorMismatch();
+    error AssignmentComplete();
+    error EntitlementAlreadyAssigned();
+    error MissingEntitlementAcl();
+    error InvalidHistoricalBeneficiary();
+    error InvalidAssignmentSlot();
 
     /// @notice Emitted after adapter-originated realized yield is recorded for one draw.
     /// @param drawId Draw whose realized yield funding was recorded.
@@ -141,6 +162,16 @@ contract VeilpotPrizeReserve is ZamaEthereumConfig, IVeilpotPrizeReserveFunding 
         bool zeroPrize
     );
 
+    /// @notice Emitted after one fixed permissionless entitlement-assignment chunk.
+    /// @param drawId Draw whose immutable historical slots were assigned.
+    /// @param start Inclusive assignment cursor at transaction start.
+    /// @param end Exclusive assignment cursor after the completed chunk.
+    event PrizeAssignmentChunkProcessed(
+        uint256 indexed drawId,
+        uint256 indexed start,
+        uint256 indexed end
+    );
+
     modifier nonReentrant() {
         if (_entered != 0) revert Reentrancy();
         _entered = 1;
@@ -159,7 +190,8 @@ contract VeilpotPrizeReserve is ZamaEthereumConfig, IVeilpotPrizeReserveFunding 
         if (
             address(adapter_.confidentialToken()) != address(token) ||
             adapter_.pool() != address(pool_) ||
-            adapter_.reserve() != address(this)
+            adapter_.reserve() != address(this) ||
+            pool_.prizeReserve() != address(this)
         ) {
             revert InvalidBinding();
         }
@@ -265,7 +297,7 @@ contract VeilpotPrizeReserve is ZamaEthereumConfig, IVeilpotPrizeReserveFunding 
     /// @notice Freeze realized yield and sponsor funding into one encrypted prize liability.
     /// @param drawId Finalized draw whose reserve funding is being frozen into a prize.
     function preparePrize(uint256 drawId) external nonReentrant {
-        uint256 participantCount = _requireFinalizedDraw(drawId);
+        (uint256 snapshotId, uint256 participantCount) = _requireFinalizedDraw(drawId);
 
         uint8 adapterState = adapter.drawYieldHandles(drawId);
 
@@ -280,6 +312,7 @@ contract VeilpotPrizeReserve is ZamaEthereumConfig, IVeilpotPrizeReserveFunding 
         euint64 totalPrize = FHE.add(prize.yieldFunding, prize.sponsorFunding);
 
         prize.remaining = totalPrize;
+        prize.snapshotId = snapshotId;
         prize.participantCount = participantCount;
         prize.assignmentCursor = 0;
         prize.statusAttemptNonce = 1;
@@ -346,6 +379,102 @@ contract VeilpotPrizeReserve is ZamaEthereumConfig, IVeilpotPrizeReserveFunding 
         prize.state = clearZeroPrize ? PrizeState.NO_PRIZE : PrizeState.ASSIGNING;
 
         emit PrizeStatusSettled(drawId, statusAttemptNonce, clearZeroPrize);
+    }
+
+    /// @notice Assign the next fixed historical entitlement chunk permissionlessly.
+    /// @dev Assignment allocates encrypted liability but never settles reserve accounting.
+    /// @param drawId Draw whose nonzero frozen prize is in the ASSIGNING state.
+    /// @param expectedCursor Caller-observed cursor used to reject stale or replayed transactions.
+    function assignPrizeEntitlementChunk(
+        uint256 drawId,
+        uint256 expectedCursor
+    ) external nonReentrant {
+        Prize storage prize = _prizeExisting(drawId);
+
+        if (prize.state != PrizeState.ASSIGNING) {
+            revert InvalidPrizeState(PrizeState.ASSIGNING, prize.state);
+        }
+
+        uint256 start = prize.assignmentCursor;
+
+        if (expectedCursor != start) revert AssignmentCursorMismatch();
+
+        if (start > prize.participantCount || start == prize.participantCount) {
+            revert AssignmentComplete();
+        }
+
+        uint256 end = start + ASSIGNMENT_CHUNK_SIZE;
+
+        if (end > prize.participantCount) {
+            end = prize.participantCount;
+        }
+
+        FHE.allowTransient(prize.remaining, address(pool));
+
+        euint128 assignedTotal = prize.assignedTotal;
+
+        for (uint256 slotIndex = start; slotIndex < end; ++slotIndex) {
+            assignedTotal = _assignPrizeEntitlementSlot(drawId, prize, slotIndex, assignedTotal);
+        }
+
+        prize.assignedTotal = assignedTotal;
+        prize.assignmentCursor = end;
+
+        FHE.allowThis(prize.assignedTotal);
+
+        if (end == prize.participantCount) {
+            prize.state = PrizeState.CLAIMABLE;
+        }
+
+        emit PrizeAssignmentChunkProcessed(drawId, start, end);
+    }
+
+    /// @notice Assign one immutable historical slot and add its encrypted entitlement to the running total.
+    /// @dev Persist one immutable historical slot and add its encrypted entitlement to the running total.
+    /// @param drawId Draw whose entitlement is being assigned.
+    /// @param prize Frozen prize state holding the historical snapshot binding.
+    /// @param slotIndex Historical slot being assigned.
+    /// @param assignedTotal Encrypted sum accumulated before this slot.
+    /// @return nextAssignedTotal Encrypted sum including this slot.
+    function _assignPrizeEntitlementSlot(
+        uint256 drawId,
+        Prize storage prize,
+        uint256 slotIndex,
+        euint128 assignedTotal
+    ) internal returns (euint128 nextAssignedTotal) {
+        PrizeEntitlement storage record = _entitlements[drawId][slotIndex];
+
+        if (record.initialized) revert EntitlementAlreadyAssigned();
+
+        (
+            address owner,
+            uint256 registrationVersion,
+            uint256 reservationNonce,
+            bool beneficiaryBound
+        ) = pool.snapshotBeneficiary(prize.snapshotId, slotIndex);
+
+        euint64 entitlement = FHE.asEuint64(0);
+
+        if (beneficiaryBound) {
+            if (owner == address(0)) revert InvalidHistoricalBeneficiary();
+
+            entitlement = pool.derivePrizeEntitlement(drawId, slotIndex, prize.remaining);
+
+            if (!FHE.isAllowed(entitlement, address(this))) {
+                revert MissingEntitlementAcl();
+            }
+        }
+
+        record.initialized = true;
+        record.beneficiaryBound = beneficiaryBound;
+        record.owner = owner;
+        record.registrationVersion = registrationVersion;
+        record.reservationNonce = reservationNonce;
+        record.amount = entitlement;
+
+        FHE.allowThis(record.amount);
+
+        nextAssignedTotal = FHE.add(assignedTotal, FHE.asEuint128(entitlement));
     }
 
     /// @notice Refresh expired public status evidence without reopening prize funding.
@@ -429,6 +558,56 @@ contract VeilpotPrizeReserve is ZamaEthereumConfig, IVeilpotPrizeReserveFunding 
         );
     }
 
+    /// @notice Return one encrypted assignment record with its immutable historical identity.
+    /// @param drawId Draw whose historical entitlement record is requested.
+    /// @param slotIndex Frozen historical slot index.
+    /// @return initialized Whether assignment has persisted this slot.
+    /// @return beneficiaryBound Whether the frozen snapshot contains a bound beneficiary.
+    /// @return owner Historical beneficiary owner.
+    /// @return registrationVersion Historical registration version.
+    /// @return reservationNonce Historical reservation nonce.
+    /// @return amount Encrypted entitlement assigned to the slot.
+    function prizeEntitlementRecord(
+        uint256 drawId,
+        uint256 slotIndex
+    )
+        external
+        view
+        returns (
+            bool initialized,
+            bool beneficiaryBound,
+            address owner,
+            uint256 registrationVersion,
+            uint256 reservationNonce,
+            euint64 amount
+        )
+    {
+        Prize storage prize = _prizeExisting(drawId);
+
+        if (slotIndex > prize.participantCount || slotIndex == prize.participantCount) {
+            revert InvalidAssignmentSlot();
+        }
+
+        PrizeEntitlement storage record = _entitlements[drawId][slotIndex];
+
+        return (
+            record.initialized,
+            record.beneficiaryBound,
+            record.owner,
+            record.registrationVersion,
+            record.reservationNonce,
+            record.amount
+        );
+    }
+
+    /// @notice Return the encrypted sum allocated across processed historical slots.
+    /// @param drawId Draw whose encrypted assigned-total handle is requested.
+    /// @return assignedTotal Encrypted sum of every entitlement persisted so far.
+    function prizeAssignmentTotalHandle(
+        uint256 drawId
+    ) external view returns (euint128 assignedTotal) {
+        return _prizeExisting(drawId).assignedTotal;
+    }
     /// @notice Return encrypted reserve asset and prize-liability accounting handles.
     /// @return accountedReserveAssets Encrypted assets admitted through approved reserve funding paths.
     /// @return outstandingPrizeLiabilities Encrypted frozen prize obligations not yet settled.
@@ -442,10 +621,10 @@ contract VeilpotPrizeReserve is ZamaEthereumConfig, IVeilpotPrizeReserveFunding 
 
     function _requireFinalizedDraw(
         uint256 drawId
-    ) internal view returns (uint256 participantCount) {
+    ) internal view returns (uint256 snapshotId, uint256 participantCount) {
         (
             uint8 state,
-            uint256 snapshotId,
+            uint256 resolvedSnapshotId,
             ,
             uint256 count,
             uint256 batchId,
@@ -455,7 +634,7 @@ contract VeilpotPrizeReserve is ZamaEthereumConfig, IVeilpotPrizeReserveFunding 
 
         if (
             state != POOL_DRAW_FINALIZED ||
-            snapshotId == 0 ||
+            resolvedSnapshotId == 0 ||
             count == 0 ||
             count > MAX_PARTICIPANTS ||
             batchId == 0 ||
@@ -465,7 +644,7 @@ contract VeilpotPrizeReserve is ZamaEthereumConfig, IVeilpotPrizeReserveFunding 
             revert DrawNotFinalized();
         }
 
-        return count;
+        return (resolvedSnapshotId, count);
     }
 
     function _initializePrize(uint256 drawId) internal returns (Prize storage prize) {
@@ -484,6 +663,8 @@ contract VeilpotPrizeReserve is ZamaEthereumConfig, IVeilpotPrizeReserveFunding 
 
         prize.remaining = FHE.asEuint64(0);
 
+        prize.assignedTotal = FHE.asEuint128(0);
+
         prize.statusPredicate = FHE.asEbool(false);
 
         prize.proofContext = FHE.asEuint256(0);
@@ -493,6 +674,8 @@ contract VeilpotPrizeReserve is ZamaEthereumConfig, IVeilpotPrizeReserveFunding 
         FHE.allowThis(prize.sponsorFunding);
 
         FHE.allowThis(prize.remaining);
+
+        FHE.allowThis(prize.assignedTotal);
 
         FHE.allowThis(prize.statusPredicate);
 

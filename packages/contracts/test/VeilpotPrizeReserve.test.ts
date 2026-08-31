@@ -244,23 +244,33 @@ async function deployPair(
 
   await token.waitForDeployment();
 
-  const poolFactory = await hre.ethers.getContractFactory("Gate1CPrizePoolHarness");
-
-  const pool = (await poolFactory.deploy(await token.getAddress())) as unknown as PrizePoolHarness;
-
-  await pool.waitForDeployment();
-
   const nonce = await hre.ethers.provider.getTransactionCount(owner.address);
 
-  const predictedAdapter = ethers.getCreateAddress({
+  const predictedPool = ethers.getCreateAddress({
     from: owner.address,
     nonce,
   });
 
-  const predictedReserve = ethers.getCreateAddress({
+  const predictedAdapter = ethers.getCreateAddress({
     from: owner.address,
     nonce: nonce + 1,
   });
+
+  const predictedReserve = ethers.getCreateAddress({
+    from: owner.address,
+    nonce: nonce + 2,
+  });
+
+  const poolFactory = await hre.ethers.getContractFactory("Gate1CPrizePoolHarness");
+
+  const pool = (await poolFactory.deploy(
+    await token.getAddress(),
+    predictedReserve,
+  )) as unknown as PrizePoolHarness;
+
+  await pool.waitForDeployment();
+
+  expect(await pool.getAddress()).to.equal(predictedPool);
 
   const adapterFactory = await hre.ethers.getContractFactory(adapterName);
 
@@ -451,9 +461,16 @@ describe("VeilpotPrizeReserve Gate 1C.2A", function () {
 
     await token.waitForDeployment();
 
+    const nonce = await hre.ethers.provider.getTransactionCount(owner.address);
+
+    const predictedReserve = ethers.getCreateAddress({
+      from: owner.address,
+      nonce: nonce + 2,
+    });
+
     const pool = await (
       await hre.ethers.getContractFactory("Gate1CPrizePoolHarness")
-    ).deploy(await token.getAddress());
+    ).deploy(await token.getAddress(), predictedReserve);
 
     await pool.waitForDeployment();
 
@@ -815,5 +832,320 @@ describe("VeilpotPrizeReserve Gate 1C.2A", function () {
     expect(await decrypt128(accounting[0])).to.equal(50n);
 
     expect(await decrypt128(accounting[1])).to.equal(0n);
+  });
+});
+
+interface PrizePoolHarness {
+  setAssignmentSlot(
+    drawId: bigint,
+    slotIndex: bigint,
+    owner: string,
+    registrationVersion: bigint,
+    reservationNonce: bigint,
+    bound: boolean,
+    winner: boolean,
+  ): Tx;
+}
+
+interface PrizeReserve {
+  ASSIGNMENT_CHUNK_SIZE(): Promise<bigint>;
+
+  assignPrizeEntitlementChunk(drawId: bigint, expectedCursor: bigint): Tx;
+
+  prizeEntitlementRecord(
+    drawId: bigint,
+    slotIndex: bigint,
+  ): Promise<readonly [boolean, boolean, string, bigint, bigint, Handle]>;
+
+  prizeAssignmentTotalHandle(drawId: bigint): Promise<Handle>;
+}
+
+async function prepareGate1C2BAssignment(
+  drawId: bigint,
+  participantCount: bigint,
+  prizeAmount: bigint,
+  winnerSlot: bigint,
+  unboundWinnerSlot: bigint | null = null,
+): Promise<{
+  owner: Signer;
+  other: Signer;
+  pool: PrizePoolHarness;
+  adapter: PrizeAdapterHarness;
+  reserve: PrizeReserve;
+}> {
+  const pair = await deployPair("Gate1CPrizeAdapterHarness");
+
+  const adapter = pair.adapter as unknown as PrizeAdapterHarness;
+
+  await receipt(pair.pool.setFinalizedDraw(drawId, participantCount));
+
+  for (let index = 0; index < Number(participantCount); index += 1) {
+    const slotIndex = BigInt(index);
+
+    const isUnboundWinner = unboundWinnerSlot !== null && slotIndex === unboundWinnerSlot;
+
+    const isWinner = slotIndex === winnerSlot || isUnboundWinner;
+
+    const beneficiary = isUnboundWinner
+      ? ethers.ZeroAddress
+      : slotIndex === winnerSlot
+        ? pair.other.address
+        : pair.owner.address;
+
+    await receipt(
+      pair.pool.setAssignmentSlot(
+        drawId,
+        slotIndex,
+        beneficiary,
+        1_000n + slotIndex,
+        2_000n + slotIndex,
+        !isUnboundWinner,
+        isWinner,
+      ),
+    );
+  }
+
+  await receipt(adapter.setDrawState(drawId, 4n));
+
+  await receipt(adapter.recordYieldWithAcl(drawId, prizeAmount));
+
+  await receipt(pair.reserve.preparePrize(drawId));
+
+  const pending = await pair.reserve.prizeHandles(drawId);
+
+  expect(pending[0]).to.equal(1n);
+
+  const stage = await publicStage(pending[4], pending[5]);
+
+  expect(stage.status).to.equal(false);
+
+  await receipt(pair.reserve.settlePrizeStatus(drawId, pending[8], stage.status, stage.proof));
+
+  const assigning = await pair.reserve.prizeHandles(drawId);
+
+  expect(assigning[0]).to.equal(2n);
+
+  expect(assigning[6]).to.equal(participantCount);
+
+  expect(assigning[7]).to.equal(0n);
+
+  return {
+    owner: pair.owner,
+    other: pair.other,
+    pool: pair.pool,
+    adapter,
+    reserve: pair.reserve,
+  };
+}
+
+describe("Gate 1C.2B reserve entitlement assignment", function () {
+  it("processes fixed 8+1 chunks permissionlessly, never early-stops after the winner, and preserves reserve accounting", async function () {
+    const drawId = 101n;
+
+    const { owner, other, reserve } = await prepareGate1C2BAssignment(drawId, 9n, 100n, 0n);
+
+    expect(await reserve.ASSIGNMENT_CHUNK_SIZE()).to.equal(8n);
+
+    const beforePrize = await reserve.prizeHandles(drawId);
+
+    const beforeAccounting = await reserve.reserveAccountingHandles();
+
+    expect(await decrypt64(beforePrize[3])).to.equal(100n);
+
+    expect(await decrypt128(beforeAccounting[0])).to.equal(100n);
+
+    expect(await decrypt128(beforeAccounting[1])).to.equal(100n);
+
+    const permissionlessReserve = reserve.connect(other) as unknown as PrizeReserve;
+
+    const firstReceipt = await receipt(
+      permissionlessReserve.assignPrizeEntitlementChunk(drawId, 0n),
+    );
+
+    recordHcu("assignPrizeEntitlementChunk8", firstReceipt);
+
+    const afterFirst = await reserve.prizeHandles(drawId);
+
+    expect(afterFirst[0]).to.equal(2n);
+
+    expect(afterFirst[7]).to.equal(8n);
+
+    expect(await decrypt64(afterFirst[3])).to.equal(100n);
+
+    expect(await decrypt128(await reserve.prizeAssignmentTotalHandle(drawId))).to.equal(100n);
+
+    const winner = await reserve.prizeEntitlementRecord(drawId, 0n);
+
+    expect(winner[0]).to.equal(true);
+
+    expect(winner[1]).to.equal(true);
+
+    expect(winner[2]).to.equal(other.address);
+
+    expect(winner[3]).to.equal(1_000n);
+
+    expect(winner[4]).to.equal(2_000n);
+
+    expect(await decrypt64(winner[5])).to.equal(100n);
+
+    const firstChunkNonwinner = await reserve.prizeEntitlementRecord(drawId, 7n);
+
+    expect(await decrypt64(firstChunkNonwinner[5])).to.equal(0n);
+
+    const secondReceipt = await receipt(
+      (reserve.connect(owner) as unknown as PrizeReserve).assignPrizeEntitlementChunk(drawId, 8n),
+    );
+
+    recordHcu("assignPrizeEntitlementChunk1", secondReceipt);
+
+    const completed = await reserve.prizeHandles(drawId);
+
+    expect(completed[0]).to.equal(3n);
+
+    expect(completed[7]).to.equal(9n);
+
+    expect(await decrypt64(completed[3])).to.equal(100n);
+
+    expect(await decrypt128(await reserve.prizeAssignmentTotalHandle(drawId))).to.equal(100n);
+
+    const finalSlot = await reserve.prizeEntitlementRecord(drawId, 8n);
+
+    expect(finalSlot[0]).to.equal(true);
+
+    expect(await decrypt64(finalSlot[5])).to.equal(0n);
+
+    const afterAccounting = await reserve.reserveAccountingHandles();
+
+    expect(await decrypt128(afterAccounting[0])).to.equal(await decrypt128(beforeAccounting[0]));
+
+    expect(await decrypt128(afterAccounting[1])).to.equal(await decrypt128(beforeAccounting[1]));
+  });
+
+  it("rejects out-of-order and replayed cursors and refuses assignment after CLAIMABLE", async function () {
+    const drawId = 102n;
+
+    const { reserve } = await prepareGate1C2BAssignment(drawId, 9n, 70n, 4n);
+
+    await expect(reserve.assignPrizeEntitlementChunk(drawId, 1n)).to.be.revertedWithCustomError(
+      reserve,
+      "AssignmentCursorMismatch",
+    );
+
+    await receipt(reserve.assignPrizeEntitlementChunk(drawId, 0n));
+
+    await expect(reserve.assignPrizeEntitlementChunk(drawId, 0n)).to.be.revertedWithCustomError(
+      reserve,
+      "AssignmentCursorMismatch",
+    );
+
+    const middle = await reserve.prizeHandles(drawId);
+
+    expect(middle[7]).to.equal(8n);
+
+    await receipt(reserve.assignPrizeEntitlementChunk(drawId, 8n));
+
+    const completed = await reserve.prizeHandles(drawId);
+
+    expect(completed[0]).to.equal(3n);
+
+    expect(completed[7]).to.equal(9n);
+
+    await expect(reserve.assignPrizeEntitlementChunk(drawId, 9n)).to.be.revertedWithCustomError(
+      reserve,
+      "InvalidPrizeState",
+    );
+  });
+
+  it("forces an unbound historical slot to encrypted zero even when its harness winner bit is true", async function () {
+    const drawId = 103n;
+
+    const { reserve } = await prepareGate1C2BAssignment(drawId, 8n, 90n, 5n, 2n);
+
+    await receipt(reserve.assignPrizeEntitlementChunk(drawId, 0n));
+
+    const unbound = await reserve.prizeEntitlementRecord(drawId, 2n);
+
+    expect(unbound[0]).to.equal(true);
+
+    expect(unbound[1]).to.equal(false);
+
+    expect(unbound[2]).to.equal(ethers.ZeroAddress);
+
+    expect(await decrypt64(unbound[5])).to.equal(0n);
+
+    const winner = await reserve.prizeEntitlementRecord(drawId, 5n);
+
+    expect(winner[0]).to.equal(true);
+
+    expect(winner[1]).to.equal(true);
+
+    expect(await decrypt64(winner[5])).to.equal(90n);
+
+    expect(await decrypt128(await reserve.prizeAssignmentTotalHandle(drawId))).to.equal(90n);
+
+    const completed = await reserve.prizeHandles(drawId);
+
+    expect(completed[0]).to.equal(3n);
+  });
+
+  it("persists the frozen historical beneficiary identity after assignment even if the test harness is later mutated", async function () {
+    const drawId = 104n;
+
+    const { owner, other, pool, reserve } = await prepareGate1C2BAssignment(drawId, 8n, 80n, 3n);
+
+    await receipt(reserve.assignPrizeEntitlementChunk(drawId, 0n));
+
+    const before = await reserve.prizeEntitlementRecord(drawId, 3n);
+
+    expect(before[2]).to.equal(other.address);
+
+    expect(before[3]).to.equal(1_003n);
+
+    expect(before[4]).to.equal(2_003n);
+
+    expect(await decrypt64(before[5])).to.equal(80n);
+
+    await receipt(pool.setAssignmentSlot(drawId, 3n, owner.address, 9_999n, 8_888n, true, false));
+
+    const after = await reserve.prizeEntitlementRecord(drawId, 3n);
+
+    expect(after[2]).to.equal(other.address);
+
+    expect(after[3]).to.equal(1_003n);
+
+    expect(after[4]).to.equal(2_003n);
+
+    expect(await decrypt64(after[5])).to.equal(80n);
+  });
+
+  it("atomically rejects a bound historical slot with the zero address without advancing cursor or assigned total", async function () {
+    const drawId = 105n;
+
+    const { pool, reserve } = await prepareGate1C2BAssignment(drawId, 8n, 60n, 3n);
+
+    await receipt(
+      pool.setAssignmentSlot(drawId, 1n, ethers.ZeroAddress, 1_001n, 2_001n, true, false),
+    );
+
+    expect(await decrypt128(await reserve.prizeAssignmentTotalHandle(drawId))).to.equal(0n);
+
+    await expect(reserve.assignPrizeEntitlementChunk(drawId, 0n)).to.be.revertedWithCustomError(
+      reserve,
+      "InvalidHistoricalBeneficiary",
+    );
+
+    const after = await reserve.prizeHandles(drawId);
+
+    expect(after[0]).to.equal(2n);
+
+    expect(after[7]).to.equal(0n);
+
+    expect(await decrypt64(after[3])).to.equal(60n);
+
+    expect(await decrypt128(await reserve.prizeAssignmentTotalHandle(drawId))).to.equal(0n);
+
+    const rolledBack = await reserve.prizeEntitlementRecord(drawId, 0n);
+
+    expect(rolledBack[0]).to.equal(false);
   });
 });

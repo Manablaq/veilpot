@@ -245,7 +245,7 @@ async function fixture() {
   await hre.fhevm.assertCoprocessorInitialized(token, "TestERC7984");
   const pool = (await (
     await hre.ethers.getContractFactory("VeilpotPool")
-  ).deploy(await token.getAddress())) as unknown as Pool;
+  ).deploy(await token.getAddress(), owner.address)) as unknown as Pool;
   await pool.waitForDeployment();
   await hre.fhevm.assertCoprocessorInitialized(pool, "VeilpotPool");
   return { signers, owner, other, token, pool };
@@ -891,5 +891,209 @@ describe("VeilpotPool Gate 1B.3 production VeilDraw", function () {
     expect(drawSection).not.to.include("_participants[");
     expect(drawSection).to.include("_snapshotWeights[snapshotId][index]");
     expect(drawSection).to.include("_epochBeneficiaries[");
+  });
+});
+
+interface Gate1C2BHandoffHarness extends ethers.BaseContract {
+  deriveWithPrizeAcl(
+    pool: string,
+    drawId: bigint,
+    slotIndex: bigint,
+    clearPrize: bigint,
+    persistEntitlement: boolean,
+  ): Tx;
+  deriveWithoutPrizeAcl(pool: string, drawId: bigint, slotIndex: bigint, clearPrize: bigint): Tx;
+  storedEntitlementHandle(): Promise<Handle>;
+  storedEntitlementAllowed(): Promise<boolean>;
+  winnerPredicateAllowed(pool: string, drawId: bigint, slotIndex: bigint): Promise<boolean>;
+}
+
+interface Gate1C2BHandoffPool extends Pool {
+  prizeReserve(): Promise<string>;
+}
+
+async function gate1C2BHandoffFixture() {
+  const signers = await hre.ethers.getSigners();
+  const owner = signers[0]!;
+  const other = signers[1]!;
+
+  const token = (await (
+    await hre.ethers.getContractFactory("TestERC7984")
+  ).deploy()) as unknown as Token;
+
+  await token.waitForDeployment();
+
+  const handoffFactory = await hre.ethers.getContractFactory("Gate1C2BPrizeReserveHandoffHarness");
+
+  const reserve = (await handoffFactory.deploy()) as unknown as Gate1C2BHandoffHarness;
+  const attacker = (await handoffFactory.deploy()) as unknown as Gate1C2BHandoffHarness;
+
+  await reserve.waitForDeployment();
+  await attacker.waitForDeployment();
+
+  const pool = (await (
+    await hre.ethers.getContractFactory("VeilpotPool")
+  ).deploy(await token.getAddress(), await reserve.getAddress())) as unknown as Gate1C2BHandoffPool;
+
+  await pool.waitForDeployment();
+
+  await hre.fhevm.assertCoprocessorInitialized(token, "TestERC7984");
+  await hre.fhevm.assertCoprocessorInitialized(reserve, "Gate1C2BPrizeReserveHandoffHarness");
+  await hre.fhevm.assertCoprocessorInitialized(attacker, "Gate1C2BPrizeReserveHandoffHarness");
+  await hre.fhevm.assertCoprocessorInitialized(pool, "VeilpotPool");
+
+  expect(await pool.prizeReserve()).to.equal(await reserve.getAddress());
+
+  return {
+    owner,
+    other,
+    token,
+    pool,
+    reserve,
+    attacker,
+  };
+}
+
+async function gate1C2BFinalizedTwoSlotDraw() {
+  const fixture = await gate1C2BHandoffFixture();
+
+  await activate(fixture.pool, fixture.token, fixture.owner, 2_000_000n, 0);
+
+  await activate(fixture.pool, fixture.token, fixture.other, 2_000_000n, 1);
+
+  await finalizeSnapshot(fixture.pool);
+
+  const { drawId, snapshotId } = await preparePositiveDraw(fixture.pool);
+
+  await acceptCandidate(fixture.pool, drawId, snapshotId);
+
+  await waitFor(fixture.pool.startWinnerResolution(drawId, snapshotId));
+
+  await waitFor(fixture.pool.processDrawWinnerChunk(drawId, snapshotId));
+
+  await waitFor(fixture.pool.finalizeDraw(drawId, snapshotId));
+
+  const first = await fixture.pool.drawWinnerRecord(drawId, 0);
+
+  const second = await fixture.pool.drawWinnerRecord(drawId, 1);
+
+  const firstWinner = await decryptBool(first[0]);
+
+  const secondWinner = await decryptBool(second[0]);
+
+  expect(Number(firstWinner) + Number(secondWinner)).to.equal(1);
+
+  const winnerSlot = firstWinner ? 0n : 1n;
+
+  const nonwinnerSlot = firstWinner ? 1n : 0n;
+
+  return {
+    ...fixture,
+    drawId,
+    snapshotId,
+    winnerSlot,
+    nonwinnerSlot,
+  };
+}
+
+describe("Gate 1C.2B production pool entitlement handoff", function () {
+  it("rejects entitlement derivation before exact draw finality", async function () {
+    const { owner, token, pool, reserve } = await gate1C2BHandoffFixture();
+
+    await activate(pool, token, owner, 2_000_000n, 0);
+
+    await finalizeSnapshot(pool);
+
+    const { drawId } = await preparePositiveDraw(pool);
+
+    await expect(
+      reserve.deriveWithPrizeAcl(await pool.getAddress(), drawId, 0n, 100n, true),
+    ).to.be.revertedWithCustomError(pool, "InvalidDrawState");
+  });
+
+  it("allows only the immutable canonical reserve to invoke entitlement derivation", async function () {
+    const { pool, attacker, drawId, winnerSlot } = await gate1C2BFinalizedTwoSlotDraw();
+
+    await expect(
+      attacker.deriveWithPrizeAcl(await pool.getAddress(), drawId, winnerSlot, 100n, true),
+    ).to.be.revertedWithCustomError(pool, "OnlyPrizeReserve");
+  });
+
+  it("rejects the canonical reserve when the prize ciphertext lacks transient pool ACL", async function () {
+    const { pool, reserve, drawId, winnerSlot } = await gate1C2BFinalizedTwoSlotDraw();
+
+    await expect(
+      reserve.deriveWithoutPrizeAcl(await pool.getAddress(), drawId, winnerSlot, 100n),
+    ).to.be.revertedWithCustomError(pool, "MissingPrizeAcl");
+  });
+
+  it("returns encrypted prize to the winner and encrypted zero to the nonwinner without granting winner-predicate ACL", async function () {
+    const { pool, reserve, drawId, winnerSlot, nonwinnerSlot } =
+      await gate1C2BFinalizedTwoSlotDraw();
+
+    await waitFor(
+      reserve.deriveWithPrizeAcl(await pool.getAddress(), drawId, winnerSlot, 100n, true),
+    );
+
+    expect(
+      await reserve.winnerPredicateAllowed(await pool.getAddress(), drawId, winnerSlot),
+    ).to.equal(false);
+
+    expect(
+      await hre.fhevm.debugger.decryptEuint(
+        FhevmType.euint64,
+        await reserve.storedEntitlementHandle(),
+      ),
+    ).to.equal(100n);
+
+    await waitFor(
+      reserve.deriveWithPrizeAcl(await pool.getAddress(), drawId, nonwinnerSlot, 100n, true),
+    );
+
+    expect(
+      await reserve.winnerPredicateAllowed(await pool.getAddress(), drawId, nonwinnerSlot),
+    ).to.equal(false);
+
+    expect(
+      await hre.fhevm.debugger.decryptEuint(
+        FhevmType.euint64,
+        await reserve.storedEntitlementHandle(),
+      ),
+    ).to.equal(0n);
+  });
+
+  it("keeps the pool-to-reserve entitlement grant transient unless the reserve explicitly persists it", async function () {
+    const { pool, reserve, drawId, winnerSlot } = await gate1C2BFinalizedTwoSlotDraw();
+
+    await waitFor(
+      reserve.deriveWithPrizeAcl(await pool.getAddress(), drawId, winnerSlot, 100n, false),
+    );
+
+    expect(await reserve.storedEntitlementAllowed()).to.equal(false);
+
+    const persistedReceipt = await waitFor(
+      reserve.deriveWithPrizeAcl(await pool.getAddress(), drawId, winnerSlot, 100n, true),
+    );
+
+    expect(await reserve.storedEntitlementAllowed()).to.equal(true);
+
+    expect(
+      await hre.fhevm.debugger.decryptEuint(
+        FhevmType.euint64,
+        await reserve.storedEntitlementHandle(),
+      ),
+    ).to.equal(100n);
+
+    const hcu = hre.fhevm.computeTransactionHCU(persistedReceipt);
+
+    console.log(
+      `HCU derivePrizeEntitlement global=${String(hcu.globalHCU)} depth=${String(
+        hcu.maxHCUDepth,
+      )} gas=${persistedReceipt.gasUsed.toString()}`,
+    );
+
+    expect(hcu.globalHCU).to.be.lessThan(REVIEWED_GLOBAL_HCU_LIMIT);
+
+    expect(hcu.maxHCUDepth).to.be.lessThan(REVIEWED_SEQUENTIAL_HCU_LIMIT);
   });
 });

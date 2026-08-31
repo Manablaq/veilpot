@@ -32,12 +32,23 @@ contract Gate1CPrizePoolHarness is ZamaEthereumConfig {
         uint8 bucketExponent;
     }
 
+    struct Beneficiary {
+        uint256 registrationVersion;
+        uint256 reservationNonce;
+        address owner;
+        bool bound;
+    }
+
     IERC7984 public immutable confidentialToken;
+    address public immutable prizeReserve;
 
     mapping(uint256 => DrawMetadata) private _draws;
+    mapping(uint256 => mapping(uint256 => Beneficiary)) private _beneficiaries;
+    mapping(uint256 => mapping(uint256 => bool)) private _winners;
 
-    constructor(IERC7984 token) {
+    constructor(IERC7984 token, address prizeReserve_) {
         confidentialToken = token;
+        prizeReserve = prizeReserve_;
     }
 
     function setFinalizedDraw(uint256 drawId, uint256 participantCount) external {
@@ -73,6 +84,59 @@ contract Gate1CPrizePoolHarness is ZamaEthereumConfig {
         });
     }
 
+    function setAssignmentSlot(
+        uint256 drawId,
+        uint256 slotIndex,
+        address owner,
+        uint256 registrationVersion,
+        uint256 reservationNonce,
+        bool bound,
+        bool winner
+    ) external {
+        _beneficiaries[drawId][slotIndex] = Beneficiary({
+            owner: owner,
+            registrationVersion: registrationVersion,
+            reservationNonce: reservationNonce,
+            bound: bound
+        });
+
+        _winners[drawId][slotIndex] = winner;
+    }
+
+    function snapshotBeneficiary(
+        uint256 snapshotId,
+        uint256 slotIndex
+    )
+        external
+        view
+        returns (address owner, uint256 registrationVersion, uint256 reservationNonce, bool bound)
+    {
+        Beneficiary storage beneficiary = _beneficiaries[snapshotId][slotIndex];
+
+        return (
+            beneficiary.owner,
+            beneficiary.registrationVersion,
+            beneficiary.reservationNonce,
+            beneficiary.bound
+        );
+    }
+
+    function derivePrizeEntitlement(
+        uint256 drawId,
+        uint256 slotIndex,
+        euint64 prizeAmount
+    ) external returns (euint64 entitlement) {
+        require(msg.sender == prizeReserve, "only prize reserve");
+        require(FHE.isAllowed(prizeAmount, address(this)), "missing prize acl");
+
+        entitlement = FHE.select(
+            FHE.asEbool(_winners[drawId][slotIndex]),
+            prizeAmount,
+            FHE.asEuint64(0)
+        );
+
+        FHE.allowTransient(entitlement, msg.sender);
+    }
     function drawMetadata(
         uint256 drawId
     )

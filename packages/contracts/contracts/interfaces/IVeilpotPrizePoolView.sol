@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.27;
 
+import {euint64} from "@fhevm/solidity/lib/FHE.sol";
 import {IERC7984} from "@openzeppelin/confidential-contracts/interfaces/IERC7984.sol";
 
 /// @title IVeilpotPrizePoolView
@@ -9,6 +10,24 @@ import {IERC7984} from "@openzeppelin/confidential-contracts/interfaces/IERC7984
 interface IVeilpotPrizePoolView {
     /// @notice Return the confidential token held by the Veilpot pool.
     function confidentialToken() external view returns (IERC7984);
+
+    /// @notice Return the immutable canonical prize reserve authorized for encrypted handoff.
+    function prizeReserve() external view returns (address);
+
+    /// @notice Return the immutable historical beneficiary bound to one snapshot slot.
+    /// @param snapshotId Immutable snapshot containing the historical slot.
+    /// @param slotIndex Historical slot index within the snapshot.
+    /// @return owner Historical beneficiary owner.
+    /// @return registrationVersion Historical registration version.
+    /// @return reservationNonce Historical reservation nonce.
+    /// @return bound Whether the historical beneficiary was frozen for the slot.
+    function snapshotBeneficiary(
+        uint256 snapshotId,
+        uint256 slotIndex
+    )
+        external
+        view
+        returns (address owner, uint256 registrationVersion, uint256 reservationNonce, bool bound);
 
     /// @notice Return public draw lifecycle metadata without exposing confidential values.
     /// @param drawId Draw whose public lifecycle metadata is requested.
@@ -33,4 +52,14 @@ interface IVeilpotPrizePoolView {
             uint8 bucketExponent,
             uint256 winnerCursor
         );
+    /// @notice Derive one encrypted historical slot entitlement for the canonical reserve.
+    /// @param drawId Finalized draw whose winner selector is consumed.
+    /// @param slotIndex Historical slot being assigned.
+    /// @param prizeAmount Frozen encrypted prize amount transiently granted by the reserve.
+    /// @return entitlement Encrypted prize amount for the winner or encrypted zero otherwise.
+    function derivePrizeEntitlement(
+        uint256 drawId,
+        uint256 slotIndex,
+        euint64 prizeAmount
+    ) external returns (euint64 entitlement);
 }
