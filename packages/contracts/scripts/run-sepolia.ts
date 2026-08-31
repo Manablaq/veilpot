@@ -561,6 +561,7 @@ async function writeDeploymentManifest(
     ],
     solidityCompilerVersion: "0.8.27",
     optimizer: { enabled: true, runs: 800 },
+    viaIR: true,
     metadata: { bytecodeHash: "none" },
     evmVersion: "cancun",
     abiHash: sha256(JSON.stringify(artifact.abi)),

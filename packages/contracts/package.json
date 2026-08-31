@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "compile": "cross-env TS_NODE_TRANSPILE_ONLY=true hardhat compile",
+    "test:build-guard": "hardhat test test/ProductionBuildGuards.test.ts",
     "artifact:compare": "node --import=tsx scripts/generate-bytecode-reproducibility.ts",
     "lint:sol": "solhint --max-warnings 0 'contracts/**/*.sol'",
     "test": "hardhat test",

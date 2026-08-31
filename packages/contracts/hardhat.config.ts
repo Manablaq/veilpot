@@ -30,6 +30,7 @@ const config: HardhatUserConfig = {
       // runtime hash reproducible across otherwise identical compilation paths.
       metadata: { bytecodeHash: "none" },
       optimizer: { enabled: true, runs: 800 },
+      viaIR: true,
     },
   },
   paths: {

@@ -1,7 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.27;
 
-import {FHE, ebool, euint64, euint128, externalEuint64} from "@fhevm/solidity/lib/FHE.sol";
+import {
+    FHE,
+    ebool,
+    euint8,
+    euint64,
+    euint128,
+    euint256,
+    externalEuint64
+} from "@fhevm/solidity/lib/FHE.sol";
 import {ZamaEthereumConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
 import {IERC7984} from "@openzeppelin/confidential-contracts/interfaces/IERC7984.sol";
 
@@ -9,8 +17,8 @@ import {IERC7984} from "@openzeppelin/confidential-contracts/interfaces/IERC7984
    gas-strict-inequalities, function-max-lines, gas-increment-by-one */
 
 /// @title VeilpotPool
-/// @notice Gate 1B.1 production foundation for ERC-7984 pull deposits and participant lifecycle.
-/// @dev Draw, TWAB, prize reserve, and yield logic are intentionally not implemented here.
+/// @notice Veilpot production pool for confidential principal, TWAB snapshots, and VeilDraw selection.
+/// @dev Prize reserve, yield recognition, and claims remain intentionally out of scope at Gate 1B.3.
 contract VeilpotPool is ZamaEthereumConfig {
     uint256 public constant MAX_PARTICIPANTS = 128;
     uint256 public constant REGISTRATION_RESERVATION_TTL_SECONDS = 86_400;
@@ -21,6 +29,10 @@ contract VeilpotPool is ZamaEthereumConfig {
     uint256 public constant SUPPORTED_REGISTRATION_VERSION = 1;
     uint256 public constant MAX_DRAW_DURATION_SECONDS = 2_592_000;
     uint256 public constant SNAPSHOT_CHUNK_SIZE = 8;
+    uint8 public constant DRAW_BATCH_SIZE = 8;
+    uint256 public constant WINNER_CHUNK_SIZE = 8;
+    uint8 public constant MAX_DRAW_BUCKET_EXPONENT = 69;
+    uint128 public constant MAX_DRAW_TOTAL = uint128(1) << MAX_DRAW_BUCKET_EXPONENT;
 
     enum ParticipantState {
         FREE,
@@ -30,6 +42,20 @@ contract VeilpotPool is ZamaEthereumConfig {
         PENDING_REFUND,
         REFUND_ATTEMPT_PENDING_PROOF,
         TOMBSTONED
+    }
+
+    enum DrawState {
+        NO_DRAW,
+        BUCKET_DISCOVERY,
+        BUCKET_READY,
+        AWAITING_CANDIDATE_BATCH,
+        BATCH_REDUCTION_PENDING,
+        BATCH_PROOF_PENDING,
+        CANDIDATE_ACCEPTED,
+        WINNER_RESOLUTION,
+        FINALIZED,
+        NO_WEIGHT_TERMINAL,
+        UNSUPPORTED_TOTAL
     }
 
     struct Participant {
@@ -61,6 +87,30 @@ contract VeilpotPool is ZamaEthereumConfig {
         uint256 registrationVersion;
         uint256 reservationNonce;
         bool bound;
+    }
+
+    struct Draw {
+        DrawState state;
+        uint256 snapshotId;
+        uint256 snapshotEpoch;
+        uint256 participantCount;
+        uint256 batchId;
+        uint256 winnerCursor;
+        uint8 bucketExponent;
+        bool bucketEvidencePrepared;
+        euint128 total;
+        euint8 encryptedBucketExponent;
+        ebool encryptedTotalIsZero;
+        ebool encryptedTotalIsSupported;
+        euint256 bucketProofContext;
+        euint256 batchProofContext;
+        euint128[8] candidates;
+        ebool[8] candidateValid;
+        euint128 batchTarget;
+        ebool batchSuccess;
+        euint128 acceptedTarget;
+        euint128 runningPrefix;
+        euint128 winnerCount;
     }
 
     IERC7984 public immutable confidentialToken;
@@ -98,6 +148,11 @@ contract VeilpotPool is ZamaEthereumConfig {
     mapping(uint256 => uint256) private _epochParticipantBounds;
     mapping(uint256 => uint256) private _snapshotEpochs;
     uint256[128] private _slotReusableAfter;
+    uint256 public nextDrawId;
+    uint256 public nextDrawSnapshotId = 1;
+    mapping(uint256 => uint256) public snapshotDrawId;
+    mapping(uint256 => Draw) private _draws;
+    mapping(uint256 => mapping(uint256 => ebool)) private _drawWinnerPredicates;
     uint256 private _entered;
 
     error InvalidToken();
@@ -129,6 +184,18 @@ contract VeilpotPool is ZamaEthereumConfig {
     error SnapshotCursorMismatch();
     error SnapshotIncomplete();
     error HistoricalBeneficiaryMismatch();
+    error SnapshotNotReadyForDraw();
+    error SnapshotAlreadyDrawn();
+    error InvalidDraw();
+    error DrawSnapshotMismatch();
+    error InvalidDrawState(DrawState expected, DrawState actual);
+    error DrawEvidenceNotPrepared();
+    error DrawEvidenceAlreadyPrepared();
+    error DrawBatchMismatch();
+    error InvalidDrawBucketEvidence();
+    error InvalidDrawIndex();
+    error DrawWinnerIncomplete();
+    error DrawWinnerComplete();
 
     event ParticipantReserved(
         address indexed participant,
@@ -168,6 +235,36 @@ contract VeilpotPool is ZamaEthereumConfig {
         uint256 participantCount
     );
     event WithdrawalProcessed(address indexed participant, uint256 indexed withdrawalNonce);
+    event DrawStarted(
+        uint256 indexed drawId,
+        uint256 indexed snapshotId,
+        uint256 indexed snapshotEpoch,
+        uint256 participantCount
+    );
+    event DrawBucketResolved(
+        uint256 indexed drawId,
+        uint256 indexed snapshotId,
+        uint8 bucketExponent,
+        DrawState state
+    );
+    event DrawBatchGenerated(
+        uint256 indexed drawId,
+        uint256 indexed snapshotId,
+        uint256 indexed batchId
+    );
+    event DrawBatchResolved(
+        uint256 indexed drawId,
+        uint256 indexed snapshotId,
+        uint256 indexed batchId,
+        bool success
+    );
+    event DrawWinnerChunkProcessed(
+        uint256 indexed drawId,
+        uint256 indexed snapshotId,
+        uint256 start,
+        uint256 end
+    );
+    event DrawFinalized(uint256 indexed drawId, uint256 indexed snapshotId);
 
     modifier nonReentrant() {
         if (_entered != 0) revert Reentrancy();
@@ -576,6 +673,330 @@ contract VeilpotPool is ZamaEthereumConfig {
         emit SnapshotReady(currentSnapshotId, snapshotCutoffTimestamp, snapshotParticipantCount);
     }
 
+    // ---------------------------------------------------------------------
+    // Gate 1B.3 production VeilDraw integration
+    // ---------------------------------------------------------------------
+
+    /// @notice Bind the next finalized snapshot to exactly one permissionless draw.
+    /// @dev The caller cannot select a snapshot: snapshots are consumed monotonically from ID 1.
+    function startDraw() external nonReentrant returns (uint256 drawId) {
+        uint256 snapshotId = nextDrawSnapshotId;
+        if (snapshotId == 0 || snapshotId > nextSnapshotId || !_snapshotFinalized[snapshotId]) {
+            revert SnapshotNotReadyForDraw();
+        }
+        if (snapshotDrawId[snapshotId] != 0) revert SnapshotAlreadyDrawn();
+
+        drawId = ++nextDrawId;
+        nextDrawSnapshotId = snapshotId + 1;
+        snapshotDrawId[snapshotId] = drawId;
+
+        Draw storage draw = _draws[drawId];
+        draw.state = DrawState.BUCKET_DISCOVERY;
+        draw.snapshotId = snapshotId;
+        draw.snapshotEpoch = _snapshotEpochs[snapshotId];
+        draw.participantCount = _snapshotBounds[snapshotId];
+        draw.total = _snapshotTotals[snapshotId];
+        draw.runningPrefix = FHE.asEuint128(0);
+        draw.winnerCount = FHE.asEuint128(0);
+        FHE.allowThis(draw.total);
+        FHE.allowThis(draw.runningPrefix);
+        FHE.allowThis(draw.winnerCount);
+
+        emit DrawStarted(drawId, snapshotId, draw.snapshotEpoch, draw.participantCount);
+    }
+
+    /// @notice Compute the fixed minimal power-of-two bucket evidence from the frozen snapshot total.
+    /// @dev Only the exponent, zero predicate, and supported-domain predicate are made public.
+    function prepareDrawBucketEvidence(uint256 drawId, uint256 snapshotId) external nonReentrant {
+        Draw storage draw = _draw(drawId, snapshotId);
+        if (draw.state != DrawState.BUCKET_DISCOVERY) {
+            revert InvalidDrawState(DrawState.BUCKET_DISCOVERY, draw.state);
+        }
+        if (draw.bucketEvidencePrepared) revert DrawEvidenceAlreadyPrepared();
+
+        euint128 threshold = FHE.asEuint128(uint128(1) << 63);
+        euint8 exponent = FHE.asEuint8(63);
+        uint8[6] memory steps = [uint8(32), 16, 8, 4, 2, 1];
+
+        for (uint256 index = 0; index < steps.length; ++index) {
+            uint8 step = steps[index];
+            ebool totalAtOrBelow = FHE.le(draw.total, threshold);
+            euint128 lowerThreshold = FHE.shr(threshold, step);
+            euint128 upperThreshold = FHE.shl(threshold, step);
+            threshold = FHE.select(totalAtOrBelow, lowerThreshold, upperThreshold);
+
+            euint8 lowerExponent = FHE.sub(exponent, step);
+            euint8 upperExponent = FHE.add(exponent, step);
+            exponent = FHE.select(totalAtOrBelow, lowerExponent, upperExponent);
+        }
+
+        ebool finalAtOrBelow = FHE.le(draw.total, threshold);
+        draw.encryptedBucketExponent = FHE.select(finalAtOrBelow, exponent, FHE.add(exponent, 1));
+        draw.encryptedTotalIsZero = FHE.eq(draw.total, 0);
+        draw.encryptedTotalIsSupported = FHE.le(draw.total, MAX_DRAW_TOTAL);
+        draw.bucketProofContext = FHE.asEuint256(_drawProofContext(1, drawId, snapshotId, 0));
+        draw.bucketEvidencePrepared = true;
+
+        FHE.allowThis(draw.encryptedBucketExponent);
+        FHE.allowThis(draw.encryptedTotalIsZero);
+        FHE.allowThis(draw.encryptedTotalIsSupported);
+        FHE.allowThis(draw.bucketProofContext);
+        FHE.makePubliclyDecryptable(draw.encryptedBucketExponent);
+        FHE.makePubliclyDecryptable(draw.encryptedTotalIsZero);
+        FHE.makePubliclyDecryptable(draw.encryptedTotalIsSupported);
+        FHE.makePubliclyDecryptable(draw.bucketProofContext);
+    }
+
+    /// @notice Verify the fixed bucket proof and enter a ready or terminal state.
+    function submitDrawBucketEvidence(
+        uint256 drawId,
+        uint256 snapshotId,
+        uint8 clearBucketExponent,
+        bool clearTotalIsZero,
+        bool clearTotalIsSupported,
+        bytes calldata decryptionProof
+    ) external nonReentrant {
+        Draw storage draw = _draw(drawId, snapshotId);
+        if (draw.state != DrawState.BUCKET_DISCOVERY) {
+            revert InvalidDrawState(DrawState.BUCKET_DISCOVERY, draw.state);
+        }
+        if (!draw.bucketEvidencePrepared) revert DrawEvidenceNotPrepared();
+
+        bytes32[] memory handles = new bytes32[](4);
+        handles[0] = FHE.toBytes32(draw.encryptedBucketExponent);
+        handles[1] = FHE.toBytes32(draw.encryptedTotalIsZero);
+        handles[2] = FHE.toBytes32(draw.encryptedTotalIsSupported);
+        handles[3] = FHE.toBytes32(draw.bucketProofContext);
+        FHE.checkSignatures(
+            handles,
+            abi.encode(
+                clearBucketExponent,
+                clearTotalIsZero,
+                clearTotalIsSupported,
+                _drawProofContext(1, drawId, snapshotId, 0)
+            ),
+            decryptionProof
+        );
+
+        draw.bucketEvidencePrepared = false;
+        if (clearTotalIsZero) {
+            if (clearBucketExponent != 0 || !clearTotalIsSupported) {
+                revert InvalidDrawBucketEvidence();
+            }
+            draw.state = DrawState.NO_WEIGHT_TERMINAL;
+            emit DrawBucketResolved(drawId, snapshotId, 0, draw.state);
+            return;
+        }
+        if (!clearTotalIsSupported) {
+            draw.state = DrawState.UNSUPPORTED_TOTAL;
+            emit DrawBucketResolved(drawId, snapshotId, clearBucketExponent, draw.state);
+            return;
+        }
+        if (clearBucketExponent > MAX_DRAW_BUCKET_EXPONENT) {
+            revert InvalidDrawBucketEvidence();
+        }
+
+        draw.bucketExponent = clearBucketExponent;
+        draw.state = DrawState.BUCKET_READY;
+        emit DrawBucketResolved(drawId, snapshotId, clearBucketExponent, draw.state);
+    }
+
+    /// @notice Generate exactly eight fresh protocol-random encrypted candidates for the frozen draw.
+    /// @dev No caller-controlled seed, candidate, threshold, bound, or batch size exists.
+    function generateDrawCandidateBatch(uint256 drawId, uint256 snapshotId) external nonReentrant {
+        Draw storage draw = _draw(drawId, snapshotId);
+        bool allowedState =
+            draw.state == DrawState.BUCKET_READY ||
+                draw.state == DrawState.AWAITING_CANDIDATE_BATCH;
+        if (!allowedState) {
+            revert InvalidDrawState(DrawState.AWAITING_CANDIDATE_BATCH, draw.state);
+        }
+
+        uint128 bound = uint128(1) << draw.bucketExponent;
+        uint256 batchId = ++draw.batchId;
+        draw.batchProofContext = FHE.asEuint256(_drawProofContext(2, drawId, snapshotId, batchId));
+        FHE.allowThis(draw.batchProofContext);
+        FHE.makePubliclyDecryptable(draw.batchProofContext);
+        for (uint256 index = 0; index < DRAW_BATCH_SIZE; ++index) {
+            euint128 candidate = FHE.randEuint128(bound);
+            ebool valid = FHE.lt(candidate, draw.total);
+            draw.candidates[index] = candidate;
+            draw.candidateValid[index] = valid;
+            FHE.allowThis(draw.candidates[index]);
+            FHE.allowThis(draw.candidateValid[index]);
+        }
+
+        draw.state = DrawState.BATCH_REDUCTION_PENDING;
+        emit DrawBatchGenerated(drawId, snapshotId, batchId);
+    }
+
+    /// @notice Select the first valid candidate with the Gate 0 order-preserving balanced reduction.
+    function reduceDrawCandidateBatch(
+        uint256 drawId,
+        uint256 snapshotId,
+        uint256 batchId
+    ) external nonReentrant {
+        Draw storage draw = _draw(drawId, snapshotId);
+        if (draw.state != DrawState.BATCH_REDUCTION_PENDING) {
+            revert InvalidDrawState(DrawState.BATCH_REDUCTION_PENDING, draw.state);
+        }
+        if (batchId != draw.batchId) revert DrawBatchMismatch();
+
+        euint128[8] memory values;
+        ebool[8] memory valid;
+        for (uint256 index = 0; index < DRAW_BATCH_SIZE; ++index) {
+            values[index] = draw.candidates[index];
+            valid[index] = draw.candidateValid[index];
+        }
+
+        uint256 width = DRAW_BATCH_SIZE;
+        while (width > 1) {
+            uint256 nextWidth = width / 2;
+            for (uint256 pair = 0; pair < nextWidth; ++pair) {
+                uint256 leftIndex = pair * 2;
+                uint256 rightIndex = leftIndex + 1;
+                values[pair] = FHE.select(valid[leftIndex], values[leftIndex], values[rightIndex]);
+                valid[pair] = FHE.or(valid[leftIndex], valid[rightIndex]);
+            }
+            width = nextWidth;
+        }
+
+        draw.batchSuccess = valid[0];
+        draw.batchTarget = FHE.select(valid[0], values[0], FHE.asEuint128(0));
+        FHE.allowThis(draw.batchSuccess);
+        FHE.allowThis(draw.batchTarget);
+        FHE.makePubliclyDecryptable(draw.batchSuccess);
+        draw.state = DrawState.BATCH_PROOF_PENDING;
+    }
+
+    /// @notice Verify aggregate batch success; only a proved failure can authorize fresh randomness.
+    function submitDrawBatchEvidence(
+        uint256 drawId,
+        uint256 snapshotId,
+        uint256 batchId,
+        bool clearSuccess,
+        bytes calldata decryptionProof
+    ) external nonReentrant {
+        Draw storage draw = _draw(drawId, snapshotId);
+        if (draw.state != DrawState.BATCH_PROOF_PENDING) {
+            revert InvalidDrawState(DrawState.BATCH_PROOF_PENDING, draw.state);
+        }
+        if (batchId != draw.batchId) revert DrawBatchMismatch();
+
+        bytes32[] memory handles = new bytes32[](2);
+        handles[0] = FHE.toBytes32(draw.batchSuccess);
+        handles[1] = FHE.toBytes32(draw.batchProofContext);
+        FHE.checkSignatures(
+            handles,
+            abi.encode(clearSuccess, _drawProofContext(2, drawId, snapshotId, batchId)),
+            decryptionProof
+        );
+
+        if (clearSuccess) {
+            draw.acceptedTarget = draw.batchTarget;
+            FHE.allowThis(draw.acceptedTarget);
+            draw.state = DrawState.CANDIDATE_ACCEPTED;
+        } else {
+            draw.state = DrawState.AWAITING_CANDIDATE_BATCH;
+        }
+        emit DrawBatchResolved(drawId, snapshotId, batchId, clearSuccess);
+    }
+
+    /// @notice Begin the fixed-order winner scan over the immutable historical snapshot.
+    function startWinnerResolution(uint256 drawId, uint256 snapshotId) external nonReentrant {
+        Draw storage draw = _draw(drawId, snapshotId);
+        if (draw.state != DrawState.CANDIDATE_ACCEPTED) {
+            revert InvalidDrawState(DrawState.CANDIDATE_ACCEPTED, draw.state);
+        }
+        draw.winnerCursor = 0;
+        draw.runningPrefix = FHE.asEuint128(0);
+        draw.winnerCount = FHE.asEuint128(0);
+        FHE.allowThis(draw.runningPrefix);
+        FHE.allowThis(draw.winnerCount);
+        draw.state = DrawState.WINNER_RESOLUTION;
+    }
+
+    /// @notice Process the next fixed eight-slot winner chunk without early winner disclosure.
+    function processDrawWinnerChunk(uint256 drawId, uint256 snapshotId) external nonReentrant {
+        Draw storage draw = _draw(drawId, snapshotId);
+        if (draw.state != DrawState.WINNER_RESOLUTION) {
+            revert InvalidDrawState(DrawState.WINNER_RESOLUTION, draw.state);
+        }
+        uint256 start = draw.winnerCursor;
+        if (start >= draw.participantCount) revert DrawWinnerComplete();
+        uint256 end = start + WINNER_CHUNK_SIZE;
+        if (end > draw.participantCount) end = draw.participantCount;
+
+        euint128 prefix = draw.runningPrefix;
+        euint128 winnerCount = draw.winnerCount;
+        for (uint256 offset = 0; offset < WINNER_CHUNK_SIZE; ++offset) {
+            (prefix, winnerCount) = _processDrawWinnerSlot(
+                drawId,
+                snapshotId,
+                draw,
+                start + offset,
+                prefix,
+                winnerCount
+            );
+        }
+
+        draw.runningPrefix = prefix;
+        draw.winnerCount = winnerCount;
+        draw.winnerCursor = end;
+        FHE.allowThis(draw.runningPrefix);
+        FHE.allowThis(draw.winnerCount);
+        emit DrawWinnerChunkProcessed(drawId, snapshotId, start, end);
+    }
+
+    /// @dev Process one real or padded snapshot slot while preserving the fixed eight-slot
+    ///      winner-resolution shape. Padded slots use encrypted zero weight and never persist
+    ///      a winner predicate.
+    function _processDrawWinnerSlot(
+        uint256 drawId,
+        uint256 snapshotId,
+        Draw storage draw,
+        uint256 index,
+        euint128 prefix,
+        euint128 winnerCount
+    ) internal returns (euint128 nextPrefix, euint128 nextWinnerCount) {
+        euint128 weight = FHE.asEuint128(0);
+
+        if (index < draw.participantCount) {
+            if (
+                _snapshotEligible[snapshotId][index] &&
+                !_epochBeneficiaries[draw.snapshotEpoch][index].bound
+            ) revert HistoricalBeneficiaryMismatch();
+
+            weight = _snapshotWeights[snapshotId][index];
+        }
+
+        nextPrefix = FHE.add(prefix, weight);
+
+        ebool winner = FHE.and(
+            FHE.le(prefix, draw.acceptedTarget),
+            FHE.lt(draw.acceptedTarget, nextPrefix)
+        );
+
+        if (index < draw.participantCount) {
+            _drawWinnerPredicates[drawId][index] = winner;
+            FHE.allowThis(_drawWinnerPredicates[drawId][index]);
+        }
+
+        nextWinnerCount = FHE.add(winnerCount, FHE.asEuint128(winner));
+    }
+
+    /// @notice Finalize only after every registered snapshot slot has been processed.
+    /// @dev No winner, winner chunk, prefix, or winner-count value is publicly decrypted here.
+    function finalizeDraw(uint256 drawId, uint256 snapshotId) external nonReentrant {
+        Draw storage draw = _draw(drawId, snapshotId);
+        if (draw.state != DrawState.WINNER_RESOLUTION) {
+            revert InvalidDrawState(DrawState.WINNER_RESOLUTION, draw.state);
+        }
+        if (draw.winnerCursor != draw.participantCount) revert DrawWinnerIncomplete();
+        draw.state = DrawState.FINALIZED;
+        emit DrawFinalized(drawId, snapshotId);
+    }
+
     /// @notice Settle one immutable refund-completion handle with a bound KMS proof.
     function settleRefundCompletion(
         uint256 slotIndex,
@@ -846,9 +1267,150 @@ contract VeilpotPool is ZamaEthereumConfig {
         );
     }
 
+    /// @notice Return public draw lifecycle metadata without exposing encrypted values.
+    function drawMetadata(
+        uint256 drawId
+    )
+        external
+        view
+        returns (
+            DrawState state,
+            uint256 snapshotId,
+            uint256 snapshotEpochId,
+            uint256 participantCount,
+            uint256 batchId,
+            uint8 bucketExponent,
+            uint256 winnerCursor
+        )
+    {
+        Draw storage draw = _drawExisting(drawId);
+        return (
+            draw.state,
+            draw.snapshotId,
+            draw.snapshotEpoch,
+            draw.participantCount,
+            draw.batchId,
+            draw.bucketExponent,
+            draw.winnerCursor
+        );
+    }
+
+    /// @notice Return the pool-owned frozen snapshot total handle for a draw.
+    function drawTotalHandle(uint256 drawId) external view returns (euint128) {
+        return _drawExisting(drawId).total;
+    }
+
+    /// @notice Return fixed bucket evidence plus its public application-domain proof context.
+    function drawBucketEvidenceHandles(
+        uint256 drawId
+    ) external view returns (bytes32, bytes32, bytes32, bytes32) {
+        Draw storage draw = _drawExisting(drawId);
+        return (
+            FHE.toBytes32(draw.encryptedBucketExponent),
+            FHE.toBytes32(draw.encryptedTotalIsZero),
+            FHE.toBytes32(draw.encryptedTotalIsSupported),
+            FHE.toBytes32(draw.bucketProofContext)
+        );
+    }
+
+    /// @notice Return one protected candidate handle from the fixed m=8 batch.
+    function drawCandidateHandle(uint256 drawId, uint256 index) external view returns (euint128) {
+        if (index >= DRAW_BATCH_SIZE) revert InvalidDrawIndex();
+        return _drawExisting(drawId).candidates[index];
+    }
+
+    /// @notice Return the protected target plus public batch-success and proof-context handles.
+    function drawBatchHandles(
+        uint256 drawId
+    ) external view returns (euint128 target, ebool success, bytes32 proofContext) {
+        Draw storage draw = _drawExisting(drawId);
+        return (draw.batchTarget, draw.batchSuccess, FHE.toBytes32(draw.batchProofContext));
+    }
+
+    /// @notice Return the immutable accepted target handle after a successful batch proof.
+    function drawAcceptedTargetHandle(uint256 drawId) external view returns (euint128) {
+        return _drawExisting(drawId).acceptedTarget;
+    }
+
+    /// @notice Return protected prefix and winner-count handles for invariant verification.
+    function drawResolutionHandles(
+        uint256 drawId
+    ) external view returns (euint128 runningPrefix, euint128 winnerCount) {
+        Draw storage draw = _drawExisting(drawId);
+        return (draw.runningPrefix, draw.winnerCount);
+    }
+
+    /// @notice Return one encrypted winner selector paired with its immutable historical beneficiary.
+    /// @dev This path never consults the current participant occupying the slot.
+    function drawWinnerRecord(
+        uint256 drawId,
+        uint256 slotIndex
+    )
+        external
+        view
+        returns (
+            ebool winnerPredicate,
+            address owner,
+            uint256 registrationVersion,
+            uint256 reservationNonce,
+            bool beneficiaryBound,
+            bool processed
+        )
+    {
+        Draw storage draw = _drawExisting(drawId);
+        if (slotIndex >= draw.participantCount) revert InvalidDrawIndex();
+        HistoricalBeneficiary storage beneficiary = _epochBeneficiaries[draw.snapshotEpoch][
+            slotIndex
+        ];
+        return (
+            _drawWinnerPredicates[drawId][slotIndex],
+            beneficiary.owner,
+            beneficiary.registrationVersion,
+            beneficiary.reservationNonce,
+            beneficiary.bound,
+            slotIndex < draw.winnerCursor
+        );
+    }
+
     /// @notice Return the encrypted zero-balance deregistration predicate handle.
     function deregistrationZeroHandle(uint256 slotIndex) external view returns (ebool) {
         return _participant(slotIndex).deregistrationZero;
+    }
+
+    /// @dev Public-only KMS proof domain tag. It binds a proof to this chain,
+    ///      pool, stage, draw, snapshot, and (for candidate evidence) batch.
+    ///      The tag carries no private state and is never used as randomness.
+    function _drawProofContext(
+        uint8 stage,
+        uint256 drawId,
+        uint256 snapshotId,
+        uint256 batchId
+    ) internal view returns (uint256) {
+        return
+            uint256(
+                keccak256(
+                    abi.encode(
+                        bytes32("VEILPOT_DRAW_PROOF_V1"),
+                        block.chainid,
+                        address(this),
+                        stage,
+                        drawId,
+                        snapshotId,
+                        batchId
+                    )
+                )
+            );
+    }
+
+    function _draw(uint256 drawId, uint256 snapshotId) internal view returns (Draw storage draw) {
+        draw = _drawExisting(drawId);
+        if (draw.snapshotId != snapshotId) revert DrawSnapshotMismatch();
+    }
+
+    function _drawExisting(uint256 drawId) internal view returns (Draw storage draw) {
+        if (drawId == 0 || drawId > nextDrawId) revert InvalidDraw();
+        draw = _draws[drawId];
+        if (draw.state == DrawState.NO_DRAW) revert InvalidDraw();
     }
 
     function _participant(

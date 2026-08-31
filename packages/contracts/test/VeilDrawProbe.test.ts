@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { access, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 import { FhevmType } from "@fhevm/hardhat-plugin";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -336,7 +336,8 @@ describe("VeilDrawProbe Gate 0", function () {
       expect(main).not.to.include('process.env.VEILPOT_LIVE_STOP_AFTER === "batch-generated"');
       expect(hardhatConfig).to.include('metadata: { bytecodeHash: "none" }');
       expect(hardhatConfig).to.include("optimizer: { enabled: true, runs: 800 }");
-      assertions += 25;
+      expect(hardhatConfig).to.include("viaIR: true");
+      assertions += 26;
     });
   });
 
@@ -554,8 +555,21 @@ describe("VeilDrawProbe Gate 0", function () {
   this.timeout(300_000);
 
   after(async function () {
-    const evidenceDirectory = resolve(process.cwd(), "../../evidence/gate0");
-    await mkdir(evidenceDirectory, { recursive: true });
+    const output = process.env.VEILPOT_GATE0_HCU_OUTPUT;
+
+    // Gate 0 evidence is frozen. Ordinary tests must never rewrite it.
+    // Fresh diagnostic evidence may be emitted only to an explicit external path.
+    if (output === undefined || output.trim().length === 0) return;
+
+    const outputPath = resolve(output);
+    const frozenEvidencePath = resolve(process.cwd(), "../../evidence/gate0/hcu.json");
+
+    if (outputPath === frozenEvidencePath) {
+      throw new Error("Refusing to overwrite frozen Gate 0 HCU evidence");
+    }
+
+    await mkdir(dirname(outputPath), { recursive: true });
+
     const payload = {
       schemaVersion: 1,
       measurementEnvironment: {
@@ -582,10 +596,7 @@ describe("VeilDrawProbe Gate 0", function () {
       publicDecryptionLatency: "NOT MEASURED LOCALLY",
       kmsRoundTripLatency: "NOT MEASURED LOCALLY",
     };
-    await writeFile(
-      resolve(evidenceDirectory, "hcu.json"),
-      `${JSON.stringify(payload, null, 2)}\n`,
-    );
+    await writeFile(outputPath, `${JSON.stringify(payload, null, 2)}\n`);
   });
 
   describe("bucket discovery and zero handling", function () {
