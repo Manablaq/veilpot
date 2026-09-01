@@ -115,6 +115,7 @@ contract VeilpotPool is ZamaEthereumConfig {
 
     IERC7984 public immutable confidentialToken;
     address public immutable prizeReserve;
+    address private immutable _autopilotVault;
     Participant[128] private _participants;
     mapping(address => uint256) private _participantIndexPlusOne;
     mapping(address => uint256) public nextDepositNonce;
@@ -277,11 +278,17 @@ contract VeilpotPool is ZamaEthereumConfig {
         _entered = 0;
     }
 
-    constructor(IERC7984 token, address prizeReserve_) {
+    constructor(
+        IERC7984 token,
+        address prizeReserve_,
+        address autopilotVault_
+    ) {
         if (address(token) == address(0)) revert InvalidToken();
         if (prizeReserve_ == address(0)) revert InvalidPrizeReserve();
+        if (autopilotVault_ == address(0)) revert InvalidRecipient();
         confidentialToken = token;
         prizeReserve = prizeReserve_;
+        _autopilotVault = autopilotVault_;
         _aggregatePrincipal = FHE.asEuint128(0);
         _aggregatePending = FHE.asEuint128(0);
         _canonicalReceived = FHE.asEuint128(0);
@@ -457,15 +464,17 @@ contract VeilpotPool is ZamaEthereumConfig {
         if (participant.state != ParticipantState.PENDING_ACTIVATION) {
             revert InvalidState(ParticipantState.PENDING_ACTIVATION, participant.state);
         }
-        if (
-            registrationVersion != SUPPORTED_REGISTRATION_VERSION ||
-            registrationVersion != participant.registrationVersion
-        ) revert RegistrationVersionMismatch();
-        if (reservationNonce != participant.reservationNonce) revert ReservationNonceMismatch();
+        _validateRegistration(
+            participant,
+            registrationVersion,
+            reservationNonce
+        );
         if (block.timestamp > participant.activationDeadline) revert ActivationProofExpired();
-        bytes32[] memory handles = new bytes32[](1);
-        handles[0] = FHE.toBytes32(participant.thresholdSatisfied);
-        FHE.checkSignatures(handles, abi.encode(clearSatisfied), decryptionProof);
+        _checkBooleanProof(
+            participant.thresholdSatisfied,
+            clearSatisfied,
+            decryptionProof
+        );
 
         address owner = participant.owner;
         participant.bondHeld = false;
@@ -473,11 +482,12 @@ contract VeilpotPool is ZamaEthereumConfig {
         if (clearSatisfied) {
             euint128 pending128 = FHE.asEuint128(participant.pendingAmount);
             _aggregatePending = FHE.sub(_aggregatePending, pending128);
-            _aggregatePrincipal = FHE.add(_aggregatePrincipal, pending128);
             FHE.allowThis(_aggregatePending);
-            FHE.allowThis(_aggregatePrincipal);
-            participant.principal = FHE.add(participant.principal, participant.pendingAmount);
-            FHE.allowThis(participant.principal);
+            _creditPrincipal(
+                participant,
+                participant.pendingAmount,
+                pending128
+            );
             participant.pendingAmount = FHE.asEuint64(0);
             FHE.allowThis(participant.pendingAmount);
             participant.twabAccumulator = FHE.asEuint128(0);
@@ -573,11 +583,11 @@ contract VeilpotPool is ZamaEthereumConfig {
         if (slotIndexPlusOne == 0) revert InvalidParticipant();
         Participant storage participant = _participants[slotIndexPlusOne - 1];
         if (participant.state != ParticipantState.ACTIVE) revert WithdrawalNotActive();
-        if (
-            registrationVersion != SUPPORTED_REGISTRATION_VERSION ||
-            registrationVersion != participant.registrationVersion
-        ) revert RegistrationVersionMismatch();
-        if (reservationNonce != participant.reservationNonce) revert ReservationNonceMismatch();
+        _validateRegistration(
+            participant,
+            registrationVersion,
+            reservationNonce
+        );
         if (withdrawalNonce != nextWithdrawNonce[msg.sender]) revert WithdrawalNonceMismatch();
 
         euint64 requested = FHE.fromExternal(encryptedRequestedAmount, inputProof);
@@ -602,6 +612,79 @@ contract VeilpotPool is ZamaEthereumConfig {
         FHE.makePubliclyDecryptable(participant.deregistrationZero);
         nextWithdrawNonce[msg.sender] = withdrawalNonce + 1;
         emit WithdrawalProcessed(msg.sender, withdrawalNonce);
+    }
+
+    /// @notice Pull one Vault-authorized confidential contribution into an active participant.
+    /// @dev The immutable Vault owns schedule/replay policy. The Pool enforces participant identity,
+    ///      encrypted capacity, old-principal TWAB checkpointing, and actual-transfer accounting.
+    function pullAutopilotContribution(
+        uint256 slotIndex,
+        uint256 reservationNonce,
+        euint64 authorizedAmount
+    ) external nonReentrant returns (euint64 actualTransferred) {
+        if (msg.sender != _autopilotVault) revert OperatorUnauthorized();
+
+        Participant storage participant = _participant(slotIndex);
+
+        if (participant.state != ParticipantState.ACTIVE) {
+            revert WithdrawalNotActive();
+        }
+
+        if (
+            reservationNonce !=
+            participant.reservationNonce
+        ) {
+            revert ReservationNonceMismatch();
+        }
+
+        _checkpointParticipant(
+            slotIndex,
+            participant
+        );
+
+        euint64 capacity = FHE.sub(
+            FHE.asEuint64(
+                MAX_USER_PRINCIPAL_BASE_UNITS
+            ),
+            participant.principal
+        );
+
+        euint64 eligible = FHE.min(
+            authorizedAmount,
+            capacity
+        );
+
+        FHE.allowTransient(
+            eligible,
+            address(confidentialToken)
+        );
+
+        actualTransferred =
+            confidentialToken.confidentialTransferFrom(
+                msg.sender,
+                address(this),
+                eligible
+            );
+
+        euint128 actualTransferred128 =
+            FHE.asEuint128(
+                actualTransferred
+            );
+
+        _creditPrincipal(
+            participant,
+            actualTransferred,
+            actualTransferred128
+        );
+
+        _canonicalReceived = FHE.add(
+            _canonicalReceived,
+            actualTransferred128
+        );
+
+        FHE.allowThis(
+            _canonicalReceived
+        );
     }
 
     /// @notice Start one immutable raw-TWAB snapshot at the configured epoch boundary.
@@ -1016,15 +1099,17 @@ contract VeilpotPool is ZamaEthereumConfig {
         if (participant.state != ParticipantState.REFUND_ATTEMPT_PENDING_PROOF) {
             revert InvalidState(ParticipantState.REFUND_ATTEMPT_PENDING_PROOF, participant.state);
         }
-        if (
-            registrationVersion != SUPPORTED_REGISTRATION_VERSION ||
-            registrationVersion != participant.registrationVersion
-        ) revert RegistrationVersionMismatch();
-        if (reservationNonce != participant.reservationNonce) revert ReservationNonceMismatch();
+        _validateRegistration(
+            participant,
+            registrationVersion,
+            reservationNonce
+        );
         if (refundAttemptNonce != participant.refundAttemptNonce) revert RefundProofMismatch();
-        bytes32[] memory handles = new bytes32[](1);
-        handles[0] = FHE.toBytes32(participant.refundComplete);
-        FHE.checkSignatures(handles, abi.encode(clearComplete), decryptionProof);
+        _checkBooleanProof(
+            participant.refundComplete,
+            clearComplete,
+            decryptionProof
+        );
 
         address owner = participant.owner;
         if (clearComplete) {
@@ -1037,8 +1122,10 @@ contract VeilpotPool is ZamaEthereumConfig {
 
     /// @notice Prepare a public zero-balance predicate for an active participant's exit.
     function prepareDeregistration(uint256 slotIndex) external nonReentrant {
-        Participant storage participant = _participant(slotIndex);
-        if (participant.state != ParticipantState.ACTIVE) revert DeregistrationNotActive();
+        Participant storage participant =
+            _activeDeregistrationParticipant(
+                slotIndex
+            );
         participant.deregistrationZero = FHE.eq(participant.principal, FHE.asEuint64(0));
         FHE.allowThis(participant.deregistrationZero);
         FHE.makePubliclyDecryptable(participant.deregistrationZero);
@@ -1050,11 +1137,15 @@ contract VeilpotPool is ZamaEthereumConfig {
         bool clearZero,
         bytes calldata decryptionProof
     ) external nonReentrant {
-        Participant storage participant = _participant(slotIndex);
-        if (participant.state != ParticipantState.ACTIVE) revert DeregistrationNotActive();
-        bytes32[] memory handles = new bytes32[](1);
-        handles[0] = FHE.toBytes32(participant.deregistrationZero);
-        FHE.checkSignatures(handles, abi.encode(clearZero), decryptionProof);
+        Participant storage participant =
+            _activeDeregistrationParticipant(
+                slotIndex
+            );
+        _checkBooleanProof(
+            participant.deregistrationZero,
+            clearZero,
+            decryptionProof
+        );
         if (!clearZero) revert DeregistrationNotActive();
         address owner = participant.owner;
         _clearParticipant(slotIndex, owner, ParticipantState.TOMBSTONED);
@@ -1439,6 +1530,85 @@ contract VeilpotPool is ZamaEthereumConfig {
         if (drawId == 0 || drawId > nextDrawId) revert InvalidDraw();
         draw = _draws[drawId];
         if (draw.state == DrawState.NO_DRAW) revert InvalidDraw();
+    }
+
+    function _validateRegistration(
+        Participant storage participant,
+        uint256 registrationVersion,
+        uint256 reservationNonce
+    ) internal view {
+        if (
+            registrationVersion != SUPPORTED_REGISTRATION_VERSION ||
+            registrationVersion != participant.registrationVersion
+        ) revert RegistrationVersionMismatch();
+
+        if (
+            reservationNonce != participant.reservationNonce
+        ) revert ReservationNonceMismatch();
+    }
+
+    function _checkBooleanProof(
+        ebool encryptedValue,
+        bool clearValue,
+        bytes calldata decryptionProof
+    ) internal {
+        bytes32[] memory handles =
+            new bytes32[](1);
+
+        handles[0] =
+            FHE.toBytes32(
+                encryptedValue
+            );
+
+        FHE.checkSignatures(
+            handles,
+            abi.encode(clearValue),
+            decryptionProof
+        );
+    }
+
+    function _creditPrincipal(
+        Participant storage participant,
+        euint64 amount,
+        euint128 aggregateAmount
+    ) internal {
+        _aggregatePrincipal = FHE.add(
+            _aggregatePrincipal,
+            aggregateAmount
+        );
+
+        FHE.allowThis(
+            _aggregatePrincipal
+        );
+
+        participant.principal = FHE.add(
+            participant.principal,
+            amount
+        );
+
+        FHE.allowThis(
+            participant.principal
+        );
+    }
+
+    function _activeDeregistrationParticipant(
+        uint256 slotIndex
+    )
+        internal
+        view
+        returns (
+            Participant storage participant
+        )
+    {
+        participant =
+            _participant(slotIndex);
+
+        if (
+            participant.state !=
+            ParticipantState.ACTIVE
+        ) {
+            revert DeregistrationNotActive();
+        }
     }
 
     function _participant(
