@@ -1,0 +1,215 @@
+{
+  "schemaVersion": 2,
+  "profile": "VEILPOT_PRODUCTION_SEPOLIA_DEPLOYMENT",
+  "network": "sepolia",
+  "chainId": "11155111",
+  "sourceCommit": "c0fb1a9dba5d384a1745c5e7c5f9f1348f4d89d3",
+  "evidenceRecoveryCommit": "d7b96c9391060b6f7b3b7bd4305f3cc71ddaa68e",
+  "recoveryReason": "RAW_RUNTIME_HASH_IMMUTABLES_NOT_NORMALIZED",
+  "deployerAddress": "0x1f87Ae197af539253978d435aD45cCf28Fb95024",
+  "startingNonce": 487,
+  "token": {
+    "address": "0x4E7B06D78965594eB5EF5414c357ca21E1554491",
+    "classification": "OFFICIAL_ZAMA_TESTNET_MOCK_ASSET",
+    "productionAsset": false
+  },
+  "wrappersRegistry": "0x2f0750Bbb0A246059d80e94c454586a7F27a128e",
+  "yieldProfile": "SIMULATED_YIELD_FOR_SEPOLIA_DEMO",
+  "deterministicCreateOrder": [
+    "VeilpotPool",
+    "VeilpotSimulatedYieldAdapter",
+    "VeilpotPrizeReserve"
+  ],
+  "deployments": {
+    "pool": {
+      "address": "0x3beB5C46b5982b0029a6fbC39A9313ee8D19eb6B",
+      "transactionHash": "0x14ba134d6b220e9f572ed78ae1e6063c938045e4bef542fdc5122eefe1b492c1",
+      "blockNumber": 11609481
+    },
+    "adapter": {
+      "address": "0xe1FbD1fBe801c00f13aF44E1D4e3B4271aDF0f56",
+      "transactionHash": "0x51f872938b4929e1c918d3c8388f5408a4337cd750bbdd31313cc9899c73bf2d",
+      "blockNumber": 11609482
+    },
+    "reserve": {
+      "address": "0xf748bF23C9f1C020Dcf3eb96c955904FCD8b40b0",
+      "transactionHash": "0x6f00e4c30a4c6725758eea86ad6e6d5e9bb137c043176b6c1afca5746ba29a27",
+      "blockNumber": 11609484
+    }
+  },
+  "runtimeIdentity": {
+    "pool": {
+      "localRawSha256": "ab0c10bd6c3643a0619b1c0dfb67a2626c59ed959ee3295a36f6c6a8b42a75c3",
+      "deployedRawSha256": "2678fb265b915cf49346338a59b157845b02fbc8a18b048af598703a88016d0a",
+      "localNormalizedSha256": "ab0c10bd6c3643a0619b1c0dfb67a2626c59ed959ee3295a36f6c6a8b42a75c3",
+      "deployedNormalizedSha256": "ab0c10bd6c3643a0619b1c0dfb67a2626c59ed959ee3295a36f6c6a8b42a75c3",
+      "immutableRanges": [
+        {
+          "start": 1554,
+          "length": 32
+        },
+        {
+          "start": 4678,
+          "length": 32
+        },
+        {
+          "start": 5973,
+          "length": 32
+        },
+        {
+          "start": 7443,
+          "length": 32
+        },
+        {
+          "start": 7656,
+          "length": 32
+        },
+        {
+          "start": 14912,
+          "length": 32
+        }
+      ]
+    },
+    "adapter": {
+      "localRawSha256": "b62902dd43d2ff5ef3187efc10d4d4b22b7e20c9a1d0df88c3a77635ee33590f",
+      "deployedRawSha256": "56fb3e795af04e9c9bc0035c0aa10d34d6c1342b99467536d49864f1c30a20e8",
+      "localNormalizedSha256": "b62902dd43d2ff5ef3187efc10d4d4b22b7e20c9a1d0df88c3a77635ee33590f",
+      "deployedNormalizedSha256": "b62902dd43d2ff5ef3187efc10d4d4b22b7e20c9a1d0df88c3a77635ee33590f",
+      "immutableRanges": [
+        {
+          "start": 1011,
+          "length": 32
+        },
+        {
+          "start": 1080,
+          "length": 32
+        },
+        {
+          "start": 2446,
+          "length": 32
+        },
+        {
+          "start": 2596,
+          "length": 32
+        },
+        {
+          "start": 2643,
+          "length": 32
+        },
+        {
+          "start": 3360,
+          "length": 32
+        },
+        {
+          "start": 3918,
+          "length": 32
+        },
+        {
+          "start": 5314,
+          "length": 32
+        },
+        {
+          "start": 5361,
+          "length": 32
+        },
+        {
+          "start": 5504,
+          "length": 32
+        },
+        {
+          "start": 5551,
+          "length": 32
+        }
+      ]
+    },
+    "reserve": {
+      "localRawSha256": "7bf278b467b358666e73a12f2856c93385504b74a7567eb27caf0b5b1e11559f",
+      "deployedRawSha256": "088f8368daab286b3fa347084e242c1c81ec06c7d11c46f2564f435d2dab8890",
+      "localNormalizedSha256": "7bf278b467b358666e73a12f2856c93385504b74a7567eb27caf0b5b1e11559f",
+      "deployedNormalizedSha256": "7bf278b467b358666e73a12f2856c93385504b74a7567eb27caf0b5b1e11559f",
+      "immutableRanges": [
+        {
+          "start": 1121,
+          "length": 32
+        },
+        {
+          "start": 1653,
+          "length": 32
+        },
+        {
+          "start": 1694,
+          "length": 32
+        },
+        {
+          "start": 2229,
+          "length": 32
+        },
+        {
+          "start": 2493,
+          "length": 32
+        },
+        {
+          "start": 3387,
+          "length": 32
+        },
+        {
+          "start": 4821,
+          "length": 32
+        },
+        {
+          "start": 5014,
+          "length": 32
+        },
+        {
+          "start": 5771,
+          "length": 32
+        },
+        {
+          "start": 6444,
+          "length": 32
+        },
+        {
+          "start": 7984,
+          "length": 32
+        },
+        {
+          "start": 8172,
+          "length": 32
+        },
+        {
+          "start": 9530,
+          "length": 32
+        },
+        {
+          "start": 9577,
+          "length": 32
+        },
+        {
+          "start": 10111,
+          "length": 32
+        },
+        {
+          "start": 12298,
+          "length": 32
+        },
+        {
+          "start": 12345,
+          "length": 32
+        },
+        {
+          "start": 12424,
+          "length": 32
+        },
+        {
+          "start": 12462,
+          "length": 32
+        },
+        {
+          "start": 12528,
+          "length": 32
+        }
+      ]
+    }
+  },
+  "createdAt": "2026-09-01T01:49:28.595Z"
+}
