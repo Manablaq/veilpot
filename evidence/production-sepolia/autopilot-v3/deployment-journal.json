@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "profile": "VEILPOT_AUTOPILOT_PRODUCTION_SEPOLIA_DEPLOYMENT_JOURNAL",
+  "state": "EVIDENCE_PUBLISHED",
+  "network": "sepolia",
+  "chainId": "11155111",
+  "sourceCommit": "ad437e0edf1f4809a53d045879da28da87c10b78",
+  "deployerAddress": "0x1f87Ae197af539253978d435aD45cCf28Fb95024",
+  "startingNonce": 490,
+  "token": {
+    "address": "0x4E7B06D78965594eB5EF5414c357ca21E1554491",
+    "classification": "OFFICIAL_ZAMA_TESTNET_MOCK_ASSET",
+    "productionAsset": false
+  },
+  "wrappersRegistry": "0x2f0750Bbb0A246059d80e94c454586a7F27a128e",
+  "yieldProfile": "SIMULATED_YIELD_FOR_SEPOLIA_DEMO",
+  "deterministicCreateOrder": [
+    "VeilpotPool",
+    "VeilpotAutopilotVault",
+    "VeilpotSimulatedYieldAdapter",
+    "VeilpotPrizeReserve"
+  ],
+  "plannedAddresses": {
+    "pool": "0x2029D8b7AE6Abe7dAa0C2A71E960839171a34601",
+    "vault": "0x7dF64925Af938a0535F30dE9cFBf97BB3ab30487",
+    "adapter": "0xEa9868e982b98B57C52B95853EdE2552dAD74b64",
+    "reserve": "0xbEe24d1060d94d435272550fAa5616faD59Ad1a1"
+  },
+  "deployments": {
+    "pool": {
+      "address": "0x2029D8b7AE6Abe7dAa0C2A71E960839171a34601",
+      "transactionHash": "0xe4eebc4ddede885450523b93b289e85f240dfefe0b1781d7b53f387437ad4ea0",
+      "blockNumber": 11614331
+    },
+    "vault": {
+      "address": "0x7dF64925Af938a0535F30dE9cFBf97BB3ab30487",
+      "transactionHash": "0x5f96f76ced42c123cbcd0fb2090e3bf79159d371183e5751602b98aface3fe96",
+      "blockNumber": 11614332
+    },
+    "adapter": {
+      "address": "0xEa9868e982b98B57C52B95853EdE2552dAD74b64",
+      "transactionHash": "0xf748b2dd137ec2f61f0b9b85311e001f378019a412672bcdb78eebcae7c04810",
+      "blockNumber": 11614333
+    },
+    "reserve": {
+      "address": "0xbEe24d1060d94d435272550fAa5616faD59Ad1a1",
+      "transactionHash": "0x67d27897e2d2a52497b6679504215a72868bfdc0153ae1181e85642e796f1fef",
+      "blockNumber": 11614334
+    }
+  },
+  "broadcastApproval": "I_AUTHORIZE_VEILPOT_PRODUCTION_SEPOLIA_DEPLOYMENT",
+  "updatedAt": "2026-09-01T18:24:16.475Z"
+}
