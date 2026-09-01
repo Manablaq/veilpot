@@ -11,6 +11,8 @@ import {
 } from "@fhevm/solidity/lib/FHE.sol";
 import {ZamaEthereumConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
 import {IERC7984} from "@openzeppelin/confidential-contracts/interfaces/IERC7984.sol";
+import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 
 import {IVeilpotPrizeReserveFunding} from "./interfaces/IVeilpotPrizeReserveFunding.sol";
 import {IVeilpotPrizePoolView} from "./interfaces/IVeilpotPrizePoolView.sol";
@@ -22,7 +24,7 @@ import {IVeilpotYieldAdapterView} from "./interfaces/IVeilpotYieldAdapterView.so
 /// @author Veilpot
 /// @notice Isolated confidential reserve holding only realized yield and explicit sponsor funding.
 /// @dev The reserve has no pool-principal transfer path and no winner-selection authority.
-contract VeilpotPrizeReserve is ZamaEthereumConfig, IVeilpotPrizeReserveFunding {
+contract VeilpotPrizeReserve is ZamaEthereumConfig, EIP712, IVeilpotPrizeReserveFunding {
     /// @notice Public VeilDraw state value required before reserve funding or prize preparation.
     uint8 public constant POOL_DRAW_FINALIZED = 8;
 
@@ -41,13 +43,24 @@ contract VeilpotPrizeReserve is ZamaEthereumConfig, IVeilpotPrizeReserveFunding 
     /// @notice Lifetime of one publicly decryptable prize-status proof request.
     uint256 public constant STATUS_PROOF_TTL_SECONDS = 86_400;
 
+    /// @notice Lifetime of one publicly decryptable claim-completion proof request.
+    uint256 public constant CLAIM_COMPLETION_PROOF_TTL_SECONDS = 86_400;
+
+    /* solhint-disable gas-small-strings */
+    /// @notice EIP-712 type hash for one exact historical claim authorization.
+    bytes32 public constant CLAIM_AUTHORIZATION_TYPEHASH = keccak256(
+        "ClaimAuthorization(uint256 chainId,address reserve,address pool,uint256 drawId,uint256 slotIndex,address participant,address recipient,uint256 registrationVersion,uint256 reservationNonce,uint256 nonce,uint256 expiry)"
+    );
+    /* solhint-enable gas-small-strings */
+
     enum PrizeState {
         UNPREPARED,
         STATUS_PROOF_PENDING,
         ASSIGNING,
         CLAIMABLE,
         CLAIMED,
-        NO_PRIZE
+        NO_PRIZE,
+        TRANSFER_PROOF_PENDING
     }
 
     struct Prize {
@@ -64,6 +77,13 @@ contract VeilpotPrizeReserve is ZamaEthereumConfig, IVeilpotPrizeReserveFunding 
         euint128 assignedTotal;
         ebool statusPredicate;
         euint256 proofContext;
+        uint256 transferSlotIndex;
+        address transferParticipant;
+        uint256 transferClaimNonce;
+        uint256 transferAttemptNonce;
+        uint256 transferProofDeadline;
+        ebool transferPredicate;
+        euint256 transferProofContext;
     }
 
     struct PrizeEntitlement {
@@ -73,6 +93,20 @@ contract VeilpotPrizeReserve is ZamaEthereumConfig, IVeilpotPrizeReserveFunding 
         uint256 registrationVersion;
         uint256 reservationNonce;
         euint64 amount;
+    }
+
+    struct ClaimAuthorization {
+        uint256 chainId;
+        address reserve;
+        address pool;
+        uint256 drawId;
+        uint256 slotIndex;
+        address participant;
+        address recipient;
+        uint256 registrationVersion;
+        uint256 reservationNonce;
+        uint256 nonce;
+        uint256 expiry;
     }
 
     /// @notice Immutable Veilpot pool whose finalized draws define prize eligibility.
@@ -86,6 +120,9 @@ contract VeilpotPrizeReserve is ZamaEthereumConfig, IVeilpotPrizeReserveFunding 
 
     /// @notice Next application-level sponsor-funding nonce accepted for each funder.
     mapping(address => uint256) public nextSponsorFundingNonce;
+
+    /// @notice Next participant-global claim authorization nonce accepted for each historical owner.
+    mapping(address => uint256) public nextClaimNonce;
     mapping(uint256 => Prize) private _prizes;
     mapping(uint256 => mapping(uint256 => PrizeEntitlement)) private _entitlements;
 
@@ -117,6 +154,18 @@ contract VeilpotPrizeReserve is ZamaEthereumConfig, IVeilpotPrizeReserveFunding 
     error MissingEntitlementAcl();
     error InvalidHistoricalBeneficiary();
     error InvalidAssignmentSlot();
+    error ClaimEntitlementNotInitialized();
+    error ClaimEntitlementUnbound();
+    error OnlyEntitlementOwner();
+    error ClaimAuthorizationExpiryRequired();
+    error ClaimAuthorizationExpired();
+    error ClaimNonceMismatch();
+    error InvalidClaimAuthorization();
+    error InvalidClaimSignature();
+    error MissingClaimTransferAcl();
+    error TransferAttemptMismatch();
+    error TransferProofNotExpired();
+    error TransferProofExpired();
 
     /// @notice Emitted after adapter-originated realized yield is recorded for one draw.
     /// @param drawId Draw whose realized yield funding was recorded.
@@ -179,7 +228,10 @@ contract VeilpotPrizeReserve is ZamaEthereumConfig, IVeilpotPrizeReserveFunding 
         _entered = 0;
     }
 
-    constructor(IVeilpotPrizePoolView pool_, IVeilpotYieldAdapterView adapter_) {
+    constructor(
+        IVeilpotPrizePoolView pool_,
+        IVeilpotYieldAdapterView adapter_
+    ) EIP712("VeilpotPrizeReserve", "1") {
         if (address(pool_) == address(0)) revert InvalidPool();
         if (address(adapter_) == address(0)) revert InvalidAdapter();
 
@@ -558,6 +610,191 @@ contract VeilpotPrizeReserve is ZamaEthereumConfig, IVeilpotPrizeReserveFunding 
         );
     }
 
+    /// @notice Execute one confidential prize payout using an exact historical authorization.
+    /// @dev The caller may be any relayer. Accounting changes only by the ERC-7984 returned actual transfer.
+    /// @param authorization Exact eleven-field historical authorization.
+    /// @param signature EOA or ERC-1271 signature from the frozen historical owner.
+    /// @return actualTransferred Encrypted amount actually transferred by the canonical token.
+    function claimPrize(
+        ClaimAuthorization calldata authorization,
+        bytes calldata signature
+    ) external nonReentrant returns (euint64 actualTransferred) {
+        _validateClaimAuthorization(authorization, signature);
+
+        Prize storage prize = _prizeExisting(authorization.drawId);
+        PrizeEntitlement storage record = _entitlements[authorization.drawId][
+            authorization.slotIndex
+        ];
+
+        actualTransferred = _executeClaimTransfer(prize, record);
+
+        nextClaimNonce[record.owner] = authorization.nonce + 1;
+
+        _startClaimCompletionEvidence(
+            prize,
+            authorization.drawId,
+            authorization.slotIndex,
+            record.owner,
+            authorization.nonce
+        );
+    }
+
+    /// @notice Return the current claim-completion proof state for one draw.
+    /// @param drawId Draw whose latest claim-completion evidence is requested.
+    /// @return state Current prize-state ordinal.
+    /// @return slotIndex Historical slot bound into the latest completion context.
+    /// @return participant Historical participant bound into the latest completion context.
+    /// @return claimNonce Participant-global claim nonce consumed by the latest claim.
+    /// @return attemptNonce Current completion-proof attempt nonce.
+    /// @return proofDeadline Inclusive completion-proof settlement deadline.
+    /// @return predicate Publicly decryptable encrypted global-zero predicate.
+    /// @return context Publicly decryptable encrypted completion-proof context.
+    function claimCompletionHandles(
+        uint256 drawId
+    )
+        external
+        view
+        returns (
+            uint8 state,
+            uint256 slotIndex,
+            address participant,
+            uint256 claimNonce,
+            uint256 attemptNonce,
+            uint256 proofDeadline,
+            ebool predicate,
+            euint256 context
+        )
+    {
+        Prize storage prize = _prizeExisting(drawId);
+
+        return (
+            uint8(prize.state),
+            prize.transferSlotIndex,
+            prize.transferParticipant,
+            prize.transferClaimNonce,
+            prize.transferAttemptNonce,
+            prize.transferProofDeadline,
+            prize.transferPredicate,
+            prize.transferProofContext
+        );
+    }
+
+    /// @notice Settle the latest proof that the draw-global encrypted residual is zero.
+    /// @dev Settlement is permissionless and valid through the inclusive proof deadline.
+    /// @param drawId Draw whose completion evidence is being settled.
+    /// @param transferAttemptNonce Exact latest completion-proof attempt nonce.
+    /// @param clearComplete Publicly decrypted global-zero predicate.
+    /// @param decryptionProof KMS proof over the predicate and exact completion context.
+    function settleClaimCompletion(
+        uint256 drawId,
+        uint256 transferAttemptNonce,
+        bool clearComplete,
+        bytes calldata decryptionProof
+    ) external nonReentrant {
+        Prize storage prize = _prizeExisting(drawId);
+
+        if (prize.state != PrizeState.TRANSFER_PROOF_PENDING) {
+            revert InvalidPrizeState(PrizeState.TRANSFER_PROOF_PENDING, prize.state);
+        }
+
+        if (transferAttemptNonce != prize.transferAttemptNonce) {
+            revert TransferAttemptMismatch();
+        }
+
+        if (block.timestamp > prize.transferProofDeadline) {
+            revert TransferProofExpired();
+        }
+
+        bytes32[] memory handles = new bytes32[](2);
+
+        handles[0] = FHE.toBytes32(prize.transferPredicate);
+        handles[1] = FHE.toBytes32(prize.transferProofContext);
+
+        uint256 expectedContext = _claimCompletionContext(
+            drawId,
+            prize.transferSlotIndex,
+            prize.transferParticipant,
+            prize.transferClaimNonce,
+            transferAttemptNonce
+        );
+
+        FHE.checkSignatures(handles, abi.encode(clearComplete, expectedContext), decryptionProof);
+
+        prize.state = clearComplete ? PrizeState.CLAIMED : PrizeState.CLAIMABLE;
+    }
+
+    /// @notice Refresh expired claim-completion evidence without changing claim accounting.
+    /// @dev Anyone may refresh only after the prior inclusive deadline has expired.
+    /// @param drawId Draw whose completion evidence is being refreshed.
+    function refreshClaimCompletionEvidence(uint256 drawId) external nonReentrant {
+        Prize storage prize = _prizeExisting(drawId);
+
+        if (prize.state != PrizeState.TRANSFER_PROOF_PENDING) {
+            revert InvalidPrizeState(PrizeState.TRANSFER_PROOF_PENDING, prize.state);
+        }
+
+        if (
+            block.timestamp < prize.transferProofDeadline ||
+            block.timestamp == prize.transferProofDeadline
+        ) {
+            revert TransferProofNotExpired();
+        }
+
+        uint256 attemptNonce = ++prize.transferAttemptNonce;
+
+        _publishClaimCompletionEvidence(prize, drawId, attemptNonce);
+    }
+
+    /// @notice Return the EIP-712 digest for one exact claim authorization payload.
+    /// @dev This helper performs no state validation and consumes no nonce.
+    /// @param authorization Exact eleven-field authorization payload to hash.
+    /// @return digest EIP-712 domain-separated digest expected by SignatureChecker.
+    function claimAuthorizationDigest(
+        ClaimAuthorization calldata authorization
+    ) external view returns (bytes32 digest) {
+        return _claimAuthorizationDigest(authorization);
+    }
+
+    /// @notice Validate a historical-owner claim authorization without consuming it.
+    /// @dev Permissionless read-only preflight for relayers; payout later reuses the same internal validator.
+    /// @param authorization Exact historical claim authorization.
+    /// @param signature EOA or ERC-1271 signature over the EIP-712 digest.
+    /// @return digest Validated EIP-712 digest.
+    function validateClaimAuthorization(
+        ClaimAuthorization calldata authorization,
+        bytes calldata signature
+    ) external view returns (bytes32 digest) {
+        return _validateClaimAuthorization(authorization, signature);
+    }
+
+    /// @notice Opt the frozen historical beneficiary into private decryption of the current entitlement handle.
+    /// @dev This grants persistent ACL only for the current encrypted residual. A later claim creates a new handle and requires a fresh opt-in.
+    /// @param drawId Draw whose historical entitlement is being authorized.
+    /// @param slotIndex Frozen historical participant slot.
+    function authorizeEntitlementDecryption(uint256 drawId, uint256 slotIndex) external {
+        Prize storage prize = _prizeExisting(drawId);
+
+        if (slotIndex > prize.participantCount || slotIndex == prize.participantCount) {
+            revert InvalidAssignmentSlot();
+        }
+
+        PrizeEntitlement storage record = _entitlements[drawId][slotIndex];
+
+        if (!record.initialized) {
+            revert ClaimEntitlementNotInitialized();
+        }
+
+        if (!record.beneficiaryBound || record.owner == address(0)) {
+            revert ClaimEntitlementUnbound();
+        }
+
+        if (msg.sender != record.owner) {
+            revert OnlyEntitlementOwner();
+        }
+
+        FHE.allow(record.amount, msg.sender);
+    }
+
     /// @notice Return one encrypted assignment record with its immutable historical identity.
     /// @param drawId Draw whose historical entitlement record is requested.
     /// @param slotIndex Frozen historical slot index.
@@ -617,6 +854,190 @@ contract VeilpotPrizeReserve is ZamaEthereumConfig, IVeilpotPrizeReserveFunding 
         returns (euint128 accountedReserveAssets, euint128 outstandingPrizeLiabilities)
     {
         return (_accountedReserveAssets, _outstandingPrizeLiabilities);
+    }
+
+    function _startClaimCompletionEvidence(
+        Prize storage prize,
+        uint256 drawId,
+        uint256 slotIndex,
+        address participant,
+        uint256 claimNonce
+    ) internal {
+        prize.transferSlotIndex = slotIndex;
+        prize.transferParticipant = participant;
+        prize.transferClaimNonce = claimNonce;
+
+        uint256 attemptNonce = ++prize.transferAttemptNonce;
+
+        _publishClaimCompletionEvidence(prize, drawId, attemptNonce);
+
+        prize.state = PrizeState.TRANSFER_PROOF_PENDING;
+    }
+
+    function _publishClaimCompletionEvidence(
+        Prize storage prize,
+        uint256 drawId,
+        uint256 attemptNonce
+    ) internal {
+        prize.transferProofDeadline = block.timestamp + CLAIM_COMPLETION_PROOF_TTL_SECONDS;
+
+        prize.transferPredicate = FHE.eq(prize.remaining, FHE.asEuint64(0));
+
+        prize.transferProofContext = FHE.asEuint256(
+            _claimCompletionContext(
+                drawId,
+                prize.transferSlotIndex,
+                prize.transferParticipant,
+                prize.transferClaimNonce,
+                attemptNonce
+            )
+        );
+
+        FHE.allowThis(prize.transferPredicate);
+        FHE.allowThis(prize.transferProofContext);
+
+        FHE.makePubliclyDecryptable(prize.transferPredicate);
+        FHE.makePubliclyDecryptable(prize.transferProofContext);
+    }
+
+    function _claimCompletionContext(
+        uint256 drawId,
+        uint256 slotIndex,
+        address participant,
+        uint256 claimNonce,
+        uint256 attemptNonce
+    ) internal view returns (uint256) {
+        return
+            uint256(
+                keccak256(
+                    abi.encode(
+                        keccak256(bytes("VEILPOT_CLAIM_COMPLETION_V1")),
+                        block.chainid,
+                        address(this),
+                        address(pool),
+                        drawId,
+                        slotIndex,
+                        participant,
+                        claimNonce,
+                        attemptNonce
+                    )
+                )
+            );
+    }
+
+    function _executeClaimTransfer(
+        Prize storage prize,
+        PrizeEntitlement storage record
+    ) internal returns (euint64 actualTransferred) {
+        ebool entitlementWithinRemaining = FHE.le(record.amount, prize.remaining);
+
+        euint64 requested = FHE.select(entitlementWithinRemaining, record.amount, prize.remaining);
+
+        FHE.allowThis(requested);
+        FHE.allowTransient(requested, address(confidentialToken));
+
+        actualTransferred = confidentialToken.confidentialTransfer(record.owner, requested);
+
+        if (!FHE.isAllowed(actualTransferred, address(this))) {
+            revert MissingClaimTransferAcl();
+        }
+
+        record.amount = FHE.sub(record.amount, actualTransferred);
+        prize.remaining = FHE.sub(prize.remaining, actualTransferred);
+
+        euint128 actualTransferred128 = FHE.asEuint128(actualTransferred);
+
+        _accountedReserveAssets = FHE.sub(_accountedReserveAssets, actualTransferred128);
+        _outstandingPrizeLiabilities = FHE.sub(_outstandingPrizeLiabilities, actualTransferred128);
+
+        FHE.allowThis(record.amount);
+        FHE.allowThis(prize.remaining);
+        FHE.allowThis(_accountedReserveAssets);
+        FHE.allowThis(_outstandingPrizeLiabilities);
+    }
+
+    function _validateClaimAuthorization(
+        ClaimAuthorization calldata authorization,
+        bytes calldata signature
+    ) internal view returns (bytes32 digest) {
+        Prize storage prize = _prizeExisting(authorization.drawId);
+
+        if (prize.state != PrizeState.CLAIMABLE) {
+            revert InvalidPrizeState(PrizeState.CLAIMABLE, prize.state);
+        }
+
+        if (
+            authorization.slotIndex > prize.participantCount ||
+            authorization.slotIndex == prize.participantCount
+        ) {
+            revert InvalidAssignmentSlot();
+        }
+
+        PrizeEntitlement storage record = _entitlements[authorization.drawId][
+            authorization.slotIndex
+        ];
+
+        if (!record.initialized) revert ClaimEntitlementNotInitialized();
+        if (!record.beneficiaryBound) revert ClaimEntitlementUnbound();
+        if (record.owner == address(0)) revert InvalidHistoricalBeneficiary();
+
+        if (authorization.expiry == 0) revert ClaimAuthorizationExpiryRequired();
+
+        if (block.timestamp > authorization.expiry) {
+            revert ClaimAuthorizationExpired();
+        }
+
+        if (authorization.nonce != nextClaimNonce[record.owner]) {
+            revert ClaimNonceMismatch();
+        }
+
+        _requireClaimAuthorizationIdentity(authorization, record);
+
+        digest = _claimAuthorizationDigest(authorization);
+
+        if (!SignatureChecker.isValidSignatureNow(record.owner, digest, signature)) {
+            revert InvalidClaimSignature();
+        }
+    }
+
+    function _requireClaimAuthorizationIdentity(
+        ClaimAuthorization calldata authorization,
+        PrizeEntitlement storage record
+    ) internal view {
+        if (
+            authorization.chainId != block.chainid ||
+            authorization.reserve != address(this) ||
+            authorization.pool != address(pool) ||
+            authorization.participant != record.owner ||
+            authorization.recipient != record.owner ||
+            authorization.registrationVersion != record.registrationVersion ||
+            authorization.reservationNonce != record.reservationNonce
+        ) {
+            revert InvalidClaimAuthorization();
+        }
+    }
+
+    function _claimAuthorizationDigest(
+        ClaimAuthorization calldata authorization
+    ) internal view returns (bytes32 digest) {
+        bytes32 structHash = keccak256(
+            abi.encode(
+                CLAIM_AUTHORIZATION_TYPEHASH,
+                authorization.chainId,
+                authorization.reserve,
+                authorization.pool,
+                authorization.drawId,
+                authorization.slotIndex,
+                authorization.participant,
+                authorization.recipient,
+                authorization.registrationVersion,
+                authorization.reservationNonce,
+                authorization.nonce,
+                authorization.expiry
+            )
+        );
+
+        return _hashTypedDataV4(structHash);
     }
 
     function _requireFinalizedDraw(

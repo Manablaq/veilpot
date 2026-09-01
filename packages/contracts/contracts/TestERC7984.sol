@@ -85,6 +85,15 @@ contract TestERC7984NoReturnAcl is TestERC7984 {
 
 /// @dev TEST_ONLY / NOT_PRODUCTION / MUST_NOT_DEPLOY: deliberately caps actual transfers.
 /// This is not representative of the pinned Zama token's all-or-nothing behavior.
+/// @dev TEST_ONLY / NOT_PRODUCTION / MUST_NOT_DEPLOY: direct payout returns an unusable handle.
+contract TestERC7984DirectNoReturnAcl is TestERC7984 {
+    function confidentialTransfer(address to, euint64 amount) public override returns (euint64) {
+        require(FHE.isAllowed(amount, msg.sender), "MISSING_CALLER_ACL");
+        _transfer(msg.sender, to, amount);
+        return euint64.wrap(keccak256("malformed-direct-return-handle"));
+    }
+}
+
 contract TestERC7984PartialReturn is TestERC7984 {
     uint64 public partialCap;
 
