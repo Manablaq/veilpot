@@ -162,7 +162,11 @@ async function deployFixture(): Promise<{
   await hre.fhevm.assertCoprocessorInitialized(token, "TestERC7984");
   const pool = (await (
     await hre.ethers.getContractFactory("VeilpotPool")
-  ).deploy(await token.getAddress(), owner.address)) as unknown as Pool;
+  ).deploy(
+    await token.getAddress(),
+    owner.address,
+    "0x1111111111111111111111111111111111111111",
+  )) as unknown as Pool;
   await pool.waitForDeployment();
   await hre.fhevm.assertCoprocessorInitialized(pool, "VeilpotPool");
   return { owner, other, token, pool };
@@ -187,7 +191,11 @@ async function deployCustomTokenFixture(
   await hre.fhevm.assertCoprocessorInitialized(token, factoryName);
   const pool = (await (
     await hre.ethers.getContractFactory("VeilpotPool")
-  ).deploy(await token.getAddress(), owner.address)) as unknown as Pool;
+  ).deploy(
+    await token.getAddress(),
+    owner.address,
+    "0x1111111111111111111111111111111111111111",
+  )) as unknown as Pool;
   await pool.waitForDeployment();
   await hre.fhevm.assertCoprocessorInitialized(pool, "VeilpotPool");
   return { owner, other, token, pool };
