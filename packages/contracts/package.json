@@ -15,7 +15,8 @@
     "live:sepolia:failure-drill": "cross-env VEILPOT_LIVE_RUN_FAILURE_DRILL=true hardhat run --network sepolia scripts/run-sepolia.ts",
     "live:sepolia:finalize": "cross-env VEILPOT_LIVE_FINALIZE=true hardhat run --network sepolia scripts/run-sepolia.ts",
     "test:production-sepolia-offline": "hardhat test test/ProductionSepoliaRunner.test.ts",
-    "production:sepolia": "hardhat run --network sepolia scripts/run-production-sepolia.ts"
+    "production:sepolia": "hardhat run --network sepolia scripts/run-production-sepolia.ts",
+    "production:sepolia:recover-evidence": "hardhat run --network sepolia scripts/recover-production-sepolia-evidence.ts"
   },
   "dependencies": {
     "@fhevm/solidity": "0.11.1",

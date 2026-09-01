@@ -13,12 +13,13 @@ import {
   EXPECTED_TOKEN_NAME,
   EXPECTED_TOKEN_SYMBOL,
   WRAPPERS_REGISTRY_ADDRESS,
+  ImmutableReferenceRange,
   assertExactAddress,
   assertPublicEvidenceOnly,
   assertStableNonceSnapshot,
+  compareRuntimeIdentity,
   planProductionDeployment,
   requireExplicitBroadcastApproval,
-  sha256Bytecode,
 } from "./production-sepolia-support";
 
 const EVIDENCE_PATH = resolve(process.cwd(), "../../evidence/production-sepolia/deployment.json");
@@ -171,6 +172,34 @@ async function assertTokenProfile(provider: ethers.Provider): Promise<void> {
   ) {
     throw new Error("Sepolia cUSDTMock profile differs from the frozen competition profile");
   }
+}
+
+async function immutableRangesForArtifact(
+  artifact: Awaited<ReturnType<typeof hre.artifacts.readArtifact>>,
+): Promise<readonly ImmutableReferenceRange[]> {
+  const fullyQualifiedName = artifact.sourceName + ":" + artifact.contractName;
+
+  const buildInfo = await hre.artifacts.getBuildInfo(fullyQualifiedName);
+
+  if (buildInfo === undefined) {
+    throw new Error("build information is unavailable for " + artifact.contractName);
+  }
+
+  const compiledContract = buildInfo.output.contracts[artifact.sourceName]?.[artifact.contractName];
+
+  if (compiledContract === undefined) {
+    throw new Error("compiled contract output is unavailable for " + artifact.contractName);
+  }
+
+  const immutableReferences = compiledContract.evm.deployedBytecode.immutableReferences ?? {};
+
+  return Object.values(immutableReferences)
+    .flat()
+    .map(({ start, length }) => ({
+      start,
+      length,
+    }))
+    .sort((left, right) => left.start - right.start || left.length - right.length);
 }
 
 async function assertBindings(
@@ -340,30 +369,26 @@ async function main(): Promise<void> {
 
   const deployedReserveRuntime = await provider.getCode(plan.reserve);
 
-  const runtimeHashes = {
-    pool: {
-      local: sha256Bytecode(poolArtifact.deployedBytecode),
-      deployed: sha256Bytecode(deployedPoolRuntime),
-    },
-    adapter: {
-      local: sha256Bytecode(adapterArtifact.deployedBytecode),
-      deployed: sha256Bytecode(deployedAdapterRuntime),
-    },
-    reserve: {
-      local: sha256Bytecode(reserveArtifact.deployedBytecode),
-      deployed: sha256Bytecode(deployedReserveRuntime),
-    },
+  const runtimeIdentity = {
+    pool: compareRuntimeIdentity(
+      poolArtifact.deployedBytecode,
+      deployedPoolRuntime,
+      await immutableRangesForArtifact(poolArtifact),
+      "VeilpotPool",
+    ),
+    adapter: compareRuntimeIdentity(
+      adapterArtifact.deployedBytecode,
+      deployedAdapterRuntime,
+      await immutableRangesForArtifact(adapterArtifact),
+      "VeilpotSimulatedYieldAdapter",
+    ),
+    reserve: compareRuntimeIdentity(
+      reserveArtifact.deployedBytecode,
+      deployedReserveRuntime,
+      await immutableRangesForArtifact(reserveArtifact),
+      "VeilpotPrizeReserve",
+    ),
   };
-
-  if (
-    runtimeHashes.pool.local !== runtimeHashes.pool.deployed ||
-    runtimeHashes.adapter.local !== runtimeHashes.adapter.deployed ||
-    runtimeHashes.reserve.local !== runtimeHashes.reserve.deployed
-  ) {
-    throw new Error(
-      "deployed runtime bytecode differs from the locally compiled production artifacts",
-    );
-  }
 
   const evidence = {
     schemaVersion: 1,
@@ -390,7 +415,7 @@ async function main(): Promise<void> {
       adapter: adapterDeployment,
       reserve: reserveDeployment,
     },
-    runtimeHashes,
+    runtimeIdentity,
     broadcastApproval: BROADCAST_APPROVAL_VALUE,
     createdAt: new Date().toISOString(),
   };

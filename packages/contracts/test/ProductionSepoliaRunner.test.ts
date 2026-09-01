@@ -9,6 +9,8 @@ import {
   assertExactAddress,
   assertPublicEvidenceOnly,
   assertStableNonceSnapshot,
+  compareRuntimeIdentity,
+  normalizeRuntimeBytecode,
   planProductionDeployment,
   requireExplicitBroadcastApproval,
   sha256Bytecode,
@@ -103,6 +105,68 @@ describe("Production Sepolia runner offline guards", function () {
     );
   });
 
+  it("normalizes only compiler-declared immutable runtime ranges", function () {
+    const artifact = "0x6000000000006100";
+
+    const deployed = "0x60aabbccdd006100";
+
+    const ranges = [
+      {
+        start: 1,
+        length: 4,
+      },
+    ];
+
+    expect(normalizeRuntimeBytecode(artifact, ranges)).to.equal("0x6000000000006100");
+
+    expect(normalizeRuntimeBytecode(deployed, ranges)).to.equal("0x6000000000006100");
+
+    expect(() => {
+      normalizeRuntimeBytecode(deployed, [
+        {
+          start: 100,
+          length: 1,
+        },
+      ]);
+    }).to.throw("immutable reference range is outside runtime bytecode");
+  });
+
+  it("accepts immutable-only runtime differences and rejects all other byte differences", function () {
+    const artifact = "0x6000000000006100";
+
+    const deployed = "0x60aabbccdd006100";
+
+    const identity = compareRuntimeIdentity(
+      artifact,
+      deployed,
+      [
+        {
+          start: 1,
+          length: 4,
+        },
+      ],
+      "test",
+    );
+
+    expect(identity.localNormalizedSha256).to.equal(identity.deployedNormalizedSha256);
+
+    expect(identity.localRawSha256).not.to.equal(identity.deployedRawSha256);
+
+    expect(() => {
+      compareRuntimeIdentity(
+        artifact,
+        "0x60aabbccdd006101",
+        [
+          {
+            start: 1,
+            length: 4,
+          },
+        ],
+        "test",
+      );
+    }).to.throw("test deployed runtime differs outside compiler-declared immutable references");
+  });
+
   it("permits public deployment evidence but rejects secret-bearing keys recursively", function () {
     expect(() => {
       assertPublicEvidenceOnly({
@@ -170,10 +234,40 @@ describe("Production Sepolia runner offline guards", function () {
 
     expect(runner).to.include("await assertBindings(");
 
-    expect(runner).to.include(
-      "deployed runtime bytecode differs from the locally compiled production artifacts",
-    );
+    expect(runner).to.include("compareRuntimeIdentity(");
+
+    expect(runner).to.include("immutableRangesForArtifact(");
 
     expect(runner).to.include("SIMULATED_YIELD_FOR_SEPOLIA_DEMO");
+  });
+  it("locks evidence recovery to the already-mined nonce 487/488/489 deployment transactions and forbids broadcast", async function () {
+    const recovery = await readFile(
+      resolve(process.cwd(), "scripts/recover-production-sepolia-evidence.ts"),
+      "utf8",
+    );
+
+    expect(recovery).to.include("const STARTING_NONCE = 487");
+
+    expect(recovery).to.include(
+      "0x14ba134d6b220e9f572ed78ae1e6063c938045e4bef542fdc5122eefe1b492c1",
+    );
+
+    expect(recovery).to.include(
+      "0x51f872938b4929e1c918d3c8388f5408a4337cd750bbdd31313cc9899c73bf2d",
+    );
+
+    expect(recovery).to.include(
+      "0x6f00e4c30a4c6725758eea86ad6e6d5e9bb137c043176b6c1afca5746ba29a27",
+    );
+
+    expect(recovery).to.include("broadcast approval must be absent during evidence recovery");
+
+    expect(recovery).not.to.include(".deploy(");
+
+    expect(recovery).not.to.include("sendTransaction(");
+
+    expect(recovery).to.include("compareRuntimeIdentity(");
+
+    expect(recovery).to.include("RAW_RUNTIME_HASH_IMMUTABLES_NOT_NORMALIZED");
   });
 });

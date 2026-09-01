@@ -93,6 +93,84 @@ export function sha256Bytecode(bytecode: string): string {
     .digest("hex");
 }
 
+export interface ImmutableReferenceRange {
+  readonly start: number;
+  readonly length: number;
+}
+
+export interface RuntimeIdentity {
+  readonly localRawSha256: string;
+  readonly deployedRawSha256: string;
+  readonly localNormalizedSha256: string;
+  readonly deployedNormalizedSha256: string;
+  readonly immutableRanges: readonly ImmutableReferenceRange[];
+}
+
+export function normalizeRuntimeBytecode(
+  bytecode: string,
+  immutableRanges: readonly ImmutableReferenceRange[],
+): string {
+  if (!/^0x(?:[0-9a-fA-F]{2})*$/.test(bytecode)) {
+    throw new Error("bytecode must be 0x-prefixed even-length hexadecimal");
+  }
+
+  const bytes = Buffer.from(bytecode.slice(2), "hex");
+
+  for (const range of immutableRanges) {
+    if (
+      !Number.isSafeInteger(range.start) ||
+      !Number.isSafeInteger(range.length) ||
+      range.start < 0 ||
+      range.length <= 0 ||
+      range.start + range.length > bytes.length
+    ) {
+      throw new Error("immutable reference range is outside runtime bytecode");
+    }
+
+    bytes.fill(0, range.start, range.start + range.length);
+  }
+
+  return "0x" + bytes.toString("hex");
+}
+
+export function compareRuntimeIdentity(
+  localBytecode: string,
+  deployedBytecode: string,
+  immutableRanges: readonly ImmutableReferenceRange[],
+  label: string,
+): RuntimeIdentity {
+  const localBytes = Buffer.from(normalizeRuntimeBytecode(localBytecode, []).slice(2), "hex");
+
+  const deployedBytes = Buffer.from(normalizeRuntimeBytecode(deployedBytecode, []).slice(2), "hex");
+
+  if (localBytes.length !== deployedBytes.length) {
+    throw new Error(label + " deployed runtime length differs from the compiled artifact");
+  }
+
+  const sortedRanges = [...immutableRanges].sort(
+    (left, right) => left.start - right.start || left.length - right.length,
+  );
+
+  const localNormalized = normalizeRuntimeBytecode(localBytecode, sortedRanges);
+  const deployedNormalized = normalizeRuntimeBytecode(deployedBytecode, sortedRanges);
+
+  const identity: RuntimeIdentity = {
+    localRawSha256: sha256Bytecode(localBytecode),
+    deployedRawSha256: sha256Bytecode(deployedBytecode),
+    localNormalizedSha256: sha256Bytecode(localNormalized),
+    deployedNormalizedSha256: sha256Bytecode(deployedNormalized),
+    immutableRanges: sortedRanges,
+  };
+
+  if (identity.localNormalizedSha256 !== identity.deployedNormalizedSha256) {
+    throw new Error(
+      label + " deployed runtime differs outside compiler-declared immutable references",
+    );
+  }
+
+  return identity;
+}
+
 const FORBIDDEN_EVIDENCE_KEYS = new Set([
   "privateKey",
   "private_key",
