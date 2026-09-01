@@ -1,8 +1,17 @@
 {
   "files": [],
   "references": [
-    { "path": "./scripts" },
-    { "path": "./packages/reference-model" },
-    { "path": "./packages/contracts" }
+    {
+      "path": "./scripts"
+    },
+    {
+      "path": "./packages/reference-model"
+    },
+    {
+      "path": "./packages/contracts"
+    },
+    {
+      "path": "./packages/protocol-sdk"
+    }
   ]
 }

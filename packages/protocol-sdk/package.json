@@ -1,0 +1,27 @@
+{
+  "name": "@veilpot/protocol-sdk",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "test": "mocha --import=tsx 'test/**/*.test.ts'"
+  },
+  "dependencies": {
+    "@zama-fhe/sdk": "3.5.1"
+  },
+  "devDependencies": {
+    "@types/chai": "4.3.20",
+    "@types/mocha": "10.0.10",
+    "chai": "4.5.0",
+    "mocha": "11.7.5"
+  }
+}
