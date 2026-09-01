@@ -15,10 +15,12 @@ import {
   WRAPPERS_REGISTRY_ADDRESS,
   ImmutableReferenceRange,
   assertExactAddress,
+  assertExactDeploymentData,
   assertPublicEvidenceOnly,
   assertStableNonceSnapshot,
   compareRuntimeIdentity,
   planProductionDeployment,
+  sha256Bytecode,
   requireExplicitBroadcastApproval,
 } from "./production-sepolia-support";
 
@@ -205,6 +207,7 @@ async function immutableRangesForArtifact(
 async function assertBindings(
   provider: ethers.Provider,
   poolAddress: string,
+  vaultAddress: string,
   adapterAddress: string,
   reserveAddress: string,
 ): Promise<void> {
@@ -228,6 +231,23 @@ async function assertBindings(
     ),
     CUSDTMOCK_ADDRESS,
     "pool.confidentialToken",
+  );
+
+  assertExactAddress(
+    await readAddress(provider, vaultAddress, "function pool() view returns (address)", "pool"),
+    poolAddress,
+    "vault.pool",
+  );
+
+  assertExactAddress(
+    await readAddress(
+      provider,
+      vaultAddress,
+      "function confidentialToken() view returns (address)",
+      "confidentialToken",
+    ),
+    CUSDTMOCK_ADDRESS,
+    "vault.confidentialToken",
   );
 
   assertExactAddress(
@@ -324,13 +344,41 @@ async function main(): Promise<void> {
 
   const poolFactory = await hre.ethers.getContractFactory("VeilpotPool", deployer);
 
-  const pool = await poolFactory.deploy(CUSDTMOCK_ADDRESS, plan.reserve);
+  const expectedPoolDeployment = await poolFactory.getDeployTransaction(
+    CUSDTMOCK_ADDRESS,
+    plan.reserve,
+    plan.vault,
+  );
+
+  const pool = await poolFactory.deploy(CUSDTMOCK_ADDRESS, plan.reserve, plan.vault);
 
   await pool.waitForDeployment();
 
   assertExactAddress(await pool.getAddress(), plan.pool, "VeilpotPool");
 
+  const poolDeploymentTransaction = pool.deploymentTransaction();
+
+  if (poolDeploymentTransaction === null) {
+    throw new Error("VeilpotPool deployment transaction is missing");
+  }
+
+  assertExactDeploymentData(
+    poolDeploymentTransaction.data,
+    expectedPoolDeployment.data,
+    "VeilpotPool",
+  );
+
   const poolDeployment = await deploymentRecord(pool);
+
+  const vaultFactory = await hre.ethers.getContractFactory("VeilpotAutopilotVault", deployer);
+
+  const vault = await vaultFactory.deploy(CUSDTMOCK_ADDRESS, plan.pool);
+
+  await vault.waitForDeployment();
+
+  assertExactAddress(await vault.getAddress(), plan.vault, "VeilpotAutopilotVault");
+
+  const vaultDeployment = await deploymentRecord(vault);
 
   const adapterFactory = await hre.ethers.getContractFactory(
     "VeilpotSimulatedYieldAdapter",
@@ -355,15 +403,19 @@ async function main(): Promise<void> {
 
   const reserveDeployment = await deploymentRecord(reserve);
 
-  await assertBindings(provider, plan.pool, plan.adapter, plan.reserve);
+  await assertBindings(provider, plan.pool, plan.vault, plan.adapter, plan.reserve);
 
   const poolArtifact = await hre.artifacts.readArtifact("VeilpotPool");
+
+  const vaultArtifact = await hre.artifacts.readArtifact("VeilpotAutopilotVault");
 
   const adapterArtifact = await hre.artifacts.readArtifact("VeilpotSimulatedYieldAdapter");
 
   const reserveArtifact = await hre.artifacts.readArtifact("VeilpotPrizeReserve");
 
   const deployedPoolRuntime = await provider.getCode(plan.pool);
+
+  const deployedVaultRuntime = await provider.getCode(plan.vault);
 
   const deployedAdapterRuntime = await provider.getCode(plan.adapter);
 
@@ -375,6 +427,12 @@ async function main(): Promise<void> {
       deployedPoolRuntime,
       await immutableRangesForArtifact(poolArtifact),
       "VeilpotPool",
+    ),
+    vault: compareRuntimeIdentity(
+      vaultArtifact.deployedBytecode,
+      deployedVaultRuntime,
+      await immutableRangesForArtifact(vaultArtifact),
+      "VeilpotAutopilotVault",
     ),
     adapter: compareRuntimeIdentity(
       adapterArtifact.deployedBytecode,
@@ -391,7 +449,7 @@ async function main(): Promise<void> {
   };
 
   const evidence = {
-    schemaVersion: 1,
+    schemaVersion: 3,
     profile: "VEILPOT_PRODUCTION_SEPOLIA_DEPLOYMENT",
     network: "sepolia",
     chainId: EXPECTED_SEPOLIA_CHAIN_ID.toString(),
@@ -407,13 +465,22 @@ async function main(): Promise<void> {
     yieldProfile: "SIMULATED_YIELD_FOR_SEPOLIA_DEMO",
     deterministicCreateOrder: [
       "VeilpotPool",
+      "VeilpotAutopilotVault",
       "VeilpotSimulatedYieldAdapter",
       "VeilpotPrizeReserve",
     ],
     deployments: {
       pool: poolDeployment,
+      vault: vaultDeployment,
       adapter: adapterDeployment,
       reserve: reserveDeployment,
+    },
+    privateImmutableVerification: {
+      poolAutopilotVault: {
+        expectedAddress: plan.vault,
+        verificationMethod: "EXACT_POOL_DEPLOYMENT_TRANSACTION_INPUT",
+        deploymentInputSha256: sha256Bytecode(poolDeploymentTransaction.data),
+      },
     },
     runtimeIdentity,
     broadcastApproval: BROADCAST_APPROVAL_VALUE,
@@ -434,6 +501,7 @@ async function main(): Promise<void> {
         sourceCommit,
         startingNonce,
         pool: plan.pool,
+        vault: plan.vault,
         adapter: plan.adapter,
         reserve: plan.reserve,
         evidencePath: EVIDENCE_PATH,

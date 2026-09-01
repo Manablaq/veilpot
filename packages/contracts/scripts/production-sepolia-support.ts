@@ -18,6 +18,7 @@ export interface ProductionDeploymentPlan {
   readonly deployer: string;
   readonly startingNonce: number;
   readonly pool: string;
+  readonly vault: string;
   readonly adapter: string;
   readonly reserve: string;
 }
@@ -42,7 +43,7 @@ export function assertStableNonceSnapshot(confirmedNonce: number, pendingNonce: 
 
   if (confirmedNonce !== pendingNonce) {
     throw new Error(
-      "deployer has pending transactions; deterministic N/N+1/N+2 deployment is unsafe",
+      "deployer has pending transactions; deterministic N/N+1/N+2/N+3 deployment is unsafe",
     );
   }
 
@@ -66,13 +67,17 @@ export function planProductionDeployment(
       from: normalizedDeployer,
       nonce: startingNonce,
     }),
-    adapter: ethers.getCreateAddress({
+    vault: ethers.getCreateAddress({
       from: normalizedDeployer,
       nonce: startingNonce + 1,
     }),
-    reserve: ethers.getCreateAddress({
+    adapter: ethers.getCreateAddress({
       from: normalizedDeployer,
       nonce: startingNonce + 2,
+    }),
+    reserve: ethers.getCreateAddress({
+      from: normalizedDeployer,
+      nonce: startingNonce + 3,
     }),
   };
 }
@@ -80,6 +85,19 @@ export function planProductionDeployment(
 export function assertExactAddress(actual: string, expected: string, label: string): void {
   if (ethers.getAddress(actual) !== ethers.getAddress(expected)) {
     throw new Error(label + " address differs from deterministic deployment plan");
+  }
+}
+
+export function assertExactDeploymentData(
+  actual: ethers.BytesLike,
+  expected: ethers.BytesLike,
+  label: string,
+): void {
+  const actualHex = ethers.hexlify(actual);
+  const expectedHex = ethers.hexlify(expected);
+
+  if (actualHex !== expectedHex) {
+    throw new Error(label + " deployment data differs from exact constructor plan");
   }
 }
 

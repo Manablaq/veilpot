@@ -7,6 +7,7 @@ import { ethers } from "ethers";
 import {
   BROADCAST_APPROVAL_VALUE,
   assertExactAddress,
+  assertExactDeploymentData,
   assertPublicEvidenceOnly,
   assertStableNonceSnapshot,
   compareRuntimeIdentity,
@@ -45,7 +46,7 @@ describe("Production Sepolia runner offline guards", function () {
     );
   });
 
-  it("derives the exact consecutive CREATE addresses N, N+1, and N+2", function () {
+  it("derives the exact consecutive CREATE addresses N through N+3", function () {
     const deployer = "0x1111111111111111111111111111111111111111";
 
     const nonce = 42;
@@ -59,17 +60,24 @@ describe("Production Sepolia runner offline guards", function () {
       }),
     );
 
-    expect(plan.adapter).to.equal(
+    expect(plan.vault).to.equal(
       ethers.getCreateAddress({
         from: deployer,
         nonce: nonce + 1,
       }),
     );
 
-    expect(plan.reserve).to.equal(
+    expect(plan.adapter).to.equal(
       ethers.getCreateAddress({
         from: deployer,
         nonce: nonce + 2,
+      }),
+    );
+
+    expect(plan.reserve).to.equal(
+      ethers.getCreateAddress({
+        from: deployer,
+        nonce: nonce + 3,
       }),
     );
   });
@@ -86,6 +94,19 @@ describe("Production Sepolia runner offline guards", function () {
     expect(() => {
       assertExactAddress(other, expected, "contract");
     }).to.throw("contract address differs from deterministic deployment plan");
+  });
+
+  it("compares exact deployment input bytes for private immutable constructor binding", function () {
+    const expected = "0x6000aabb";
+    const other = "0x6000aabc";
+
+    expect(() => {
+      assertExactDeploymentData(expected, expected, "VeilpotPool");
+    }).not.to.throw();
+
+    expect(() => {
+      assertExactDeploymentData(other, expected, "VeilpotPool");
+    }).to.throw("VeilpotPool deployment data differs from exact constructor plan");
   });
 
   it("hashes only valid bytecode and rejects malformed hex", function () {
@@ -222,13 +243,28 @@ describe("Production Sepolia runner offline guards", function () {
 
     const pool = runner.indexOf("poolFactory.deploy(");
 
+    const vault = runner.indexOf("vaultFactory.deploy(");
+
     const adapter = runner.indexOf("adapterFactory.deploy(");
 
     const reserve = runner.indexOf("reserveFactory.deploy(");
 
     expect(pool).to.be.greaterThan(-1);
-    expect(adapter).to.be.greaterThan(pool);
+    expect(vault).to.be.greaterThan(pool);
+    expect(adapter).to.be.greaterThan(vault);
     expect(reserve).to.be.greaterThan(adapter);
+
+    expect(runner).to.include("poolFactory.deploy(CUSDTMOCK_ADDRESS, plan.reserve, plan.vault)");
+
+    expect(runner).to.include("vaultFactory.deploy(CUSDTMOCK_ADDRESS, plan.pool)");
+
+    expect(runner).to.include("assertExactDeploymentData(");
+
+    expect(runner).to.include('verificationMethod: "EXACT_POOL_DEPLOYMENT_TRANSACTION_INPUT"');
+
+    expect(runner).to.include('await hre.artifacts.readArtifact("VeilpotAutopilotVault")');
+
+    expect(runner).to.include("await provider.getCode(plan.vault)");
 
     expect(runner).to.include("../../evidence/production-sepolia/deployment.json");
 
