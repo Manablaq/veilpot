@@ -266,7 +266,21 @@ describe("Production Sepolia runner offline guards", function () {
 
     expect(runner).to.include("await provider.getCode(plan.vault)");
 
-    expect(runner).to.include("../../evidence/production-sepolia/deployment.json");
+    expect(runner).to.include("../../evidence/production-sepolia/autopilot-v3/deployment.json");
+
+    expect(runner).to.include(
+      "../../evidence/production-sepolia/autopilot-v3/deployment-journal.json",
+    );
+
+    expect(runner).to.include('profile: "VEILPOT_AUTOPILOT_PRODUCTION_SEPOLIA_DEPLOYMENT"');
+
+    expect(runner).to.include('evidenceNamespace: "AUTOPILOT_V3"');
+
+    expect(runner).to.include("verifiedBindings: {");
+
+    expect(runner).to.include(
+      'autopilotVaultVerification: "EXACT_POOL_DEPLOYMENT_TRANSACTION_INPUT"',
+    );
 
     expect(runner).to.include("await assertBindings(");
 
@@ -276,6 +290,75 @@ describe("Production Sepolia runner offline guards", function () {
 
     expect(runner).to.include("SIMULATED_YIELD_FOR_SEPOLIA_DEMO");
   });
+  it("preserves historical schema-v2 evidence while publishing Autopilot v3 to its own namespace", async function () {
+    const runner = await readFile(
+      resolve(process.cwd(), "scripts/run-production-sepolia.ts"),
+      "utf8",
+    );
+
+    const historical = await readFile(
+      resolve(process.cwd(), "../../evidence/production-sepolia/deployment.json"),
+      "utf8",
+    );
+
+    expect(historical).to.include('"schemaVersion": 2');
+    expect(historical).to.include('"VeilpotPool"');
+    expect(historical).to.include('"VeilpotSimulatedYieldAdapter"');
+    expect(historical).to.include('"VeilpotPrizeReserve"');
+    expect(historical).not.to.include("VeilpotAutopilotVault");
+
+    expect(runner).to.include("../../evidence/production-sepolia/autopilot-v3/deployment.json");
+
+    expect(runner).to.include("historicalEvidencePath: HISTORICAL_EVIDENCE_REPOSITORY_PATH");
+
+    expect(runner).to.include("schemaVersion: 3");
+    expect(runner).to.include('evidenceNamespace: "AUTOPILOT_V3"');
+  });
+
+  it("journals every four-contract deployment stage and provides fail-closed no-broadcast Autopilot evidence recovery", async function () {
+    const runner = await readFile(
+      resolve(process.cwd(), "scripts/run-production-sepolia.ts"),
+      "utf8",
+    );
+
+    const recovery = await readFile(
+      resolve(process.cwd(), "scripts/recover-autopilot-production-sepolia-evidence.ts"),
+      "utf8",
+    );
+
+    for (const state of [
+      '"PLANNED"',
+      '"POOL_CONFIRMED"',
+      '"VAULT_CONFIRMED"',
+      '"ADAPTER_CONFIRMED"',
+      '"RESERVE_CONFIRMED"',
+      '"EVIDENCE_PUBLISHED"',
+    ]) {
+      expect(runner).to.include(state);
+    }
+
+    expect(runner).to.include("requireFreshAutopilotEvidenceNamespace()");
+    expect(runner).to.include("writeDeploymentJournal(");
+
+    expect(recovery).to.include(
+      "broadcast approval must be absent during Autopilot evidence recovery",
+    );
+
+    expect(recovery).to.include("Autopilot deployment journal is incomplete; do not redeploy");
+
+    expect(recovery).to.include(
+      "current Git HEAD differs from the sourceCommit that produced the Autopilot deployment",
+    );
+
+    expect(recovery).to.include("planProductionDeployment(");
+    expect(recovery).to.include("assertExactDeploymentData(");
+    expect(recovery).to.include("compareRuntimeIdentity(");
+    expect(recovery).to.include('"VeilpotAutopilotVault"');
+    expect(recovery).to.include("startingNonce + 3");
+    expect(recovery).not.to.include(".deploy(");
+    expect(recovery).not.to.include("sendTransaction(");
+  });
+
   it("locks evidence recovery to the already-mined nonce 487/488/489 deployment transactions and forbids broadcast", async function () {
     const recovery = await readFile(
       resolve(process.cwd(), "scripts/recover-production-sepolia-evidence.ts"),

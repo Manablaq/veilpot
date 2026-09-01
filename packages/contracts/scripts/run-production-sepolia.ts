@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { access, mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
 import { ethers } from "ethers";
@@ -24,12 +24,102 @@ import {
   requireExplicitBroadcastApproval,
 } from "./production-sepolia-support";
 
-const EVIDENCE_PATH = resolve(process.cwd(), "../../evidence/production-sepolia/deployment.json");
+const AUTOPILOT_EVIDENCE_REPOSITORY_PATH =
+  "../../evidence/production-sepolia/autopilot-v3/deployment.json";
+
+const AUTOPILOT_JOURNAL_REPOSITORY_PATH =
+  "../../evidence/production-sepolia/autopilot-v3/deployment-journal.json";
+
+const HISTORICAL_EVIDENCE_REPOSITORY_PATH = "../../evidence/production-sepolia/deployment.json";
+
+const EVIDENCE_PATH = resolve(process.cwd(), AUTOPILOT_EVIDENCE_REPOSITORY_PATH);
+
+const JOURNAL_PATH = resolve(process.cwd(), AUTOPILOT_JOURNAL_REPOSITORY_PATH);
 
 interface DeploymentTransactionRecord {
   readonly address: string;
   readonly transactionHash: string;
   readonly blockNumber: number;
+}
+
+type JournalState =
+  | "PLANNED"
+  | "POOL_CONFIRMED"
+  | "VAULT_CONFIRMED"
+  | "ADAPTER_CONFIRMED"
+  | "RESERVE_CONFIRMED"
+  | "EVIDENCE_PUBLISHED";
+
+interface JournalDeployments {
+  pool?: DeploymentTransactionRecord;
+  vault?: DeploymentTransactionRecord;
+  adapter?: DeploymentTransactionRecord;
+  reserve?: DeploymentTransactionRecord;
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function requireFreshAutopilotEvidenceNamespace(): Promise<void> {
+  if ((await pathExists(EVIDENCE_PATH)) || (await pathExists(JOURNAL_PATH))) {
+    throw new Error(
+      "Autopilot production evidence namespace already exists; recover or review it before any redeployment",
+    );
+  }
+}
+
+async function writeDeploymentJournal(
+  state: JournalState,
+  sourceCommit: string,
+  deployerAddress: string,
+  startingNonce: number,
+  plan: ReturnType<typeof planProductionDeployment>,
+  deployments: JournalDeployments,
+): Promise<void> {
+  const journal = {
+    schemaVersion: 1,
+    profile: "VEILPOT_AUTOPILOT_PRODUCTION_SEPOLIA_DEPLOYMENT_JOURNAL",
+    state,
+    network: "sepolia",
+    chainId: EXPECTED_SEPOLIA_CHAIN_ID.toString(),
+    sourceCommit,
+    deployerAddress,
+    startingNonce,
+    token: {
+      address: CUSDTMOCK_ADDRESS,
+      classification: "OFFICIAL_ZAMA_TESTNET_MOCK_ASSET",
+      productionAsset: false,
+    },
+    wrappersRegistry: WRAPPERS_REGISTRY_ADDRESS,
+    yieldProfile: "SIMULATED_YIELD_FOR_SEPOLIA_DEMO",
+    deterministicCreateOrder: [
+      "VeilpotPool",
+      "VeilpotAutopilotVault",
+      "VeilpotSimulatedYieldAdapter",
+      "VeilpotPrizeReserve",
+    ],
+    plannedAddresses: {
+      pool: plan.pool,
+      vault: plan.vault,
+      adapter: plan.adapter,
+      reserve: plan.reserve,
+    },
+    deployments,
+    broadcastApproval: BROADCAST_APPROVAL_VALUE,
+    updatedAt: new Date().toISOString(),
+  };
+
+  assertPublicEvidenceOnly(journal);
+
+  await mkdir(dirname(JOURNAL_PATH), { recursive: true });
+
+  await writeFile(JOURNAL_PATH, JSON.stringify(journal, null, 2) + "\n", "utf8");
 }
 
 function currentGitCommit(): string {
@@ -312,6 +402,8 @@ async function main(): Promise<void> {
 
   requireCleanWorktree();
 
+  await requireFreshAutopilotEvidenceNamespace();
+
   const sourceCommit = currentGitCommit();
 
   const provider = hre.ethers.provider;
@@ -342,6 +434,17 @@ async function main(): Promise<void> {
 
   const plan = planProductionDeployment(deployerAddress, startingNonce);
 
+  const journalDeployments: JournalDeployments = {};
+
+  await writeDeploymentJournal(
+    "PLANNED",
+    sourceCommit,
+    deployerAddress,
+    startingNonce,
+    plan,
+    journalDeployments,
+  );
+
   const poolFactory = await hre.ethers.getContractFactory("VeilpotPool", deployer);
 
   const expectedPoolDeployment = await poolFactory.getDeployTransaction(
@@ -370,6 +473,17 @@ async function main(): Promise<void> {
 
   const poolDeployment = await deploymentRecord(pool);
 
+  journalDeployments.pool = poolDeployment;
+
+  await writeDeploymentJournal(
+    "POOL_CONFIRMED",
+    sourceCommit,
+    deployerAddress,
+    startingNonce,
+    plan,
+    journalDeployments,
+  );
+
   const vaultFactory = await hre.ethers.getContractFactory("VeilpotAutopilotVault", deployer);
 
   const vault = await vaultFactory.deploy(CUSDTMOCK_ADDRESS, plan.pool);
@@ -379,6 +493,17 @@ async function main(): Promise<void> {
   assertExactAddress(await vault.getAddress(), plan.vault, "VeilpotAutopilotVault");
 
   const vaultDeployment = await deploymentRecord(vault);
+
+  journalDeployments.vault = vaultDeployment;
+
+  await writeDeploymentJournal(
+    "VAULT_CONFIRMED",
+    sourceCommit,
+    deployerAddress,
+    startingNonce,
+    plan,
+    journalDeployments,
+  );
 
   const adapterFactory = await hre.ethers.getContractFactory(
     "VeilpotSimulatedYieldAdapter",
@@ -393,6 +518,17 @@ async function main(): Promise<void> {
 
   const adapterDeployment = await deploymentRecord(adapter);
 
+  journalDeployments.adapter = adapterDeployment;
+
+  await writeDeploymentJournal(
+    "ADAPTER_CONFIRMED",
+    sourceCommit,
+    deployerAddress,
+    startingNonce,
+    plan,
+    journalDeployments,
+  );
+
   const reserveFactory = await hre.ethers.getContractFactory("VeilpotPrizeReserve", deployer);
 
   const reserve = await reserveFactory.deploy(plan.pool, plan.adapter);
@@ -402,6 +538,17 @@ async function main(): Promise<void> {
   assertExactAddress(await reserve.getAddress(), plan.reserve, "VeilpotPrizeReserve");
 
   const reserveDeployment = await deploymentRecord(reserve);
+
+  journalDeployments.reserve = reserveDeployment;
+
+  await writeDeploymentJournal(
+    "RESERVE_CONFIRMED",
+    sourceCommit,
+    deployerAddress,
+    startingNonce,
+    plan,
+    journalDeployments,
+  );
 
   await assertBindings(provider, plan.pool, plan.vault, plan.adapter, plan.reserve);
 
@@ -450,7 +597,10 @@ async function main(): Promise<void> {
 
   const evidence = {
     schemaVersion: 3,
-    profile: "VEILPOT_PRODUCTION_SEPOLIA_DEPLOYMENT",
+    profile: "VEILPOT_AUTOPILOT_PRODUCTION_SEPOLIA_DEPLOYMENT",
+    evidenceNamespace: "AUTOPILOT_V3",
+    historicalEvidencePath: HISTORICAL_EVIDENCE_REPOSITORY_PATH,
+    deploymentJournalPath: AUTOPILOT_JOURNAL_REPOSITORY_PATH,
     network: "sepolia",
     chainId: EXPECTED_SEPOLIA_CHAIN_ID.toString(),
     sourceCommit,
@@ -482,6 +632,28 @@ async function main(): Promise<void> {
         deploymentInputSha256: sha256Bytecode(poolDeploymentTransaction.data),
       },
     },
+    verifiedBindings: {
+      pool: {
+        confidentialToken: CUSDTMOCK_ADDRESS,
+        prizeReserve: plan.reserve,
+        autopilotVault: plan.vault,
+        autopilotVaultVerification: "EXACT_POOL_DEPLOYMENT_TRANSACTION_INPUT",
+      },
+      vault: {
+        confidentialToken: CUSDTMOCK_ADDRESS,
+        pool: plan.pool,
+      },
+      adapter: {
+        confidentialToken: CUSDTMOCK_ADDRESS,
+        pool: plan.pool,
+        reserve: plan.reserve,
+      },
+      reserve: {
+        confidentialToken: CUSDTMOCK_ADDRESS,
+        pool: plan.pool,
+        adapter: plan.adapter,
+      },
+    },
     runtimeIdentity,
     broadcastApproval: BROADCAST_APPROVAL_VALUE,
     createdAt: new Date().toISOString(),
@@ -492,6 +664,15 @@ async function main(): Promise<void> {
   await mkdir(dirname(EVIDENCE_PATH), { recursive: true });
 
   await writeFile(EVIDENCE_PATH, JSON.stringify(evidence, null, 2) + "\n", "utf8");
+
+  await writeDeploymentJournal(
+    "EVIDENCE_PUBLISHED",
+    sourceCommit,
+    deployerAddress,
+    startingNonce,
+    plan,
+    journalDeployments,
+  );
 
   process.stdout.write("PRODUCTION_SEPOLIA_DEPLOYMENT_COMPLETE\n");
 
