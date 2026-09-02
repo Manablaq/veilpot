@@ -11,6 +11,11 @@ export const VEILPOT_POOL_ABI = [
         name: "prizeReserve_",
         type: "address",
       },
+      {
+        internalType: "address",
+        name: "autopilotVault_",
+        type: "address",
+      },
     ],
     stateMutability: "nonpayable",
     type: "constructor",
@@ -1829,6 +1834,35 @@ export const VEILPOT_POOL_ABI = [
     inputs: [],
     name: "processSnapshotChunk",
     outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "slotIndex",
+        type: "uint256",
+      },
+      {
+        internalType: "uint256",
+        name: "reservationNonce",
+        type: "uint256",
+      },
+      {
+        internalType: "euint64",
+        name: "authorizedAmount",
+        type: "bytes32",
+      },
+    ],
+    name: "pullAutopilotContribution",
+    outputs: [
+      {
+        internalType: "euint64",
+        name: "actualTransferred",
+        type: "bytes32",
+      },
+    ],
     stateMutability: "nonpayable",
     type: "function",
   },

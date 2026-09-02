@@ -48,6 +48,16 @@ export const PRIZE_STATE = {
 
 export type PrizeState = (typeof PRIZE_STATE)[keyof typeof PRIZE_STATE];
 
+export const AUTOPILOT_PLAN_STATE = {
+  NONE: 0,
+  ACTIVE: 1,
+  PAUSED: 2,
+  REVOKED: 3,
+  COMPLETED: 4,
+} as const;
+
+export type AutopilotPlanState = (typeof AUTOPILOT_PLAN_STATE)[keyof typeof AUTOPILOT_PLAN_STATE];
+
 function stateName<T extends Record<string, number>>(
   states: T,
   value: number,
@@ -76,4 +86,8 @@ export function yieldStateName(value: number): keyof typeof YIELD_STATE {
 
 export function prizeStateName(value: number): keyof typeof PRIZE_STATE {
   return stateName(PRIZE_STATE, value, "prize state");
+}
+
+export function autopilotPlanStateName(value: number): keyof typeof AUTOPILOT_PLAN_STATE {
+  return stateName(AUTOPILOT_PLAN_STATE, value, "Autopilot plan state");
 }

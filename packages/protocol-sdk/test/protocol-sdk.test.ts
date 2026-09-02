@@ -52,7 +52,7 @@ async function readJson(path: string): Promise<unknown> {
 describe("Veilpot protocol SDK core", function () {
   it("pins the exact frozen Sepolia deployment identity", async function () {
     const raw = await readJson(
-      resolve(process.cwd(), "../../evidence/production-sepolia/deployment.json"),
+      resolve(process.cwd(), "../../evidence/production-sepolia/autopilot-v3/deployment.json"),
     );
 
     const evidence = asRecord(raw, "deployment evidence");
@@ -60,6 +60,8 @@ describe("Veilpot protocol SDK core", function () {
     const deployments = asRecord(evidence.deployments, "deployments");
 
     const pool = asRecord(deployments.pool, "pool deployment");
+
+    const vault = asRecord(deployments.vault, "vault deployment");
 
     const adapter = asRecord(deployments.adapter, "adapter deployment");
 
@@ -69,18 +71,24 @@ describe("Veilpot protocol SDK core", function () {
 
     expect(VEILPOT_SEPOLIA_DEPLOYMENT.pool).to.equal(pool.address);
 
+    expect(VEILPOT_SEPOLIA_DEPLOYMENT.vault).to.equal(vault.address);
+
     expect(VEILPOT_SEPOLIA_DEPLOYMENT.adapter).to.equal(adapter.address);
 
     expect(VEILPOT_SEPOLIA_DEPLOYMENT.reserve).to.equal(reserve.address);
 
     expect(VEILPOT_SEPOLIA_DEPLOYMENT.deploymentEvidenceSha256).to.equal(
-      "ba6f9d5b35dc7373382b9e49bcb9e6ff4628d0cad106236a4bedd97b7ab64109",
+      "939127735c3ea54763992b8238b09a37a4474d66f6774c0eab5f619328ffcd98",
+    );
+
+    expect(VEILPOT_SEPOLIA_DEPLOYMENT.runtimeEvidenceSha256).to.equal(
+      "147c83636f21ac13b8e26174cce1abe1a02d18f496d42d00aa53a7e8d0b8729a",
     );
   });
 
   it("keeps every SDK ABI byte-for-byte structurally equal to the frozen production artifacts", async function () {
     const entries = [
-      [VEILPOT_POOL_ABI, "../contracts/artifacts/contracts/VeilpotPool.sol/VeilpotPool.json", 89],
+      [VEILPOT_POOL_ABI, "../contracts/artifacts/contracts/VeilpotPool.sol/VeilpotPool.json", 90],
       [
         VEILPOT_ADAPTER_ABI,
         "../contracts/artifacts/contracts/VeilpotSimulatedYieldAdapter.sol/VeilpotSimulatedYieldAdapter.json",
