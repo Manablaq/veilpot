@@ -1,0 +1,643 @@
+{
+  "schemaVersion": 1,
+  "profile": "VEILPOT_AUTOPILOT_PRODUCTION_SEPOLIA_RUNTIME_SMOKE",
+  "evidenceNamespace": "AUTOPILOT_V3",
+  "network": "sepolia",
+  "chainId": "11155111",
+  "sourceCommit": "ad437e0edf1f4809a53d045879da28da87c10b78",
+  "evidenceHeadAtFreeze": "dd3b53311b98a8af03f154a31cade7e4b354cf45",
+  "evidenceClass": "REPRODUCIBLE_LIVE_RUNTIME_LIFECYCLE_EVIDENCE",
+  "tokenClassification": {
+    "address": "0x4E7B06D78965594eB5EF5414c357ca21E1554491",
+    "classification": "OFFICIAL_ZAMA_TESTNET_MOCK_ASSET",
+    "productionAsset": false
+  },
+  "artifactBindings": {
+    "deploymentEvidencePath": "../../evidence/production-sepolia/autopilot-v3/deployment.json",
+    "deploymentEvidenceSha256": "939127735c3ea54763992b8238b09a37a4474d66f6774c0eab5f619328ffcd98",
+    "deploymentJournalPath": "../../evidence/production-sepolia/autopilot-v3/deployment-journal.json",
+    "deploymentJournalSha256": "a148519ba8e6fa6c6eff5f84e487bde8fd3791e4104c0a67dca0a01bd297dcea",
+    "runtimeJournalPath": "../../evidence/production-sepolia/autopilot-v3/runtime-smoke-journal.json",
+    "runtimeJournalSha256": "cb9fa6873acbfb04c58be61c643f2a9413aae75aea6afa3143298eac98a5c3ff",
+    "nonce503PlanInputSha256": "e3cb3456a7cc041e5766f216088ed546c62a886721fc44a2b3d52cb308b3bb53",
+    "nonce503PlanReportSha256": "71ba3413a0475e2db793a0d52ac8976966d1f619a1f3d3a9db8b31879b25ac94",
+    "nonce504FundingInputSha256": "aa091dac070d486807d95e8208f05db1ce32575de8fa075978a137ca379abdf8",
+    "nonce504FundingReportSha256": "609205cb1d8a2af3f1f3532ef633aeeb4ec31574aff61e8b9ca1bde00e08b2df",
+    "nonce505ExecutionInputSha256": "4ded1fd7b3f1aad86678dbeb9e6310722bd704a555d8eddf364218856cfa9fbe",
+    "nonce505ExecutionReportSha256": "3a2b4a05287e72e8844fcd112b3c1b4e0617fa9bb410c6ff8b9089c564291890",
+    "nonce506WithdrawalInputSha256": "2afcba5356f2cd08bacc8a5ffbb9a3017bebf445de85640fbfe7731adcf20484",
+    "nonce506WithdrawalReportSha256": "315eeaaa74798aaf1086a87113b5d6e52a7b7dd972959bbb991089ed898f5c70",
+    "nonce506DeregistrationProofSha256": "9730082d8c4fa56e3dea219065de519c6259f539cf24d4868f61a497881e6087",
+    "nonce507SettlementInputSha256": "d086d885ee8edd127793b12d9d8d533ddc7d3630b72ed173dca8c0dd038754db",
+    "nonce507SettlementReportSha256": "02bc89136fd57a668a370ceb1e23a4189f04ef282f723b4f5333134f7c884d4d",
+    "preFreezeIndependentAuditProfile": "VEILPOT_GATE_2C_C3C9_FINAL_INDEPENDENT_RUNTIME_LIFECYCLE_EVIDENCE_AUDIT",
+    "preFreezeIndependentAuditRequiredPassMarker": "VEILPOT_GATE_2C_C3C9_FINAL_INDEPENDENT_RUNTIME_LIFECYCLE_EVIDENCE_AUDIT=PASS"
+  },
+  "contracts": {
+    "pool": "0x2029D8b7AE6Abe7dAa0C2A71E960839171a34601",
+    "vault": "0x7dF64925Af938a0535F30dE9cFBf97BB3ab30487",
+    "adapter": "0xEa9868e982b98B57C52B95853EdE2552dAD74b64",
+    "reserve": "0xbEe24d1060d94d435272550fAa5616faD59Ad1a1",
+    "confidentialToken": "0x4E7B06D78965594eB5EF5414c357ca21E1554491",
+    "underlyingToken": "0xa7dA08FafDC9097Cc0E7D4f113A61e31d7e8e9b0",
+    "acl": "0xf0Ffdc93b7E186bC2f8CB3dAA75D86d1930A433D"
+  },
+  "verifiedBindings": {
+    "pool": {
+      "confidentialToken": "0x4E7B06D78965594eB5EF5414c357ca21E1554491",
+      "prizeReserve": "0xbEe24d1060d94d435272550fAa5616faD59Ad1a1",
+      "autopilotVault": "0x7dF64925Af938a0535F30dE9cFBf97BB3ab30487",
+      "autopilotVaultVerification": "EXACT_POOL_DEPLOYMENT_TRANSACTION_INPUT"
+    },
+    "vault": {
+      "confidentialToken": "0x4E7B06D78965594eB5EF5414c357ca21E1554491",
+      "pool": "0x2029D8b7AE6Abe7dAa0C2A71E960839171a34601"
+    },
+    "adapter": {
+      "confidentialToken": "0x4E7B06D78965594eB5EF5414c357ca21E1554491",
+      "pool": "0x2029D8b7AE6Abe7dAa0C2A71E960839171a34601",
+      "reserve": "0xbEe24d1060d94d435272550fAa5616faD59Ad1a1"
+    },
+    "reserve": {
+      "confidentialToken": "0x4E7B06D78965594eB5EF5414c357ca21E1554491",
+      "pool": "0x2029D8b7AE6Abe7dAa0C2A71E960839171a34601",
+      "adapter": "0xEa9868e982b98B57C52B95853EdE2552dAD74b64"
+    }
+  },
+  "sourceSha256": {
+    "VeilpotPool": "bd06e4f9217ffa6d584a518cb93ae0504221c760e4c6f17656d114262a82710e",
+    "VeilpotAutopilotVault": "d003c095c3260ce34ff2c4bd8559b306b092c6655c6ac030c5a9059a87c1d384",
+    "VeilpotSimulatedYieldAdapter": "3bb7593778e0d0a5b4b9c9b24745a28d7d97bbff85e63185046cda36212165fc",
+    "VeilpotPrizeReserve": "b325862cd9bdb542ffd2b3580c3d80a63efcc8ef50c4cfbd5ffa847ca0ca6dd0"
+  },
+  "runtimeIdentity": {
+    "pool": {
+      "localRawSha256": "d1ad1d24c304558f29f62a0ae89584d4f7b3382ee7198f0f8015ed5c816d076f",
+      "deployedRawSha256": "53d8300b687dc9e54e77fc544f94ceb337b5460ca42b8e8004f1050d0dc80169",
+      "localNormalizedSha256": "d1ad1d24c304558f29f62a0ae89584d4f7b3382ee7198f0f8015ed5c816d076f",
+      "deployedNormalizedSha256": "d1ad1d24c304558f29f62a0ae89584d4f7b3382ee7198f0f8015ed5c816d076f",
+      "immutableRanges": [
+        {
+          "start": 1567,
+          "length": 32
+        },
+        {
+          "start": 4717,
+          "length": 32
+        },
+        {
+          "start": 5897,
+          "length": 32
+        },
+        {
+          "start": 7264,
+          "length": 32
+        },
+        {
+          "start": 7477,
+          "length": 32
+        },
+        {
+          "start": 10070,
+          "length": 32
+        },
+        {
+          "start": 10283,
+          "length": 32
+        },
+        {
+          "start": 14887,
+          "length": 32
+        }
+      ]
+    },
+    "vault": {
+      "localRawSha256": "a79e7a5fd69729be992e09deaf74534fbbf31c9a1b954bde67ee9280e0b6521d",
+      "deployedRawSha256": "d3fae5c67ce422c51be28f059b3c11026af74cea758abba1441f727aa794d6c9",
+      "localNormalizedSha256": "a79e7a5fd69729be992e09deaf74534fbbf31c9a1b954bde67ee9280e0b6521d",
+      "deployedNormalizedSha256": "a79e7a5fd69729be992e09deaf74534fbbf31c9a1b954bde67ee9280e0b6521d",
+      "immutableRanges": [
+        {
+          "start": 660,
+          "length": 32
+        },
+        {
+          "start": 702,
+          "length": 32
+        },
+        {
+          "start": 1695,
+          "length": 32
+        },
+        {
+          "start": 2074,
+          "length": 32
+        },
+        {
+          "start": 2806,
+          "length": 32
+        },
+        {
+          "start": 3992,
+          "length": 32
+        },
+        {
+          "start": 4279,
+          "length": 32
+        },
+        {
+          "start": 4776,
+          "length": 32
+        },
+        {
+          "start": 4816,
+          "length": 32
+        }
+      ]
+    },
+    "adapter": {
+      "localRawSha256": "b62902dd43d2ff5ef3187efc10d4d4b22b7e20c9a1d0df88c3a77635ee33590f",
+      "deployedRawSha256": "c7ccc309518d0931af48ae111eca04938d56d18013e6835e8b4a380c20c8bcfb",
+      "localNormalizedSha256": "b62902dd43d2ff5ef3187efc10d4d4b22b7e20c9a1d0df88c3a77635ee33590f",
+      "deployedNormalizedSha256": "b62902dd43d2ff5ef3187efc10d4d4b22b7e20c9a1d0df88c3a77635ee33590f",
+      "immutableRanges": [
+        {
+          "start": 1011,
+          "length": 32
+        },
+        {
+          "start": 1080,
+          "length": 32
+        },
+        {
+          "start": 2446,
+          "length": 32
+        },
+        {
+          "start": 2596,
+          "length": 32
+        },
+        {
+          "start": 2643,
+          "length": 32
+        },
+        {
+          "start": 3360,
+          "length": 32
+        },
+        {
+          "start": 3918,
+          "length": 32
+        },
+        {
+          "start": 5314,
+          "length": 32
+        },
+        {
+          "start": 5361,
+          "length": 32
+        },
+        {
+          "start": 5504,
+          "length": 32
+        },
+        {
+          "start": 5551,
+          "length": 32
+        }
+      ]
+    },
+    "reserve": {
+      "localRawSha256": "7bf278b467b358666e73a12f2856c93385504b74a7567eb27caf0b5b1e11559f",
+      "deployedRawSha256": "8269b4c06c0a17df1a363828ca3a5e3d2acca9636a9eed3bf9d9bc4d945b2e87",
+      "localNormalizedSha256": "7bf278b467b358666e73a12f2856c93385504b74a7567eb27caf0b5b1e11559f",
+      "deployedNormalizedSha256": "7bf278b467b358666e73a12f2856c93385504b74a7567eb27caf0b5b1e11559f",
+      "immutableRanges": [
+        {
+          "start": 1121,
+          "length": 32
+        },
+        {
+          "start": 1653,
+          "length": 32
+        },
+        {
+          "start": 1694,
+          "length": 32
+        },
+        {
+          "start": 2229,
+          "length": 32
+        },
+        {
+          "start": 2493,
+          "length": 32
+        },
+        {
+          "start": 3387,
+          "length": 32
+        },
+        {
+          "start": 4821,
+          "length": 32
+        },
+        {
+          "start": 5014,
+          "length": 32
+        },
+        {
+          "start": 5771,
+          "length": 32
+        },
+        {
+          "start": 6444,
+          "length": 32
+        },
+        {
+          "start": 7984,
+          "length": 32
+        },
+        {
+          "start": 8172,
+          "length": 32
+        },
+        {
+          "start": 9530,
+          "length": 32
+        },
+        {
+          "start": 9577,
+          "length": 32
+        },
+        {
+          "start": 10111,
+          "length": 32
+        },
+        {
+          "start": 12298,
+          "length": 32
+        },
+        {
+          "start": 12345,
+          "length": 32
+        },
+        {
+          "start": 12424,
+          "length": 32
+        },
+        {
+          "start": 12462,
+          "length": 32
+        },
+        {
+          "start": 12528,
+          "length": 32
+        }
+      ]
+    },
+    "cUSDT": {
+      "runtimeBytes": 170,
+      "runtimeKeccak256": "0x864cc9ad53b338b82da1f7cab85ab0b3d5c8861acb422b6fec63cf36234f36a6"
+    },
+    "allMatchedAtFreeze": true
+  },
+  "deploymentReceipts": [
+    {
+      "label": "VeilpotPool",
+      "nonce": 490,
+      "transactionHash": "0xe4eebc4ddede885450523b93b289e85f240dfefe0b1781d7b53f387437ad4ea0",
+      "blockNumber": 11614331,
+      "contractAddress": "0x2029D8b7AE6Abe7dAa0C2A71E960839171a34601",
+      "status": "SUCCESS"
+    },
+    {
+      "label": "VeilpotAutopilotVault",
+      "nonce": 491,
+      "transactionHash": "0x5f96f76ced42c123cbcd0fb2090e3bf79159d371183e5751602b98aface3fe96",
+      "blockNumber": 11614332,
+      "contractAddress": "0x7dF64925Af938a0535F30dE9cFBf97BB3ab30487",
+      "status": "SUCCESS"
+    },
+    {
+      "label": "VeilpotSimulatedYieldAdapter",
+      "nonce": 492,
+      "transactionHash": "0xf748b2dd137ec2f61f0b9b85311e001f378019a412672bcdb78eebcae7c04810",
+      "blockNumber": 11614333,
+      "contractAddress": "0xEa9868e982b98B57C52B95853EdE2552dAD74b64",
+      "status": "SUCCESS"
+    },
+    {
+      "label": "VeilpotPrizeReserve",
+      "nonce": 493,
+      "transactionHash": "0x67d27897e2d2a52497b6679504215a72868bfdc0153ae1181e85642e796f1fef",
+      "blockNumber": 11614334,
+      "contractAddress": "0xbEe24d1060d94d435272550fAa5616faD59Ad1a1",
+      "status": "SUCCESS"
+    }
+  ],
+  "runtimeTransactions": [
+    {
+      "index": 0,
+      "label": "UNDERLYING_MINT",
+      "nonce": 494,
+      "transactionHash": "0xd76011d3887789bfede35b4546d900d3b0d93e92d96af5497eb24a12cd9cac71",
+      "target": "0xa7dA08FafDC9097Cc0E7D4f113A61e31d7e8e9b0",
+      "blockNumber": 11614536,
+      "gasUsed": "51760",
+      "status": "SUCCESS"
+    },
+    {
+      "index": 1,
+      "label": "UNDERLYING_APPROVE_WRAPPER",
+      "nonce": 495,
+      "transactionHash": "0xa22da4a3ac67a14052a99ede69c149b8ae7f89ee5fce356430b4f935718aa83e",
+      "target": "0xa7dA08FafDC9097Cc0E7D4f113A61e31d7e8e9b0",
+      "blockNumber": 11614537,
+      "gasUsed": "46600",
+      "status": "SUCCESS"
+    },
+    {
+      "index": 2,
+      "label": "WRAP_TO_CUSDT",
+      "nonce": 496,
+      "transactionHash": "0xe1b7959329edad622787b1364908e25bafbe41e3873f6206685ea5890cf210e4",
+      "target": "0x4E7B06D78965594eB5EF5414c357ca21E1554491",
+      "blockNumber": 11614538,
+      "gasUsed": "367250",
+      "status": "SUCCESS"
+    },
+    {
+      "index": 3,
+      "label": "RESERVE_PARTICIPANT_SLOT",
+      "nonce": 497,
+      "transactionHash": "0x55466763cd36f8bcca7db6b9f2fdd4eada6432398ac6e715378758ca358685f5",
+      "target": "0x2029D8b7AE6Abe7dAa0C2A71E960839171a34601",
+      "blockNumber": 11614709,
+      "gasUsed": "619936",
+      "status": "SUCCESS"
+    },
+    {
+      "index": 4,
+      "label": "MANUAL_DEPOSIT_POOL_OPERATOR_GRANT",
+      "nonce": 498,
+      "transactionHash": "0xd880e173d3bc6ca79d6ddcc45678d0f0bf14213f7d0ab6eebf8df9dd632e31d6",
+      "target": "0x4E7B06D78965594eB5EF5414c357ca21E1554491",
+      "blockNumber": 11614710,
+      "gasUsed": "51129",
+      "status": "SUCCESS"
+    },
+    {
+      "index": 5,
+      "label": "MANUAL_REGISTRATION_DEPOSIT",
+      "nonce": 499,
+      "transactionHash": "0x0152b1faea3138dfa6336812c3feb2fde4d33639057a6c4663cf95fc953ad5e9",
+      "target": "0x2029D8b7AE6Abe7dAa0C2A71E960839171a34601",
+      "blockNumber": 11614711,
+      "gasUsed": "902796",
+      "status": "SUCCESS"
+    },
+    {
+      "index": 6,
+      "label": "MANUAL_DEPOSIT_POOL_OPERATOR_REVOKE",
+      "nonce": 500,
+      "transactionHash": "0x678425c8710b2a237a8333d06572d004bcdbbdfb10b6c947ace1e040300af6e1",
+      "target": "0x4E7B06D78965594eB5EF5414c357ca21E1554491",
+      "blockNumber": 11614713,
+      "gasUsed": "29181",
+      "status": "SUCCESS"
+    },
+    {
+      "index": 7,
+      "label": "SETTLE_REGISTRATION_THRESHOLD",
+      "nonce": 501,
+      "transactionHash": "0x11bf7472ad4836c75c57f91837149be70b02b150ab777e5948f33997e02c9aac",
+      "target": "0x2029D8b7AE6Abe7dAa0C2A71E960839171a34601",
+      "blockNumber": 11615734,
+      "gasUsed": "738684",
+      "status": "SUCCESS"
+    },
+    {
+      "index": 8,
+      "label": "WITHDRAW_REGISTRATION_BOND",
+      "nonce": 502,
+      "transactionHash": "0x682dce4ce78e286cf899f500b997221142f70d4ec3f57183fa733ec1bff94118",
+      "target": "0x2029D8b7AE6Abe7dAa0C2A71E960839171a34601",
+      "blockNumber": 11616456,
+      "gasUsed": "46140",
+      "status": "SUCCESS"
+    },
+    {
+      "index": 9,
+      "label": "CREATE_AUTOPILOT_PLAN",
+      "nonce": 503,
+      "transactionHash": "0x1fc6d5c0e8c6e3adfcb883aa6bf80bf3091940c504fcc22808b79d55e4393be9",
+      "target": "0x7dF64925Af938a0535F30dE9cFBf97BB3ab30487",
+      "blockNumber": 11616539,
+      "gasUsed": "681739",
+      "status": "SUCCESS"
+    },
+    {
+      "index": 10,
+      "label": "FUND_AUTOPILOT_PLAN",
+      "nonce": 504,
+      "transactionHash": "0x14a2e464a973df1df5d6db7fa6ff67236b1a4102be63b704b50fd7f9e0dc586b",
+      "target": "0x4E7B06D78965594eB5EF5414c357ca21E1554491",
+      "blockNumber": 11616632,
+      "gasUsed": "1010937",
+      "status": "SUCCESS"
+    },
+    {
+      "index": 11,
+      "label": "EXECUTE_AUTOPILOT_PLAN",
+      "nonce": 505,
+      "transactionHash": "0x634f25a18a16f5927b69eb0b073d275797ad35a8585d6fee28e551beefa65557",
+      "target": "0x7dF64925Af938a0535F30dE9cFBf97BB3ab30487",
+      "blockNumber": 11616739,
+      "gasUsed": "908874",
+      "status": "SUCCESS"
+    },
+    {
+      "index": 12,
+      "label": "WITHDRAW_FULL_PRINCIPAL",
+      "nonce": 506,
+      "transactionHash": "0x71ce173e3a2c34d3a14573ae4e252b5f6c46d5b9ffa61b87961a62151b23823e",
+      "target": "0x2029D8b7AE6Abe7dAa0C2A71E960839171a34601",
+      "blockNumber": 11616868,
+      "gasUsed": "933051",
+      "status": "SUCCESS"
+    },
+    {
+      "index": 13,
+      "label": "SETTLE_DEREGISTRATION",
+      "nonce": 507,
+      "transactionHash": "0x0a182865856293dbf30ee97444b4c8c21b6f108d916a73286bb3d65b25ecd947",
+      "target": "0x2029D8b7AE6Abe7dAa0C2A71E960839171a34601",
+      "blockNumber": 11616968,
+      "gasUsed": "768357",
+      "status": "SUCCESS"
+    }
+  ],
+  "nonceRange": {
+    "deployment": "490-493",
+    "runtime": "494-507",
+    "finalOwnerNonceLatest": 508,
+    "finalOwnerNoncePending": 508
+  },
+  "finalSettlementBoundary": {
+    "transactionHash": "0x0a182865856293dbf30ee97444b4c8c21b6f108d916a73286bb3d65b25ecd947",
+    "blockNumber": 11616968,
+    "blockHash": "0xef4990b1b30cad362ebd6b573fec8787ba58a8a205cfe47698674679c0a07dba",
+    "blockTimestamp": 1788319776,
+    "frozenAt": "2026-09-02T03:29:36.000Z",
+    "receiptStatus": 1
+  },
+  "finalParticipantLifecycle": {
+    "slotIndex": "0",
+    "state": "TOMBSTONED",
+    "stateEnum": 6,
+    "activeParticipantCount": "0",
+    "nextWithdrawNonce": "1",
+    "pendingBondRefundWei": "0",
+    "liveParticipantGettersClosed": true,
+    "exactSettlementProofReplayRejected": true,
+    "withdrawalAfterTombstoneRejected": true
+  },
+  "historicalPreservation": {
+    "closingEpoch": "0",
+    "beneficiary": {
+      "owner": "0x1f87Ae197af539253978d435aD45cCf28Fb95024",
+      "registrationVersion": "1",
+      "reservationNonce": "1",
+      "bound": true
+    },
+    "epochSnapshotWeightHandle": "0x8c7b57df06f3d395264976dcb38cd8f5cee8111383ff0000000000aa36a70600",
+    "epochSnapshotWeightBound": true,
+    "epochParticipantBound": "1",
+    "slotReusableAfter": "1790879016",
+    "slotReusableAfterEqualsActiveEpochEnd": true,
+    "historicalWeightAcl": {
+      "poolAllowed": true,
+      "ownerAllowed": false,
+      "publiclyDecryptable": false
+    }
+  },
+  "confidentialAccounting": {
+    "aggregatePrincipalHandle": "0x2d64fd4497a88b7d0499d5379b27ee095be83d3ab3ff0000000000aa36a70600",
+    "canonicalReceivedHandle": "0x6cd7866655b36d1eecef8459f8bf60dc8a382a8c29ff0000000000aa36a70600",
+    "principalZeroHandleBeforeTombstone": "0x9aeba20eadc6c6c9bf4ae7c3f284ff3513de7fdc85ff0000000000aa36a70500",
+    "principalZeroAcl": {
+      "poolAllowed": true,
+      "ownerAllowed": false,
+      "publiclyDecryptable": false
+    },
+    "deregistrationZeroHandle": "0xc9b7ce3855c9a3933282eed3c2a12464d3721b5ee5ff0000000000aa36a70000",
+    "deregistrationZeroPubliclyDecryptable": true,
+    "deregistrationZeroClear": true,
+    "ownerTokenBalanceHandle": "0xb6a27ffc43e6a0ce7680240e6139838e7f3e3b0e3cff0000000000aa36a70500",
+    "ownerTokenBalanceClearBaseUnits": "1100000",
+    "poolTokenBalanceHandle": "0x252df4e445a6a1b81c2f791d7036c4d2290b1f048aff0000000000aa36a70500"
+  },
+  "autopilotFinalState": {
+    "planId": "0x2c9d9797c99c7b48856127e0cfc47ac3dea70c2091aa49d1f0fd7c8acac4c534",
+    "state": "COMPLETED",
+    "slotIndex": "0",
+    "registrationVersion": "1",
+    "reservationNonce": "1",
+    "planNonce": "0",
+    "scheduleRoot": "0xd3dfac053b783e1dfbe0e0df5f070e25b2b9b670ca4c9cc8a226ea95333b093a",
+    "executionCount": 1,
+    "nextExecutionIndex": 1,
+    "lastWindowNotAfter": "1788321060",
+    "nextPlanNonce": "1",
+    "periodAmount": {
+      "handle": "0xe13580aa3f6ab0447ef2899e98e9cc0d85c108ca0b000000000000aa36a70500",
+      "clearBaseUnits": "100000"
+    },
+    "remainingBudget": {
+      "handle": "0x9320a267928a43210f8fe424e1e6c08d31ea0eba60ff0000000000aa36a70500",
+      "clearBaseUnits": "0"
+    },
+    "funds": {
+      "handle": "0x6fcb8ffaa84e3cdb0f8302bb0e8bc48e852859a1deff0000000000aa36a70500",
+      "clearBaseUnits": "0"
+    },
+    "poolPersistentAuthorityOnFunds": false
+  },
+  "authorityAndAcl": {
+    "operators": {
+      "walletToPool": false,
+      "walletToVault": false,
+      "vaultToPool": false
+    },
+    "aggregatePrincipal": {
+      "poolAllowed": true,
+      "ownerAllowed": false,
+      "publiclyDecryptable": false
+    },
+    "canonicalReceived": {
+      "poolAllowed": true,
+      "ownerAllowed": false,
+      "publiclyDecryptable": false
+    },
+    "planPeriod": {
+      "vaultAllowed": true,
+      "ownerAllowed": true,
+      "poolAllowed": false,
+      "publiclyDecryptable": false
+    },
+    "planRemainingBudget": {
+      "vaultAllowed": true,
+      "ownerAllowed": true,
+      "poolAllowed": false,
+      "publiclyDecryptable": false
+    },
+    "planFunds": {
+      "vaultAllowed": true,
+      "ownerAllowed": true,
+      "poolAllowed": false,
+      "publiclyDecryptable": false
+    }
+  },
+  "valueRecoveryAndLiveness": {
+    "manualRegistrationDepositBaseUnits": "1000000",
+    "autopilotActualContributionBaseUnits": "100000",
+    "totalPrincipalWithdrawnBaseUnits": "1100000",
+    "finalOwnerRecoveredCUSDTBaseUnits": "1100000",
+    "finalAutopilotFundsBaseUnits": "0",
+    "pendingRegistrationRefundWei": "0",
+    "sharedWrapperUnderlyingBackingAtLeastRecoveredPosition": true,
+    "noUnexpectedTrappedEth": {
+      "pool": true,
+      "vault": true,
+      "adapter": true,
+      "reserve": true
+    }
+  },
+  "epochAndSnapshotState": {
+    "activeEpochId": "0",
+    "activeEpochStart": "1788287016",
+    "activeEpochEnd": "1790879016",
+    "currentSnapshotId": "0",
+    "snapshotCutoffTimestamp": "0",
+    "snapshotInProgress": false,
+    "snapshotReady": false
+  },
+  "consequenceChain": {
+    "manualDepositPlusExactAutopilotTransferEqualsWithdrawnPrincipal": true,
+    "actualAutopilotTransferBoundTo100000": true,
+    "fullPrincipalWithdrawalBoundTo1100000": true,
+    "deregistrationZeroPublicProofBoundToWithdrawal": true,
+    "tombstoneBoundToExactKmsProof": true,
+    "crossArtifactChainReconciled": true
+  },
+  "evidenceGeneration": {
+    "stateChangingTransactionsSent": 0,
+    "ethereumTransactionSigned": false,
+    "ownerUserDecryptSignatureUsed": true,
+    "publicDecryptUserSignatureRequired": false,
+    "runtimeJournalWritten": false,
+    "runtimeEvidenceWritten": true,
+    "deploymentEvidenceModified": false,
+    "remotePushPerformed": false
+  }
+}
