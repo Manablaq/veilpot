@@ -6,3 +6,12 @@ evidence/gate0/
 node_modules
 typechain-types
 pnpm-lock.yaml
+
+# Byte-preserved historical/provenance anchors.
+# Their identities are enforced by Git/SHA gates rather than rewritten by repository-wide Prettier.
+docs/AUTOPILOT_SOLIDITY_DESIGN.md
+docs/GATE_0_DECISION.md
+docs/GATE_0_SEPOLIA_VERIFICATION.md
+evidence/production-sepolia/autopilot-v3/runtime-smoke-journal.json
+packages/contracts/contracts/VeilpotAutopilotVault.sol
+packages/contracts/contracts/VeilpotPool.sol
