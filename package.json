@@ -2,7 +2,7 @@
   "name": "veilpot",
   "version": "0.0.0",
   "private": true,
-  "description": "Clean-room Gate 0 feasibility repository for the VeilDraw primitive",
+  "description": "Veilpot confidential prize-savings protocol with Zama FHE and Autopilot recurring savings",
   "license": "UNLICENSED",
   "packageManager": "pnpm@10.18.3",
   "engines": {
@@ -12,10 +12,10 @@
   "scripts": {
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "lint": "eslint . && pnpm --filter @veilpot/contracts lint:sol",
+    "lint": "pnpm --filter @veilpot/reference-model build && eslint . && pnpm --filter @veilpot/contracts lint:sol",
     "typecheck": "tsc -b",
     "compile": "pnpm --filter @veilpot/contracts compile",
-    "test": "pnpm --filter @veilpot/reference-model test && pnpm --filter @veilpot/contracts test",
+    "test": "pnpm --filter @veilpot/reference-model build && pnpm --filter @veilpot/reference-model test && pnpm --filter @veilpot/contracts test && pnpm --filter @veilpot/protocol-sdk test",
     "gate0": "pnpm --filter @veilpot/reference-model gate0 && pnpm --filter @veilpot/contracts test:gate0 && node --import=tsx scripts/generate-gate0-summary.ts",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm compile && pnpm test && pnpm gate0"
   },
