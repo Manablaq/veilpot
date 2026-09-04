@@ -765,6 +765,7 @@ export function AppShell() {
 
       <ActionSheet
         action={action}
+        authenticatedAddress={session.address}
         onClose={() => {
           setAction(null);
         }}

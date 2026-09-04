@@ -3280,6 +3280,25 @@ button:disabled {
   gap: 0.85rem;
 }
 
+.operator-approval-review .action-review-table strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.operator-verification-card {
+  margin-top: 0.75rem;
+}
+
+.operator-verification-card p {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.operator-verification-card .financial-secondary-button {
+  margin-top: 0.65rem;
+}
+
 .financial-transaction-status a {
   display: inline-flex;
   align-items: center;

@@ -58,11 +58,25 @@ import {
   type AutopilotPlanMetadataSnapshot,
   type PersistedAutopilotScheduleRecord,
 } from "@/lib/autopilot";
+import {
+  OPERATOR_APPROVAL_REVIEW_MAX_AGE_SECONDS,
+  createOperatorApprovalReview,
+  createOperatorApprovalSubmissionRecord,
+  operatorApprovalReviewInvalidReason,
+  operatorApprovalTransactionInvalidReason,
+  parseOperatorApprovalSubmissionRecord,
+  serializeOperatorApprovalSubmissionRecord,
+  subscribeToSetOperatorSubmitted,
+  transactionReceiptStatus,
+  type OperatorApprovalReview,
+  type OperatorApprovalSubmissionRecord,
+} from "@/lib/operator-approval";
 
 export type PreviewAction = "plan" | "deposit" | "withdraw" | null;
 
 interface ActionSheetProps {
   readonly action: PreviewAction;
+  readonly authenticatedAddress: Address;
   readonly onClose: () => void;
 }
 
@@ -82,7 +96,24 @@ interface ParticipantSnapshot {
 type TransactionPhase =
   | { readonly kind: "idle" }
   | { readonly kind: "wallet"; readonly label: string }
-  | { readonly kind: "included"; readonly label: string; readonly hash: Hex }
+  | {
+      readonly kind: "submitted";
+      readonly label: string;
+      readonly hash: Hex;
+      readonly message: string;
+    }
+  | {
+      readonly kind: "reverted";
+      readonly label: string;
+      readonly hash: Hex;
+      readonly message: string;
+    }
+  | {
+      readonly kind: "included";
+      readonly label: string;
+      readonly hash: Hex;
+      readonly warning?: string;
+    }
   | { readonly kind: "error"; readonly message: string };
 
 interface PlanDraft {
@@ -172,7 +203,7 @@ function autopilotPlanCanReceiveFunding(state: number): boolean {
   return state !== AUTOPILOT_PLAN_STATE_REVOKED && state !== AUTOPILOT_PLAN_STATE_COMPLETED;
 }
 
-export function ActionSheet({ action, onClose }: ActionSheetProps) {
+export function ActionSheet({ action, authenticatedAddress, onClose }: ActionSheetProps) {
   const connection = useConnection();
   const publicClient = usePublicClient({ chainId: VEILPOT_SEPOLIA_DEPLOYMENT.chainId });
   const writeMutation = useWriteContract();
@@ -194,6 +225,13 @@ export function ActionSheet({ action, onClose }: ActionSheetProps) {
   const [participantError, setParticipantError] = useState<string | null>(null);
   const [amount, setAmount] = useState("");
   const [transaction, setTransaction] = useState<TransactionPhase>({ kind: "idle" });
+  const [operatorReview, setOperatorReview] = useState<OperatorApprovalReview | null>(null);
+  const [operatorReviewNotice, setOperatorReviewNotice] = useState<string | null>(null);
+  const [operatorSubmission, setOperatorSubmission] =
+    useState<OperatorApprovalSubmissionRecord | null>(null);
+  const [operatorSubmissionLoadedKey, setOperatorSubmissionLoadedKey] = useState<string | null>(
+    null,
+  );
   const [plan, setPlan] = useState<PlanDraft>(INITIAL_PLAN);
   const [planReview, setPlanReview] = useState(false);
   const [createdPlan, setCreatedPlan] = useState<CreatedAutopilotPlan | null>(null);
@@ -214,8 +252,69 @@ export function ActionSheet({ action, onClose }: ActionSheetProps) {
   const address = connection.address;
   const tokenSymbol = metadataQuery.data?.symbol ?? "confidential token";
   const tokenDecimals = metadataQuery.data?.decimals;
+  const operatorSubmissionStorageKey = `veilpot:operator-approval:unresolved:v1:${String(
+    VEILPOT_SEPOLIA_DEPLOYMENT.chainId,
+  )}:${VEILPOT_SEPOLIA_DEPLOYMENT.confidentialToken.toLowerCase()}:${VEILPOT_SEPOLIA_DEPLOYMENT.pool.toLowerCase()}:${authenticatedAddress.toLowerCase()}`;
+
+  const preserveOperatorSubmission = useCallback(
+    (record: OperatorApprovalSubmissionRecord) => {
+      setOperatorSubmission(record);
+      try {
+        window.localStorage.setItem(
+          operatorSubmissionStorageKey,
+          serializeOperatorApprovalSubmissionRecord(record),
+        );
+      } catch {
+        // In-memory blocking remains active if browser storage is unavailable.
+      }
+    },
+    [operatorSubmissionStorageKey],
+  );
+
+  const clearOperatorSubmission = useCallback(() => {
+    setOperatorSubmission(null);
+    try {
+      window.localStorage.removeItem(operatorSubmissionStorageKey);
+    } catch {
+      // In-memory state has already been cleared after conclusive reconciliation.
+    }
+  }, [operatorSubmissionStorageKey]);
 
   useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(operatorSubmissionStorageKey);
+      if (stored === null) {
+        setOperatorSubmission(null);
+      } else {
+        const parsed = parseOperatorApprovalSubmissionRecord(stored);
+        const matchesCurrentContext =
+          parsed !== null &&
+          parsed.holder.toLowerCase() === authenticatedAddress.toLowerCase() &&
+          parsed.token.toLowerCase() ===
+            VEILPOT_SEPOLIA_DEPLOYMENT.confidentialToken.toLowerCase() &&
+          parsed.operator.toLowerCase() === VEILPOT_SEPOLIA_DEPLOYMENT.pool.toLowerCase();
+
+        if (matchesCurrentContext) {
+          setOperatorSubmission(parsed);
+        } else {
+          window.localStorage.removeItem(operatorSubmissionStorageKey);
+          setOperatorSubmission(null);
+        }
+      }
+    } catch {
+      setOperatorSubmission(null);
+    } finally {
+      setOperatorSubmissionLoadedKey(operatorSubmissionStorageKey);
+    }
+  }, [authenticatedAddress, operatorSubmissionStorageKey]);
+
+  const operatorSubmissionStorageReady =
+    operatorSubmissionLoadedKey === operatorSubmissionStorageKey;
+
+  useEffect(() => {
+    setOperatorReview(null);
+    setOperatorReviewNotice(null);
+
     if (action !== null) {
       setLocalAction(action);
       setAmount("");
@@ -239,6 +338,8 @@ export function ActionSheet({ action, onClose }: ActionSheetProps) {
   }, [action]);
 
   useEffect(() => {
+    setOperatorReview(null);
+    setOperatorReviewNotice(null);
     setDiscoveredPlans([]);
     setAutopilotDiscoveryError(null);
     setAutopilotScheduleWarning(null);
@@ -250,18 +351,14 @@ export function ActionSheet({ action, onClose }: ActionSheetProps) {
     setFundingWarning(null);
     setCreatedPlan(null);
     setPlanPersistenceWarning(null);
-  }, [address, connection.chainId]);
+  }, [address, authenticatedAddress, connection.chainId]);
 
-  const refreshParticipant = useCallback(async () => {
-    if (address === undefined || publicClient === undefined) {
-      setParticipant(null);
-      return;
-    }
+  const loadParticipant = useCallback(
+    async (holder: Address): Promise<ParticipantSnapshot | null> => {
+      if (publicClient === undefined) {
+        throw new Error("The Ethereum Sepolia public client is unavailable.");
+      }
 
-    setParticipantLoading(true);
-    setParticipantError(null);
-
-    try {
       const maximum = await publicClient.readContract({
         address: VEILPOT_SEPOLIA_DEPLOYMENT.pool,
         abi: VEILPOT_POOL_ABI,
@@ -303,7 +400,7 @@ export function ActionSheet({ action, onClose }: ActionSheetProps) {
           }),
         );
 
-        const match = rows.find(({ row }) => row[1].toLowerCase() === address.toLowerCase());
+        const match = rows.find(({ row }) => row[1].toLowerCase() === holder.toLowerCase());
 
         if (match !== undefined) {
           found = {
@@ -321,13 +418,28 @@ export function ActionSheet({ action, onClose }: ActionSheetProps) {
         }
       }
 
-      setParticipant(found);
+      return found;
+    },
+    [publicClient],
+  );
+
+  const refreshParticipant = useCallback(async () => {
+    if (address === undefined) {
+      setParticipant(null);
+      return;
+    }
+
+    setParticipantLoading(true);
+    setParticipantError(null);
+
+    try {
+      setParticipant(await loadParticipant(address));
     } catch (error: unknown) {
       setParticipantError(errorMessage(error));
     } finally {
       setParticipantLoading(false);
     }
-  }, [address, publicClient]);
+  }, [address, loadParticipant]);
 
   useEffect(() => {
     if (action !== null) {
@@ -408,41 +520,584 @@ export function ActionSheet({ action, onClose }: ActionSheetProps) {
     }
   }, [canUseWallet, publicClient, refreshParticipant, writeMutation]);
 
-  const approvePoolOperator = useCallback(async () => {
-    if (address === undefined) return;
+  const reviewPoolOperator = useCallback(async () => {
+    setOperatorReview(null);
+    setOperatorReviewNotice(null);
+    setTransaction({ kind: "idle" });
 
-    setTransaction({
-      kind: "wallet",
-      label: "Approve a short-lived Pool operator permission",
-    });
+    if (!operatorSubmissionStorageReady) {
+      setTransaction({
+        kind: "error",
+        message:
+          "Veilpot is still checking for a previously submitted Pool approval. No new review was prepared.",
+      });
+      return;
+    }
+
+    if (operatorSubmission !== null) {
+      setTransaction({
+        kind: "submitted",
+        label: "A previous Pool operator transaction still requires exact verification",
+        hash: operatorSubmission.hash,
+        message:
+          "Veilpot preserved the expected transaction identity. Verify this exact hash before preparing any later approval.",
+      });
+      return;
+    }
+
+    if (connection.status !== "connected") {
+      setTransaction({
+        kind: "error",
+        message: "Connect the wallet that owns the authenticated Veilpot session before review.",
+      });
+      return;
+    }
+
+    const connectedAddress = connection.address;
+    if (connectedAddress.toLowerCase() !== authenticatedAddress.toLowerCase()) {
+      setTransaction({
+        kind: "error",
+        message: "The connected wallet does not own the authenticated Veilpot session.",
+      });
+      return;
+    }
+
+    if (connection.chainId !== VEILPOT_SEPOLIA_DEPLOYMENT.chainId || publicClient === undefined) {
+      setTransaction({
+        kind: "error",
+        message: "Switch the authenticated wallet to Ethereum Sepolia before review.",
+      });
+      return;
+    }
+
+    setParticipantLoading(true);
+    setParticipantError(null);
 
     try {
-      const until = Math.floor(Date.now() / 1000) + 30 * 60;
-      const result = await operatorMutation.mutateAsync({
+      const [liveParticipant, operatorResult] = await Promise.all([
+        loadParticipant(connectedAddress),
+        operatorQuery.refetch({ throwOnError: true }),
+      ]);
+
+      setParticipant(liveParticipant);
+
+      if (
+        liveParticipant?.state !== PARTICIPANT_STATE.RESERVED ||
+        liveParticipant.owner.toLowerCase() !== connectedAddress.toLowerCase()
+      ) {
+        throw new Error(
+          "A live RESERVED participant registration owned by the authenticated wallet is required.",
+        );
+      }
+
+      const nowSeconds = Math.floor(Date.now() / 1000);
+      if (BigInt(nowSeconds) >= liveParticipant.reservationExpiry) {
+        throw new Error("The RESERVED participant registration has expired.");
+      }
+
+      if (operatorResult.data === true) {
+        setOperatorReviewNotice(
+          "The Pool is already an active operator. No new approval was prepared or requested.",
+        );
+        return;
+      }
+
+      if (operatorResult.data !== false) {
+        throw new Error("The live Pool operator status could not be verified.");
+      }
+
+      setOperatorReview(
+        createOperatorApprovalReview({
+          holder: connectedAddress,
+          token: VEILPOT_SEPOLIA_DEPLOYMENT.confidentialToken,
+          operator: VEILPOT_SEPOLIA_DEPLOYMENT.pool,
+          chainId: connection.chainId,
+          participant: liveParticipant,
+          nowSeconds,
+        }),
+      );
+    } catch (error: unknown) {
+      setParticipantError(errorMessage(error));
+      setTransaction({ kind: "error", message: errorMessage(error) });
+    } finally {
+      setParticipantLoading(false);
+    }
+  }, [
+    authenticatedAddress,
+    connection,
+    loadParticipant,
+    operatorQuery,
+    operatorSubmission,
+    operatorSubmissionStorageReady,
+    publicClient,
+  ]);
+
+  const openPoolOperatorWalletReview = useCallback(async () => {
+    const review = operatorReview;
+
+    if (!operatorSubmissionStorageReady) {
+      setOperatorReview(null);
+      setTransaction({
+        kind: "error",
+        message:
+          "Veilpot has not finished checking preserved Pool approval state. No wallet request was opened.",
+      });
+      return;
+    }
+
+    if (operatorSubmission !== null) {
+      setOperatorReview(null);
+      setTransaction({
+        kind: "submitted",
+        label: "A previous Pool operator transaction still requires exact verification",
+        hash: operatorSubmission.hash,
+        message:
+          "Verify the preserved transaction before any later approval. No wallet request was opened.",
+      });
+      return;
+    }
+
+    if (review === null) {
+      setTransaction({
+        kind: "error",
+        message: "Prepare and inspect a fresh Pool operator review before opening the wallet.",
+      });
+      return;
+    }
+
+    if (connection.status !== "connected") {
+      setOperatorReview(null);
+      setTransaction({
+        kind: "error",
+        message: "The wallet connection changed. Prepare a new review.",
+      });
+      return;
+    }
+
+    const connectedAddress = connection.address;
+    if (
+      connectedAddress.toLowerCase() !== authenticatedAddress.toLowerCase() ||
+      connection.chainId !== VEILPOT_SEPOLIA_DEPLOYMENT.chainId ||
+      publicClient === undefined
+    ) {
+      setOperatorReview(null);
+      setTransaction({
+        kind: "error",
+        message: "The authenticated wallet context changed. Prepare a new review.",
+      });
+      return;
+    }
+
+    const submission: { record: OperatorApprovalSubmissionRecord | null } = {
+      record: null,
+    };
+    let unsubscribeSubmitted: (() => void) | null = null;
+
+    setParticipantLoading(true);
+    setParticipantError(null);
+
+    try {
+      const [liveParticipant, operatorResult] = await Promise.all([
+        loadParticipant(connectedAddress),
+        operatorQuery.refetch({ throwOnError: true }),
+      ]);
+
+      setParticipant(liveParticipant);
+
+      if (operatorResult.data === true) {
+        setOperatorReview(null);
+        setOperatorReviewNotice(
+          "The Pool became an active operator before wallet review. No transaction was requested.",
+        );
+        setTransaction({ kind: "idle" });
+        return;
+      }
+
+      if (operatorResult.data !== false) {
+        throw new Error("The live Pool operator status could not be verified.");
+      }
+
+      if (
+        liveParticipant?.state !== PARTICIPANT_STATE.RESERVED ||
+        liveParticipant.owner.toLowerCase() !== connectedAddress.toLowerCase()
+      ) {
+        setOperatorReview(null);
+        throw new Error("The participant is no longer the reviewed RESERVED registration.");
+      }
+
+      const invalidReason = operatorApprovalReviewInvalidReason(review, {
+        holder: connectedAddress,
+        token: VEILPOT_SEPOLIA_DEPLOYMENT.confidentialToken,
         operator: VEILPOT_SEPOLIA_DEPLOYMENT.pool,
-        until,
+        chainId: connection.chainId,
+        participant: liveParticipant,
+        nowSeconds: Math.floor(Date.now() / 1000),
+      });
+
+      if (invalidReason !== null) {
+        setOperatorReview(null);
+        throw new Error(`${invalidReason} No replacement approval was generated.`);
+      }
+
+      unsubscribeSubmitted = subscribeToSetOperatorSubmitted((event) => {
+        if (
+          event.tokenAddress !== undefined &&
+          event.tokenAddress.toLowerCase() !== review.token.toLowerCase()
+        ) {
+          return;
+        }
+
+        const record = createOperatorApprovalSubmissionRecord(review, event.txHash);
+        submission.record = record;
+        preserveOperatorSubmission(record);
+        setTransaction({
+          kind: "submitted",
+          label: "Pool operator transaction submitted; awaiting a conclusive receipt",
+          hash: record.hash,
+          message:
+            "The exact reviewed transaction identity is preserved. Do not submit another approval unless this record is reconciled.",
+        });
       });
 
       setTransaction({
-        kind: "included",
-        label: "Pool operator permission confirmed",
-        hash: result.txHash,
+        kind: "wallet",
+        label: "Review the frozen Pool operator approval in your wallet",
       });
+
+      const result = await operatorMutation.mutateAsync({
+        operator: review.operator,
+        until: review.until,
+      });
+
+      if (
+        submission.record !== null &&
+        submission.record.hash.toLowerCase() !== result.txHash.toLowerCase()
+      ) {
+        throw new Error("The SDK returned a different hash from its submitted-transaction event.");
+      }
+
+      if (submission.record === null) {
+        submission.record = createOperatorApprovalSubmissionRecord(review, result.txHash);
+        preserveOperatorSubmission(submission.record);
+      }
+
+      const record = submission.record;
+      let receiptStatus = transactionReceiptStatus(result.receipt);
+
+      if (receiptStatus === "unknown") {
+        const receipt = await publicClient.getTransactionReceipt({ hash: record.hash });
+        receiptStatus = transactionReceiptStatus(receipt);
+      }
+
+      setOperatorReview(null);
+
+      if (receiptStatus === "reverted") {
+        clearOperatorSubmission();
+        setTransaction({
+          kind: "reverted",
+          label: "Pool operator transaction reverted",
+          hash: record.hash,
+          message:
+            "The exact transaction was mined with failure. A future approval still requires a new explicit review; Veilpot did not retry.",
+        });
+        return;
+      }
+
+      if (receiptStatus !== "success") {
+        throw new Error("A successful transaction receipt could not be verified.");
+      }
+
+      const minedTransaction = await publicClient.getTransaction({ hash: record.hash });
+      const transactionInvalidReason = operatorApprovalTransactionInvalidReason(record, {
+        from: minedTransaction.from,
+        to: minedTransaction.to,
+        input: minedTransaction.input,
+      });
+
+      if (transactionInvalidReason !== null) {
+        setTransaction({
+          kind: "submitted",
+          label: "The submitted Pool operator transaction failed exact identity verification",
+          hash: record.hash,
+          message: `${transactionInvalidReason} The transaction remains blocked from retry until manually resolved.`,
+        });
+        return;
+      }
+
+      setTransaction({
+        kind: "included",
+        label: "Exact reviewed Pool operator transaction included successfully",
+        hash: record.hash,
+      });
+
       try {
-        await operatorQuery.refetch();
+        const reconciled = await operatorQuery.refetch({ throwOnError: true });
+
+        if (reconciled.data === true) {
+          clearOperatorSubmission();
+          setOperatorReviewNotice(
+            "The exact reviewed transaction and live active Pool operator state were reconciled.",
+          );
+          return;
+        }
+
+        const nowSeconds = Math.floor(Date.now() / 1000);
+        if (nowSeconds >= record.until) {
+          clearOperatorSubmission();
+          setOperatorReviewNotice(
+            "The exact reviewed transaction was confirmed and has already expired. A later approval requires a completely new review.",
+          );
+          setTransaction({
+            kind: "included",
+            label: "Exact reviewed Pool operator transaction included; approval window has expired",
+            hash: record.hash,
+          });
+          return;
+        }
+
+        setTransaction({
+          kind: "included",
+          label: "Exact reviewed Pool operator transaction included successfully",
+          hash: record.hash,
+          warning:
+            "The approval is not live even though the exact expected transaction mined before its expiry. Keep this exact record blocked and do not resubmit automatically.",
+        });
       } catch (error: unknown) {
         setTransaction({
           kind: "included",
-          label:
-            "Pool operator approval included - operator-status refresh needs review. Do not resubmit it automatically. " +
+          label: "Exact reviewed Pool operator transaction included successfully",
+          hash: record.hash,
+          warning:
+            "Operator-state reconciliation failed after exact transaction inclusion. The preserved record remains blocked from retry. " +
             errorMessage(error),
-          hash: result.txHash,
         });
       }
     } catch (error: unknown) {
-      setTransaction({ kind: "error", message: errorMessage(error) });
+      if (submission.record !== null) {
+        setOperatorReview(null);
+        setTransaction({
+          kind: "submitted",
+          label: "Pool operator transaction may have been submitted or mined",
+          hash: submission.record.hash,
+          message:
+            "Receipt or exact-state reconciliation failed after the transaction hash became available. Verify the preserved transaction before any retry. " +
+            errorMessage(error),
+        });
+      } else {
+        setTransaction({ kind: "error", message: errorMessage(error) });
+      }
+    } finally {
+      unsubscribeSubmitted?.();
+      setParticipantLoading(false);
     }
-  }, [address, operatorMutation, operatorQuery]);
+  }, [
+    authenticatedAddress,
+    clearOperatorSubmission,
+    connection,
+    loadParticipant,
+    operatorMutation,
+    operatorQuery,
+    operatorReview,
+    operatorSubmission,
+    operatorSubmissionStorageReady,
+    preserveOperatorSubmission,
+    publicClient,
+  ]);
+
+  const verifyOperatorTransaction = useCallback(async () => {
+    const record = operatorSubmission;
+    if (!operatorSubmissionStorageReady || record === null) return;
+
+    if (connection.status !== "connected") {
+      setTransaction({
+        kind: "submitted",
+        label: "The preserved Pool operator transaction is still blocked",
+        hash: record.hash,
+        message:
+          "Reconnect the authenticated wallet on Ethereum Sepolia to verify this exact transaction. No wallet request was opened.",
+      });
+      return;
+    }
+
+    const connectedAddress = connection.address;
+    if (
+      connectedAddress.toLowerCase() !== authenticatedAddress.toLowerCase() ||
+      connectedAddress.toLowerCase() !== record.holder.toLowerCase() ||
+      connection.chainId !== record.chainId ||
+      record.token.toLowerCase() !== VEILPOT_SEPOLIA_DEPLOYMENT.confidentialToken.toLowerCase() ||
+      record.operator.toLowerCase() !== VEILPOT_SEPOLIA_DEPLOYMENT.pool.toLowerCase() ||
+      publicClient === undefined
+    ) {
+      setTransaction({
+        kind: "submitted",
+        label: "The preserved Pool operator transaction is still blocked",
+        hash: record.hash,
+        message:
+          "The authenticated wallet or deployment context does not match the preserved transaction. No wallet request was opened.",
+      });
+      return;
+    }
+
+    try {
+      const [receipt, minedTransaction] = await Promise.all([
+        publicClient.getTransactionReceipt({ hash: record.hash }),
+        publicClient.getTransaction({ hash: record.hash }),
+      ]);
+      const receiptStatus = transactionReceiptStatus(receipt);
+
+      const transactionInvalidReason = operatorApprovalTransactionInvalidReason(record, {
+        from: minedTransaction.from,
+        to: minedTransaction.to,
+        input: minedTransaction.input,
+      });
+
+      if (transactionInvalidReason !== null) {
+        setTransaction({
+          kind: "submitted",
+          label: "The preserved transaction failed exact identity verification",
+          hash: record.hash,
+          message: `${transactionInvalidReason} Keep this record blocked and do not submit another approval.`,
+        });
+        return;
+      }
+
+      if (receiptStatus === "reverted") {
+        clearOperatorSubmission();
+        setTransaction({
+          kind: "reverted",
+          label: "The exact Pool operator transaction was verified as reverted",
+          hash: record.hash,
+          message:
+            "The mined receipt reported failure. A future approval still requires a new explicit review.",
+        });
+        return;
+      }
+
+      if (receiptStatus !== "success") {
+        throw new Error("The receipt did not report a recognized success or reverted status.");
+      }
+
+      const operatorResult = await operatorQuery.refetch({ throwOnError: true });
+      if (operatorResult.data === true) {
+        clearOperatorSubmission();
+        setOperatorReview(null);
+        setOperatorReviewNotice(
+          "The exact hash, transaction identity, successful receipt, and active Pool operator state were reconciled.",
+        );
+        setTransaction({
+          kind: "included",
+          label: "Exact Pool operator transaction fully reconciled",
+          hash: record.hash,
+        });
+        return;
+      }
+
+      if (Math.floor(Date.now() / 1000) >= record.until) {
+        clearOperatorSubmission();
+        setOperatorReview(null);
+        setOperatorReviewNotice(
+          "The exact transaction was verified as successfully mined, and its reviewed approval window has expired. A future approval requires a new review.",
+        );
+        setTransaction({
+          kind: "included",
+          label: "Exact Pool operator transaction verified; approval window expired",
+          hash: record.hash,
+        });
+        return;
+      }
+
+      setTransaction({
+        kind: "included",
+        label: "Exact Pool operator transaction has a successful matching receipt",
+        hash: record.hash,
+        warning:
+          "The operator state is still not active before the reviewed expiry. Keep this record blocked and do not submit another approval automatically.",
+      });
+    } catch (error: unknown) {
+      setTransaction({
+        kind: "submitted",
+        label: "The Pool operator transaction still requires exact verification",
+        hash: record.hash,
+        message:
+          "No conclusive exact reconciliation was obtained. The transaction may have been submitted or mined; do not retry. " +
+          errorMessage(error),
+      });
+    }
+  }, [
+    authenticatedAddress,
+    clearOperatorSubmission,
+    connection,
+    operatorQuery,
+    operatorSubmission,
+    operatorSubmissionStorageReady,
+    publicClient,
+  ]);
+
+  useEffect(() => {
+    if (operatorReview === null) return;
+
+    if (operatorSubmission !== null) {
+      setOperatorReview(null);
+      setOperatorReviewNotice(
+        "A preserved Pool operator transaction must be reconciled before any new review.",
+      );
+      return;
+    }
+
+    if (localAction !== "deposit") {
+      setOperatorReview(null);
+      setOperatorReviewNotice("The Pool approval review was closed. Prepare a new review.");
+      return;
+    }
+
+    if (operatorQuery.data === true) {
+      setOperatorReview(null);
+      setOperatorReviewNotice(
+        "The Pool is now an active operator. The prepared approval was invalidated.",
+      );
+      return;
+    }
+
+    const invalidReason = operatorApprovalReviewInvalidReason(operatorReview, {
+      holder: address,
+      token: VEILPOT_SEPOLIA_DEPLOYMENT.confidentialToken,
+      operator: VEILPOT_SEPOLIA_DEPLOYMENT.pool,
+      chainId: connection.chainId,
+      participant,
+      nowSeconds: Math.floor(Date.now() / 1000),
+    });
+
+    if (invalidReason !== null) {
+      setOperatorReview(null);
+      setOperatorReviewNotice(`${invalidReason} Prepare a new review.`);
+    }
+  }, [
+    address,
+    connection.chainId,
+    localAction,
+    operatorQuery.data,
+    operatorReview,
+    operatorSubmission,
+    participant,
+  ]);
+
+  useEffect(() => {
+    if (operatorReview === null) return;
+
+    const staleAt = (operatorReview.preparedAt + OPERATOR_APPROVAL_REVIEW_MAX_AGE_SECONDS) * 1000;
+    const delay = Math.max(0, staleAt - Date.now());
+
+    const timeout = window.setTimeout(() => {
+      setOperatorReview(null);
+      setOperatorReviewNotice(
+        "The Pool approval review became stale. No replacement expiry was generated; prepare a new review.",
+      );
+    }, delay);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [operatorReview]);
 
   const submitRegistrationDeposit = useCallback(async () => {
     if (
@@ -1943,7 +2598,7 @@ export function ActionSheet({ action, onClose }: ActionSheetProps) {
 
                 <div className="financial-step-card">
                   <span className="financial-step-icon">
-                    {operatorQuery.data === true ? (
+                    {operatorSubmission === null && operatorQuery.data === true ? (
                       <CircleCheck size={18} />
                     ) : (
                       <CircleDashed size={18} />
@@ -1952,23 +2607,147 @@ export function ActionSheet({ action, onClose }: ActionSheetProps) {
                   <div>
                     <strong>2. Allow the Pool to pull this confidential deposit</strong>
                     <p>
-                      The permission is explicit and short-lived. Veilpot requests a 30-minute
-                      operator window, not an indefinite wallet approval.
+                      The permission is explicit and short-lived. Veilpot prepares one exact
+                      30-minute approval for inspection before any wallet request.
                     </p>
-                    {operatorQuery.data === true ? (
+
+                    {!operatorSubmissionStorageReady ? (
+                      <p className="financial-field-help">
+                        Checking for any previously submitted Pool approval…
+                      </p>
+                    ) : operatorSubmission !== null ? (
+                      <div className="financial-state-card warning operator-verification-card">
+                        <ShieldCheck size={18} />
+                        <div>
+                          <strong>
+                            Exact transaction must be verified before any later approval
+                          </strong>
+                          <p>{operatorSubmission.hash}</p>
+                          <button
+                            className="financial-secondary-button"
+                            type="button"
+                            disabled={participantLoading || operatorMutation.isPending}
+                            onClick={() => {
+                              void verifyOperatorTransaction();
+                            }}
+                          >
+                            <RefreshCw size={15} /> Verify exact transaction
+                          </button>
+                        </div>
+                      </div>
+                    ) : operatorQuery.data === true ? (
                       <span className="financial-inline-success">Pool operator is ready</span>
-                    ) : (
+                    ) : operatorReview === null ? (
                       <button
                         className="financial-secondary-button"
                         type="button"
-                        disabled={operatorMutation.isPending}
+                        disabled={
+                          operatorMutation.isPending ||
+                          participantLoading ||
+                          transaction.kind === "wallet" ||
+                          transaction.kind === "submitted"
+                        }
                         onClick={() => {
-                          void approvePoolOperator();
+                          void reviewPoolOperator();
                         }}
                       >
-                        Approve Pool for 30 minutes <ArrowRight size={16} />
+                        Review Pool approval <ArrowRight size={16} />
                       </button>
+                    ) : (
+                      <div className="financial-plan-review operator-approval-review">
+                        <div
+                          className="action-review-table"
+                          aria-label="Exact Pool approval review"
+                        >
+                          <div>
+                            <span>Holder</span>
+                            <strong>{operatorReview.holder}</strong>
+                          </div>
+                          <div>
+                            <span>Confidential token · testnet mock</span>
+                            <strong>{operatorReview.token}</strong>
+                          </div>
+                          <div>
+                            <span>Operator / Pool</span>
+                            <strong>{operatorReview.operator}</strong>
+                          </div>
+                          <div>
+                            <span>Participant slot</span>
+                            <strong>{operatorReview.participant.slotIndex.toString()}</strong>
+                          </div>
+                          <div>
+                            <span>Registration version</span>
+                            <strong>
+                              {operatorReview.participant.registrationVersion.toString()}
+                            </strong>
+                          </div>
+                          <div>
+                            <span>Reservation nonce</span>
+                            <strong>
+                              {operatorReview.participant.reservationNonce.toString()}
+                            </strong>
+                          </div>
+                          <div>
+                            <span>Function</span>
+                            <strong>{operatorReview.functionSignature}</strong>
+                          </div>
+                          <div>
+                            <span>Expected selector</span>
+                            <strong>{operatorReview.selector}</strong>
+                          </div>
+                          <div>
+                            <span>Exact frozen until · Unix</span>
+                            <strong>{operatorReview.until}</strong>
+                          </div>
+                          <div>
+                            <span>Exact frozen until · UTC</span>
+                            <strong>{operatorReview.untilUtc}</strong>
+                          </div>
+                          <div>
+                            <span>Duration</span>
+                            <strong>{operatorReview.durationSeconds / 60} minutes</strong>
+                          </div>
+                          <div>
+                            <span>Network</span>
+                            <strong>{operatorReview.network}</strong>
+                          </div>
+                          <div>
+                            <span>chainId</span>
+                            <strong>{operatorReview.chainId}</strong>
+                          </div>
+                          <div>
+                            <span>Exact expected calldata</span>
+                            <strong>{operatorReview.calldata}</strong>
+                          </div>
+                        </div>
+
+                        <p className="financial-field-help">
+                          This review is usable for five minutes. Opening the wallet re-reads the
+                          RESERVED registration and operator state. It never replaces the displayed
+                          expiry or calldata.
+                        </p>
+
+                        <button
+                          className="financial-primary-button"
+                          type="button"
+                          disabled={
+                            operatorMutation.isPending ||
+                            participantLoading ||
+                            transaction.kind === "wallet" ||
+                            transaction.kind === "submitted"
+                          }
+                          onClick={() => {
+                            void openPoolOperatorWalletReview();
+                          }}
+                        >
+                          Open wallet review <LockKeyhole size={15} />
+                        </button>
+                      </div>
                     )}
+
+                    {operatorReviewNotice !== null ? (
+                      <p className="financial-field-help">{operatorReviewNotice}</p>
+                    ) : null}
                   </div>
                 </div>
 
@@ -2139,7 +2918,9 @@ export function ActionSheet({ action, onClose }: ActionSheetProps) {
         {transaction.kind !== "idle" ? (
           <div
             className={
-              transaction.kind === "error"
+              transaction.kind === "error" ||
+              transaction.kind === "submitted" ||
+              transaction.kind === "reverted"
                 ? "financial-transaction-status error"
                 : transaction.kind === "included"
                   ? "financial-transaction-status success"
@@ -2160,20 +2941,38 @@ export function ActionSheet({ action, onClose }: ActionSheetProps) {
                   ? transaction.label
                   : transaction.kind === "included"
                     ? transaction.label
-                    : "Action stopped safely"}
+                    : transaction.kind === "submitted" || transaction.kind === "reverted"
+                      ? transaction.label
+                      : "Action stopped safely"}
               </strong>
               {transaction.kind === "included" ? (
-                <a
-                  href={`https://sepolia.etherscan.io/tx/${transaction.hash}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  View included transaction <ExternalLink size={13} />
-                </a>
+                <>
+                  {transaction.warning !== undefined ? <p>{transaction.warning}</p> : null}
+                  <a
+                    href={`https://sepolia.etherscan.io/tx/${transaction.hash}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    View included transaction <ExternalLink size={13} />
+                  </a>
+                </>
+              ) : transaction.kind === "submitted" || transaction.kind === "reverted" ? (
+                <>
+                  <p>{transaction.message}</p>
+                  <a
+                    href={`https://sepolia.etherscan.io/tx/${transaction.hash}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Verify exact transaction hash <ExternalLink size={13} />
+                  </a>
+                </>
               ) : transaction.kind === "error" ? (
                 <p>{transaction.message}</p>
               ) : (
-                <p>Confirm only if the wallet details match what Veilpot showed you.</p>
+                <p>
+                  Confirm only if the wallet details match the frozen review Veilpot showed you.
+                </p>
               )}
             </div>
           </div>

@@ -2626,3 +2626,896 @@ The following are not yet recorded as passed:
 
 These items must not be described as completed until their corresponding gate has passed and has
 been added to this ledger.
+
+## Pool operator approval explicit-review safety repair — STATIC PASS
+
+The frontend Pool operator-approval path was replaced with an explicit two-step review/signing
+boundary and statically validated before any new operator transaction.
+
+Pre-repair live read-only state used to define this safety checkpoint:
+
+- Ethereum Sepolia chain ID: `11155111`
+- pinned snapshot block: `11632957`
+- pinned snapshot hash:
+  `0x17372d78941c3a04f5cc940d3cbac78078bbc2766be8b7c19006614ecda11dfa`
+- pinned snapshot time: `2026-09-04T10:45:24.000Z`
+- owner: `0x1f87Ae197af539253978d435aD45cCf28Fb95024`
+- Pool: `0x2029D8b7AE6Abe7dAa0C2A71E960839171a34601`
+- confidential token testnet mock:
+  `0x4E7B06D78965594eB5EF5414c357ca21E1554491`
+- participant slot: `1`
+- participant state: `RESERVED`
+- registration version: `1`
+- reservation nonce: `3`
+- reservation expiry: `2026-09-05T09:17:36.000Z`
+- bond held: `true`
+- `nextReservationNonce`: `3`
+- owner `nextDepositNonce`: `2`
+- owner `pendingBondRefund`: `0`
+- `activeParticipantCount`: `0`
+- Pool operator active at snapshot: `false`
+- owner account nonce latest/pending: `518 / 518`
+- confidential token symbol: `cUSDTMock`
+- confidential token decimals: `6`
+- confidential balance handle existed, but the plaintext balance was **not decrypted**
+- deposit amount sufficiency remained unknown by design
+- deposit authorization remained **false**
+
+Operator-review repair:
+
+- the old one-click operator path was removed
+- the first action is now `Review Pool approval`
+- review performs fresh authenticated-wallet, Sepolia, participant, reservation-expiry, and
+  `isOperator(holder, Pool)` checks
+- an already-active operator causes the new approval path to stop without opening the wallet
+- one exact 30-minute `until` value is generated during review and frozen
+- `until` is not recomputed by the wallet-opening callback
+- exact `setOperator(address,uint48)` calldata is derived with viem
+- expected selector is checked as `0xd4febb96`
+- the review displays the full holder, confidential-token address, Pool/operator address,
+  participant binding, function, selector, Unix expiry, UTC expiry, chain ID, and expected calldata
+- a review is invalidated by wallet/network/participant/deployment changes
+- a review becomes stale after five minutes and fails closed without silently generating a
+  replacement expiry
+- `Open wallet review` is a distinct second user action
+- all critical invariants are re-read before that second action may invoke the Zama mutation
+
+Submitted-transaction / retry safety:
+
+- installed Zama SDK `3.5.1` emits `setOperator:submitted` after transaction broadcast and before
+  receipt waiting
+- the frontend captures that submitted event
+- once a hash is available, Veilpot preserves the expected public transaction identity:
+  hash, holder, confidential token, Pool/operator, frozen expiry, calldata, and chain ID
+- unresolved submitted state is persisted so closing/reopening the action sheet or reloading the
+  browser cannot silently make the approval retryable
+- exact reconciliation verifies transaction sender, target token, calldata, and receipt status
+- a transaction hash or reconciliation failure never triggers automatic resubmission
+- confirmed inclusion followed by operator-state refresh failure remains represented as an included
+  transaction with an explicit warning
+- an exact reverted receipt is represented as reverted and is not silently retried
+
+Static validation environment:
+
+- Node.js: `v22.23.2`
+- pnpm: `10.18.3`
+- Next.js: `16.3.4`
+
+Static validation result:
+
+- Prettier: **PASS**
+- focused operator-approval tests: **8/8 PASS**
+- TypeScript: **PASS**
+- ESLint: **PASS**
+- Next.js production build: **PASS**
+- `git diff --check`: **PASS**
+- old one-click operator-path assertion: **PASS / absent**
+- required explicit-review path assertions: **PASS**
+- frozen Solidity boundary: **unchanged**
+- frozen protocol SDK boundary: **unchanged**
+- frozen evidence boundary: **unchanged**
+
+Validated frontend hashes:
+
+- `apps/web/components/action-sheet.tsx`:
+  `242e0af71f22aed9768ec884e83877473a5bd98b0363a029f489c6bae9880ee4`
+- `apps/web/components/app-shell.tsx`:
+  `f41c0050ed4e0252291f6e345c7b800c4e1135885745a91abb6da573b67b973b`
+- `apps/web/lib/zama.ts`:
+  `212d50775343b7ddcbcd000139c316843476223b8e118502c235fc40dc1ab0a0`
+- `apps/web/app/globals.css`:
+  `8959c0bdd2305e1cf6e1f964d979cb86ff455562b977ddf6e0f8eae61aaa615e`
+- `apps/web/lib/operator-approval.ts`:
+  `4cf92ede20079e5c1ec88c757ce6e0c445685c0fe375021708c9222227f9fe37`
+- `apps/web/lib/operator-approval.test.ts`:
+  `e98ff2c11f637a720f0f962b709f85581acb5553b23c253052ac99ad4bbe94f0`
+
+Authorization boundary after this static PASS:
+
+- historical nonce-`517` operator approval must not be retried
+- the existing reservation transaction must not be retried
+- no new operator transaction has been authorized by this static checkpoint
+- no wallet review has been authorized by this static checkpoint
+- no operator signature has been authorized by this static checkpoint
+- no deposit amount has been selected
+- no deposit encryption has been authorized
+- no deposit transaction has been authorized
+- no threshold/public consequence decryption has been authorized
+- a fresh signer-free Sepolia state snapshot is required after this ledger checkpoint and before any
+  possible wallet review
+
+Safety result:
+
+- transactions sent by this repair/validation: **0**
+- wallet approvals requested: **0**
+- encryptions performed: **0**
+- decryptions performed: **0**
+- deposits performed: **0**
+- Solidity modified: **no**
+- frozen protocol SDK modified: **no**
+- frozen evidence modified: **no**
+- commit created: **no**
+- push performed: **no**
+
+## Fresh Pool-operator read-only Sepolia revalidation — PASS
+
+A fresh signer-free/read-only Ethereum Sepolia probe was executed after the explicit-review
+operator-safety repair and its static validation checkpoint.
+
+Probe mode and execution boundary:
+
+- mode: `READ_ONLY_NO_WALLET_NO_SIGNER_NO_ENCRYPTION_NO_DECRYPTION`
+- RPC source: public Sepolia fallback
+- wallet opened: **no**
+- signer used: **no**
+- transaction path: **none**
+- encryption: **none**
+- decryption: **none**
+- confidential plaintext balance revealed: **no**
+- repository source modified by the probe: **no**
+
+Pinned Sepolia snapshot:
+
+- chain ID: `11155111`
+- block number: `11633273`
+- block hash:
+  `0x742c5488da2bf79f12b71c57cef7ea5c3fdc5b8bac7ae93f022119b9f2366bbb`
+- block timestamp: `1788522732`
+- block timestamp UTC: `2026-09-04T11:52:12.000Z`
+- pinned block hash reconfirmed unchanged before accepting the result: **yes**
+
+Deployment identity:
+
+- owner: `0x1f87Ae197af539253978d435aD45cCf28Fb95024`
+- Pool: `0x2029D8b7AE6Abe7dAa0C2A71E960839171a34601`
+- confidential-token testnet mock:
+  `0x4E7B06D78965594eB5EF5414c357ca21E1554491`
+- Pool bytecode present: **yes**
+- confidential-token bytecode present: **yes**
+
+Pool-wide participant state:
+
+- maximum participants: `128`
+- `FREE`: `126`
+- `RESERVED`: `1`
+- `TOMBSTONED`: `1`
+- live occupied slots: `1`
+
+Connected-owner participant:
+
+- slot: `1`
+- state ordinal: `1`
+- state: `RESERVED`
+- owner: `0x1f87Ae197af539253978d435aD45cCf28Fb95024`
+- registration version: `1`
+- reservation nonce: `3`
+- reservation expiry: `1788599856`
+- reservation expiry UTC: `2026-09-05T09:17:36.000Z`
+- reservation seconds remaining at probe: `77122`
+- activation started at: `0`
+- activation deadline: `0`
+- refund-attempt nonce: `0`
+- registration bond held: **true**
+
+Public Pool state at the same pinned block:
+
+- `nextReservationNonce`: `3`
+- owner `nextDepositNonce`: `2`
+- owner `pendingBondRefund`: `0`
+- `activeParticipantCount`: `0`
+
+Fresh operator state:
+
+- holder: `0x1f87Ae197af539253978d435aD45cCf28Fb95024`
+- spender / Pool: `0x2029D8b7AE6Abe7dAa0C2A71E960839171a34601`
+- Pool operator active at snapshot: **false**
+
+Confidential-token readiness:
+
+- symbol: `cUSDTMock`
+- decimals: `6`
+- confidential balance handle present: **yes**
+- plaintext confidential balance: **NOT_DECRYPTED**
+- amount sufficiency:
+  `UNKNOWN_BY_DESIGN_UNTIL_EXACT_AMOUNT_AND_SEPARATE_AUTHORIZATION`
+
+Account nonce observation:
+
+- account nonce at pinned snapshot: `518`
+- pending account nonce immediately after pinned read: `518`
+- no pending nonce movement was observed by this gate
+
+Readiness interpretation:
+
+- public blocker list: `POOL_OPERATOR_NOT_ACTIVE`
+- operator-review preparation eligible: **true**
+- a new operator transaction would be needed if the state remains unchanged: **true**
+- public read-only gate as a complete deposit-readiness gate: **false**, because the Pool operator is
+  not active
+- this result does not infer or authorize any confidential deposit amount
+
+Authorization boundary:
+
+- this read-only checkpoint does **not** authorize opening the wallet
+- this read-only checkpoint does **not** authorize an operator signature
+- this read-only checkpoint does **not** authorize a confidential deposit
+- this read-only checkpoint does **not** authorize encryption
+- this read-only checkpoint does **not** authorize threshold/public consequence decryption
+- exact deposit amount selected: **no**
+- deposit descriptor built for signing: **no**
+- deposit simulated: **no**
+- wallet review authorized: **no**
+- signing authorized: **no**
+- threshold decryption authorized: **no**
+- the historical nonce-`517` operator approval must not be retried
+- the existing reservation transaction must not be retried
+
+Repository preservation after the probe:
+
+- `apps/web/components/action-sheet.tsx`:
+  `242e0af71f22aed9768ec884e83877473a5bd98b0363a029f489c6bae9880ee4`
+- `apps/web/components/app-shell.tsx`:
+  `f41c0050ed4e0252291f6e345c7b800c4e1135885745a91abb6da573b67b973b`
+- `apps/web/lib/zama.ts`:
+  `212d50775343b7ddcbcd000139c316843476223b8e118502c235fc40dc1ab0a0`
+- `apps/web/app/globals.css`:
+  `8959c0bdd2305e1cf6e1f964d979cb86ff455562b977ddf6e0f8eae61aaa615e`
+- `apps/web/lib/operator-approval.ts`:
+  `4cf92ede20079e5c1ec88c757ce6e0c445685c0fe375021708c9222227f9fe37`
+- `apps/web/lib/operator-approval.test.ts`:
+  `e98ff2c11f637a720f0f962b709f85581acb5553b23c253052ac99ad4bbe94f0`
+- frozen Solidity boundary: **unchanged**
+- frozen protocol SDK boundary: **unchanged**
+- frozen evidence boundary: **unchanged**
+
+Next separate gate:
+
+- build/start a fresh production runtime from the exact validated operator-review source
+- confirm `/`, `/app`, and `/api/auth/session`
+- confirm the exact source hashes survive runtime preparation
+- no browser operator control or wallet interaction is authorized until that runtime gate passes
+
+Safety result:
+
+- transactions sent: `0`
+- wallet requests: `0`
+- signer used: **no**
+- encryptions: `0`
+- decryptions: `0`
+- deposits: `0`
+- commit created: **no**
+- push performed: **no**
+
+## Operator-review fresh production runtime preparation — PASS
+
+A fresh Next.js production runtime was built and started from the exact statically validated
+Pool-operator explicit-review frontend before any browser operator action or wallet interaction.
+
+Exact source / documentation identity:
+
+- branch: `frontend/veilpot-masterpiece-v1`
+- HEAD: `470a77cfae2a8915854bec29274225e8807c6494`
+- `apps/web/components/action-sheet.tsx`:
+  `242e0af71f22aed9768ec884e83877473a5bd98b0363a029f489c6bae9880ee4`
+- `apps/web/components/app-shell.tsx`:
+  `f41c0050ed4e0252291f6e345c7b800c4e1135885745a91abb6da573b67b973b`
+- `apps/web/lib/zama.ts`:
+  `212d50775343b7ddcbcd000139c316843476223b8e118502c235fc40dc1ab0a0`
+- `apps/web/app/globals.css`:
+  `8959c0bdd2305e1cf6e1f964d979cb86ff455562b977ddf6e0f8eae61aaa615e`
+- `apps/web/lib/operator-approval.ts`:
+  `4cf92ede20079e5c1ec88c757ce6e0c445685c0fe375021708c9222227f9fe37`
+- `apps/web/lib/operator-approval.test.ts`:
+  `e98ff2c11f637a720f0f962b709f85581acb5553b23c253052ac99ad4bbe94f0`
+- pre-runtime validation-ledger SHA-256:
+  `dbf620a996582fba9b7c18f803ef0670249d21878344a0b6ae132ff63bc4af48`
+
+Runtime toolchain:
+
+- Node.js: `v22.23.2`
+- pnpm: `10.18.3`
+- Next.js: `16.3.4`
+
+Production build:
+
+- Next.js production build: **PASS**
+- source hashes after build: **unchanged**
+- `git diff --check`: **PASS**
+- frozen Solidity boundary: **unchanged**
+- frozen protocol SDK boundary: **unchanged**
+- frozen evidence boundary: **unchanged**
+
+Port-3177 replacement safety:
+
+- an existing listener was found on port `3177`
+- prior listener PID: `46382`
+- prior listener command: `next-server (v16.3.4)`
+- prior listener cwd: `/Users/mralbert/Downloads/veilpot/apps/web`
+- the prior listener was positively identified as Veilpot's own production runtime before stopping
+- exact prior PID `46382` was stopped
+- no force-kill was used
+- port `3177` was confirmed available before the fresh runtime started
+
+Fresh runtime:
+
+- start PID: `66329`
+- listener PID: `66329`
+- listener command: `next-server (v16.3.4)`
+- listener cwd: `/Users/mralbert/Downloads/veilpot/apps/web`
+- production URL: `http://127.0.0.1:3177`
+- runtime log:
+  `/tmp/veilpot-operator-review-runtime-20260904-125620.log`
+
+HTTP smoke:
+
+- `/`: **HTTP 200**
+- `/app`: **HTTP 200**
+- `/api/auth/session`: **HTTP 200**
+- cookieless `/api/auth/session` body: `{ "authenticated": false }`
+- cookieless session semantics: **PASS**
+
+Session interpretation:
+
+- `authenticated:false` is the expected result for a request without the browser's HttpOnly session
+  cookies
+- this runtime gate does not determine whether the normal Veilpot browser profile still holds a
+  valid authenticated session
+- browser cookie/session continuity therefore remains a separate unresolved gate
+
+Execution and authorization boundary:
+
+- browser cookie/session state inspected: **no**
+- `Review Pool approval` clicked: **no**
+- `Open wallet review` clicked: **no**
+- wallet opened: **no**
+- wallet review authorized: **no**
+- signing authorized: **no**
+- transactions sent: `0`
+- encryption: `0`
+- decryption: `0`
+- deposit: `0`
+- exact deposit amount selected: **no**
+- threshold decryption authorized: **no**
+- historical nonce-`517` operator approval remains non-retryable
+- the existing reservation transaction remains non-retryable
+
+Repository preservation:
+
+- all six validated operator-review frontend hashes remained byte-identical after build/start
+- validation-ledger hash remained byte-identical during the runtime gate
+- no new repository path was created by runtime preparation
+- frozen Solidity, protocol SDK, and evidence remained untouched
+
+Next separate gate:
+
+- hard-refresh `http://127.0.0.1:3177/app` in the existing normal Veilpot browser profile
+- inspect only existing browser/session/network/account continuity
+- do not click `Review Pool approval`
+- do not click `Open wallet review`
+- do not approve/sign any wallet prompt
+- do not encrypt, decrypt, or deposit
+
+Safety result:
+
+- production runtime preparation: **PASS**
+- transactions sent: `0`
+- wallet requests: `0`
+- encryptions: `0`
+- decryptions: `0`
+- deposits: `0`
+- source modifications from runtime preparation: `0`
+- commit created: **no**
+- push performed: **no**
+
+## Operator-review browser authenticated-session continuity — PASS
+
+The existing normal Veilpot browser profile was hard-refreshed on the exact fresh production runtime
+before entering any Pool-operator review flow.
+
+Observed browser state:
+
+- application URL: `http://127.0.0.1:3177/app`
+- authenticated Veilpot workspace rendered successfully
+- the sign-in gate was not displayed
+- heading `Your private account is ready.` was visible
+- network indicator displayed `Sepolia`
+- account chip displayed `0x1f87…5024`, consistent with the expected owner wallet
+- no visible session/wallet mismatch warning appeared
+- private savings remained hidden
+- private-savings card remained marked `Never auto-decrypted`
+- no wallet popup was visible in the captured browser state
+- no transaction-approval popup was visible
+- no encryption or decryption prompt was visible
+
+Deliberately unresolved from this screenshot:
+
+- participant/registration status was not visible in the captured viewport
+- no participant state is inferred from presentation data
+- the latest authoritative participant state remains the prior pinned read-only Sepolia snapshot
+  until a fresh read or explicit live-control inspection establishes otherwise
+
+Operator-review boundary:
+
+- `Review Pool approval` was not clicked
+- `Open wallet review` was not clicked
+- no operator review object was intentionally prepared by this checkpoint
+- no wallet review was opened
+- no signature was requested
+- no transaction was submitted
+
+Confidentiality boundary:
+
+- no private token amount was revealed
+- no confidential balance plaintext was decrypted
+- no encryption was initiated
+- no threshold/public consequence decryption was initiated
+- no deposit amount was selected or authorized
+
+Runtime/source boundary:
+
+- this was a browser-state observation only
+- no source file was modified
+- no production build was triggered by this checkpoint
+- the validated operator-review source remains the active intended runtime source
+- frozen Solidity, protocol SDK, and evidence remain unchanged
+
+Next separate gate:
+
+- inspect the Private Deposit action sheet only far enough to expose current participant/operator
+  controls and status
+- do not click `Review Pool approval`
+- do not click `Open wallet review`
+- do not approve/sign any wallet prompt
+- if any wallet prompt appears unexpectedly, stop immediately
+
+Safety result:
+
+- authenticated browser continuity: **PASS**
+- participant UI status captured: **no / unresolved**
+- wallet opened: **no**
+- transactions sent: `0`
+- wallet signatures requested: `0`
+- encryptions: `0`
+- decryptions: `0`
+- deposits: `0`
+- commit created: **no**
+- push performed: **no**
+
+## Private Deposit operator-control browser inspection — PASS
+
+The authenticated Veilpot browser opened the Private Deposit action sheet on the validated
+production runtime without entering the operator review or initiating any wallet action.
+
+Observed browser state:
+
+- application remained at `http://127.0.0.1:3177/app`
+- wallet displayed `0x1f87…5024`, consistent with the expected owner
+- network displayed `Ethereum Sepolia`
+- participant displayed `RESERVED`
+- registration card displayed `Registration slot reserved`
+- registration slot displayed `1`
+- browser-local reservation expiry displayed `05/09/2026, 10:17:36`
+- this browser-local display is consistent with the canonical reservation expiry
+  `2026-09-05T09:17:36.000Z`
+
+Operator-control state:
+
+- the next protocol step displayed:
+  `2. Allow the Pool to pull this confidential deposit`
+- the explanatory copy stated that the permission is explicit and short-lived
+- the explanatory copy stated that Veilpot prepares one exact 30-minute approval for inspection
+  before any wallet request
+- `Review Pool approval` was visibly present and appeared enabled
+- `Review Pool approval` was **not clicked**
+- `Open wallet review` was not visible because operator review had not yet been entered
+- no unresolved-operator-transaction warning was visible in the captured action sheet
+- no wallet popup was visible
+
+Deposit control state:
+
+- the amount input visibly contained `25.00`
+- token label displayed `cUSDTMock`
+- this visible amount is presentation/input state only
+- `25.00 cUSDTMock` is **not authorized** as the next deposit amount
+- the historical 25.00 test amount must not be reused merely because the UI currently displays it
+- the amount field was not edited during this inspection
+- `Encrypt & review deposit` was visibly disabled/locked at this stage
+- no encryption was initiated
+- no deposit descriptor was prepared
+- no deposit simulation was performed
+- no wallet review was opened
+- no deposit signing was authorized
+
+State interpretation boundary:
+
+- the participant browser state is consistent with the latest accepted pinned read-only Sepolia
+  snapshot, which found slot `1` in `RESERVED`
+- this screenshot does not independently prove the current on-chain Pool-operator boolean
+- the presence of the operator-review step must not be substituted for a fresh chain read
+- the operator-review callback itself is designed to perform fresh participant and operator reads
+  before freezing an exact review
+
+Next separate gate:
+
+- click `Review Pool approval` exactly once
+- this first review action is expected to be read-only and must not open a wallet
+- do not click `Open wallet review`
+- do not approve/sign anything
+- do not modify the deposit amount
+- if any wallet prompt appears during `Review Pool approval`, stop immediately without interacting
+
+Safety result:
+
+- Private Deposit action-sheet inspection: **PASS**
+- participant UI status captured: **RESERVED**
+- operator review entered: **no**
+- wallet opened: **no**
+- wallet signatures requested: `0`
+- transactions sent: `0`
+- encryptions: `0`
+- decryptions: `0`
+- deposits: `0`
+- commit created: **no**
+- push performed: **no**
+
+## Exact Pool operator approval browser review — PASS
+
+The Private Deposit flow explicitly prepared one exact Pool operator approval review in the
+authenticated browser without opening the wallet.
+
+Review identity:
+
+- holder:
+  `0x1f87Ae197af539253978d435aD45cCf28Fb95024`
+- confidential-token testnet mock:
+  `0x4E7B06D78965594eB5EF5414c357ca21E1554491`
+- operator / Pool:
+  `0x2029D8b7AE6Abe7dAa0C2A71E960839171a34601`
+- participant state: `RESERVED`
+- participant slot: `1`
+- registration version: `1`
+- reservation nonce: `3`
+
+Exact reviewed call:
+
+- function: `setOperator(address,uint48)`
+- expected selector: `0xd4febb96`
+- exact frozen `until` Unix timestamp: `1788525670`
+- exact frozen `until` UTC: `2026-09-04T12:41:10.000Z`
+- duration: `30 minutes`
+- network: `Ethereum Sepolia`
+- chain ID: `11155111`
+- exact expected calldata:
+  `0xd4febb960000000000000000000000002029d8b7ae6abe7daa0c2a71e960839171a34601000000000000000000000000000000000000000000000000000000006a9abc66`
+
+Calldata consistency:
+
+- calldata selector matched `0xd4febb96`
+- first ABI argument encoded the exact frozen Pool address
+- final ABI word encoded `0x6a9abc66`
+- `0x6a9abc66` equals decimal `1788525670`
+- therefore the calldata expiry matched the displayed frozen `until`
+
+Review UX / safety state:
+
+- review copy stated that opening the wallet re-reads the `RESERVED` registration and operator state
+- review copy stated that opening the wallet never replaces the displayed expiry or calldata
+- `Open wallet review` was visibly present
+- `Open wallet review` was **not clicked**
+- no wallet popup was visible
+- no unresolved-operator-submission warning was visible
+
+Review freshness boundary:
+
+- the review UI states that a prepared review is usable for five minutes
+- that five-minute review-usability limit is distinct from the 30-minute operator permission expiry
+- preserving this checkpoint does not extend or refresh the review's five-minute usability window
+- this recorded review must not be treated as automatically signable later merely because its
+  30-minute `until` remains in the future
+- before any wallet action, Veilpot must establish that the review is still fresh or deliberately
+  prepare a new exact review through the same explicit read-only review step
+- no expiry may be silently recomputed inside the wallet-opening step
+
+Deposit boundary:
+
+- the visible `25.00 cUSDTMock` input from the preceding screen remains **unauthorized**
+- no deposit amount is approved by this operator-review checkpoint
+- no deposit encryption occurred
+- no deposit descriptor was prepared for signing
+- no deposit simulation occurred
+- no threshold/public consequence decryption occurred
+
+Authorization boundary:
+
+- this checkpoint records an exact review only
+- wallet review authorization: **no**
+- signing authorization: **no**
+- operator transaction submitted: **no**
+- the historical nonce-`517` approval remains non-retryable
+- the already-mined reservation remains non-retryable
+
+Safety result:
+
+- exact operator review prepared: **yes**
+- wallet opened: **no**
+- wallet signatures requested: `0`
+- transactions sent: `0`
+- encryptions: `0`
+- decryptions: `0`
+- deposits: `0`
+- commit created: **no**
+- push performed: **no**
+
+## Operator-review five-minute staleness fail-closed runtime validation — PASS
+
+The previously prepared exact Pool operator approval review was left untouched past its separate
+five-minute review-usability window and then inspected in the authenticated browser without
+clicking any operator or wallet control.
+
+Observed stale-review behavior:
+
+- the previously displayed exact review was no longer actionable
+- `Open wallet review` was no longer displayed
+- the operator flow returned to `Review Pool approval`
+- the browser displayed the explicit warning:
+  `The Pool approval review became stale. No replacement expiry was generated; prepare a new review.`
+- no replacement `until` value was silently generated
+- no replacement calldata was silently generated
+- no wallet popup appeared
+- no transaction-approval popup appeared
+
+Participant / deposit UI state during the stale inspection:
+
+- wallet displayed `0x1f87…5024`
+- network displayed `Ethereum Sepolia`
+- participant displayed `RESERVED`
+- registration remained shown as `Registration slot reserved`
+- slot displayed `1`
+- browser-local reservation expiry remained displayed as `05/09/2026, 10:17:36`
+- the amount input still visibly contained `25.00 cUSDTMock`
+- that visible amount remains presentation/input state only and remains **unauthorized**
+- `Encrypt & review deposit` remained unavailable while Pool operator approval was unresolved
+
+Staleness interpretation:
+
+- the previous exact review had frozen `until = 1788525670`
+- the 30-minute operator permission expiry and the five-minute review-usability window are distinct
+- once the five-minute review window elapsed, Veilpot failed closed
+- the frontend did not preserve an actionable wallet-opening control for the stale review
+- the frontend did not silently replace the exact reviewed expiry
+- the frontend did not silently replace the exact reviewed calldata
+- a future approval requires a deliberately prepared new exact review
+
+Authorization boundary:
+
+- `Review Pool approval` was not clicked during this stale-inspection checkpoint
+- `Open wallet review` was not clicked
+- wallet review authorization: **no**
+- signing authorization: **no**
+- operator transaction submitted: **no**
+- deposit authorization: **no**
+- encryption authorization: **no**
+- threshold/public consequence decryption authorization: **no**
+- historical nonce-`517` operator approval remains non-retryable
+- the already-mined reservation remains non-retryable
+
+Safety result:
+
+- stale-review fail-closed behavior: **PASS**
+- replacement expiry generated automatically: **no**
+- wallet opened: **no**
+- wallet signatures requested: `0`
+- transactions sent: `0`
+- encryptions: `0`
+- decryptions: `0`
+- deposits: `0`
+- commit created: **no**
+- push performed: **no**
+
+## Exact Rabby wallet review for fresh Pool operator approval — PASS
+
+The authenticated Veilpot browser opened Rabby Wallet for the deliberately fresh Pool operator
+approval review. The wallet prompt was inspected without signing or cancelling.
+
+Veilpot review that opened this wallet prompt:
+
+- holder:
+  `0x1f87Ae197af539253978d435aD45cCf28Fb95024`
+- confidential-token testnet mock:
+  `0x4E7B06D78965594eB5EF5414c357ca21E1554491`
+- operator / Pool:
+  `0x2029D8b7AE6Abe7dAa0C2A71E960839171a34601`
+- function: `setOperator(address,uint48)`
+- selector: `0xd4febb96`
+- exact frozen `until`: `1788526259`
+- exact frozen UTC expiry: `2026-09-04T12:50:59.000Z`
+- duration: `30 minutes`
+- chain ID: `11155111`
+- exact reviewed calldata:
+  `0xd4febb960000000000000000000000002029d8b7ae6abe7daa0c2a71e960839171a34601000000000000000000000000000000000000000000000000000000006a9abeb3`
+
+Observed Rabby wallet prompt:
+
+- requesting site: `http://127.0.0.1:3177`
+- wallet chain: `Sepolia`
+- raw `chainId`: `11155111`
+- raw `from`:
+  `0x1f87Ae197af539253978d435aD45cCf28Fb95024`
+- raw `to`:
+  `0x4E7B06D78965594eB5EF5414c357ca21E1554491`
+- raw `nonce`: `0x206`
+- decimal nonce interpretation: `518`
+- raw `gas`: `0xc97d`
+- raw `gasPrice`: `0x4b89e2ac`
+- raw transaction `data`:
+  `0xd4febb960000000000000000000000002029d8b7ae6abe7daa0c2a71e960839171a34601000000000000000000000000000000000000000000000000000000006a9abeb3`
+- Rabby displayed `Simulation Not Supported`
+- Rabby displayed `Unknown Signature Type`
+- Rabby exposed a `View Raw` control
+- Rabby displayed `Sign` and `Cancel`
+
+Exact wallet-review identity checks:
+
+- wallet chain matched the reviewed Ethereum Sepolia chain: **PASS**
+- wallet sender matched the authenticated holder: **PASS**
+- wallet target matched the exact confidential-token testnet mock: **PASS**
+- wallet nonce `0x206` equals decimal `518`, consistent with the latest accepted account nonce: **PASS**
+- wallet calldata matched the frozen Veilpot review byte-for-byte: **PASS**
+- calldata selector remained `0xd4febb96`: **PASS**
+- calldata encoded the exact Pool address: **PASS**
+- final ABI word remained `0x6a9abeb3`: **PASS**
+- `0x6a9abeb3` equals decimal `1788526259`: **PASS**
+- therefore the wallet transaction retained the exact reviewed `until`: **PASS**
+
+Rabby interpretation boundary:
+
+- `Simulation Not Supported` is not treated as proof of failure or success
+- `Unknown Signature Type` is not treated as an independent decode of the contract call
+- the wallet-review safety conclusion is based on exact raw transaction identity
+- no claim is made that Rabby independently simulated the state transition
+
+Authorization boundary:
+
+- opening this wallet prompt was separately authorized
+- opening the wallet did **not** authorize signing
+- `Sign` was **not clicked**
+- `Cancel` was **not clicked**
+- signing authorization remains **no**
+- operator transaction submitted: **no**
+- transaction hash: **none**
+- historical nonce-`517` approval remains non-retryable
+- if this fresh review becomes stale before a separate signing authorization, it must not be signed
+- a stale review must be cancelled/closed and deliberately prepared again rather than silently
+  replacing expiry/calldata
+
+Deposit/confidentiality boundary:
+
+- visible `25.00 cUSDTMock` remains unauthorized
+- no deposit amount was approved
+- no encryption occurred
+- no decryption occurred
+- no deposit transaction was built or submitted
+- no threshold/public consequence decryption was authorized
+
+Safety result:
+
+- exact wallet review: **PASS**
+- wallet opened: **yes, review only**
+- wallet signature produced: **no**
+- transactions sent: `0`
+- encryptions: `0`
+- decryptions: `0`
+- deposits: `0`
+- commit created: **no**
+- push performed: **no**
+
+## Pool operator approval repair — mined, reconciled, and complete
+
+The deliberately fresh Pool operator approval was separately reviewed in Veilpot, opened in Rabby,
+explicitly authorized for signing, mined successfully on Ethereum Sepolia, and reconciled by the
+frontend against live operator state.
+
+Exact authorized transaction:
+
+- chain: Ethereum Sepolia
+- chain ID: `11155111`
+- sender / holder:
+  `0x1f87Ae197af539253978d435aD45cCf28Fb95024`
+- confidential-token testnet mock:
+  `0x4E7B06D78965594eB5EF5414c357ca21E1554491`
+- operator / Pool:
+  `0x2029D8b7AE6Abe7dAa0C2A71E960839171a34601`
+- function: `setOperator(address,uint48)`
+- selector: `0xd4febb96`
+- reviewed nonce: `0x206` / decimal `518`
+- exact reviewed `until`: `1788526679`
+- exact reviewed UTC expiry: `2026-09-04T12:57:59.000Z`
+- exact reviewed calldata:
+  `0xd4febb960000000000000000000000002029d8b7ae6abe7daa0c2a71e960839171a34601000000000000000000000000000000000000000000000000000000006a9ac057`
+
+Mined transaction:
+
+- transaction hash:
+  `0x62cc18d7c985ff61f49956f99de8f3fa35e67cf00d16a0db6cad3b9de1582754`
+- Etherscan status: `Success`
+- block: `11633461`
+- Etherscan action: `Set Operator`
+- from:
+  `0x1f87Ae197af539253978d435aD45cCf28Fb95024`
+- to:
+  `0x4E7B06D78965594eB5EF5414c357ca21E1554491`
+- value: `0 ETH`
+
+Post-mine frontend reconciliation:
+
+- Veilpot displayed `Pool operator is ready`
+- Veilpot displayed `Exact reviewed Pool operator transaction included successfully`
+- Veilpot stated that the exact reviewed transaction and live active Pool operator state were
+  reconciled
+- participant remained displayed as `RESERVED`
+- no transaction retry is required or permitted
+
+Retry / authorization boundary:
+
+- nonce `518` was consumed by this successful operator approval transaction
+- transaction
+  `0x62cc18d7c985ff61f49956f99de8f3fa35e67cf00d16a0db6cad3b9de1582754`
+  must not be retried
+- historical nonce-`517` operator approval remains non-retryable
+- the existing reservation transaction remains non-retryable
+- this operator approval does not authorize any deposit
+- the visible `25.00 cUSDTMock` amount remains unauthorized and must not be reused merely because it
+  remains visible in the UI
+- no deposit encryption has been authorized
+- no deposit transaction has been authorized
+- no threshold/public consequence decryption has been authorized
+
+Completed operator-approval safety properties:
+
+- explicit `Review Pool approval` step before any wallet request
+- exact 30-minute expiry frozen during review
+- exact `setOperator(address,uint48)` calldata displayed before wallet opening
+- five-minute review-usability window fails closed
+- stale reviews do not silently generate replacement expiry/calldata
+- wallet-opening step rechecks live participant/operator state
+- submitted transaction identity is preserved for reconciliation
+- unresolved submitted transactions block silent retries
+- exact mined transaction identity is verified before state reconciliation
+- successful inclusion plus live operator state is reconciled before declaring the Pool operator
+  ready
+
+Repository completion boundary:
+
+- this checkpoint completes the frontend Pool-operator approval safety repair
+- frozen Solidity remains unchanged
+- frozen protocol SDK remains unchanged
+- frozen evidence remains unchanged
+- confidential-deposit signing safety remains a separate future task
+
+Safety result:
+
+- operator approval repair: **COMPLETE**
+- successful operator tx count in this completion step: `1`
+- deposit transactions: `0`
+- encryptions: `0`
+- decryptions: `0`
