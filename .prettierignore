@@ -15,3 +15,5 @@ docs/GATE_0_SEPOLIA_VERIFICATION.md
 evidence/production-sepolia/autopilot-v3/runtime-smoke-journal.json
 packages/contracts/contracts/VeilpotAutopilotVault.sol
 packages/contracts/contracts/VeilpotPool.sol
+apps/web/.next/
+apps/web/next-env.d.ts

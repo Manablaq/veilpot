@@ -11,3 +11,5 @@ typechain-types/
 .DS_Store
 fhevmTemp/
 .tooling/
+apps/web/.next/
+apps/web/next-env.d.ts

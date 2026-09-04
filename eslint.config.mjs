@@ -9,6 +9,7 @@ export default tseslint.config(
       "**/cache/**",
       "**/coverage/**",
       "**/dist/**",
+      "**/.next/**",
       "**/typechain-types/**",
       "eslint.config.mjs",
     ],
@@ -23,6 +24,13 @@ export default tseslint.config(
     },
     rules: {
       "@typescript-eslint/no-non-null-assertion": "off",
+    },
+  },
+  {
+    files: ["apps/web/**/*.{ts,tsx}"],
+    languageOptions: {
+      globals: { ...globals.browser, ...globals.node },
+      parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
     },
   },
 );
