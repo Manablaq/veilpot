@@ -1,5 +1,6 @@
 export * from "./abi.js";
 export * from "./v2-abi.js";
+export * from "./v2-user-flows.js";
 export * from "./autopilot-abi.js";
 export * from "./autopilot-schedule.js";
 export * from "./calls.js";
