@@ -26,6 +26,7 @@ import styles from "@/app/meridian-app.module.css";
 import { useExactAction } from "@/components/exact-action-control";
 import { MeridianSaveDepositActivation } from "@/components/meridian/save-deposit-activation";
 import { MeridianSaveDeregistration } from "@/components/meridian/save-deregistration";
+import { MeridianSaveRecovery } from "@/components/meridian/save-recovery";
 import { MeridianSaveWithdrawal } from "@/components/meridian/save-withdrawal";
 import {
   AddressText,
@@ -40,9 +41,12 @@ import {
 import { VEILPOT_V2_EXACT_ACTION_SCOPE } from "@/lib/deployment-scope";
 import {
   V2_PARTICIPANT_SCAN_CHUNK_SIZE,
+  v2ParticipantCanAttemptRefund,
   v2ParticipantCanDeposit,
   v2ParticipantCanExpireActivation,
+  v2ParticipantCanExpireReservation,
   v2ParticipantCanReserve,
+  v2ParticipantCanSettleRefund,
   v2ParticipantCanSettleThreshold,
   v2ParticipantCanWithdraw,
   v2SaveLifecycle,
@@ -203,8 +207,11 @@ export function MeridianSaveControl({ authenticatedAddress }: MeridianSaveContro
 
   const canReserve = v2ParticipantCanReserve(participant);
   const depositReady = v2ParticipantCanDeposit(participant, nowSeconds);
+  const reservationExpired = v2ParticipantCanExpireReservation(participant, nowSeconds);
   const thresholdReady = v2ParticipantCanSettleThreshold(participant, nowSeconds);
   const activationExpired = v2ParticipantCanExpireActivation(participant, nowSeconds);
+  const refundReady = v2ParticipantCanAttemptRefund(participant);
+  const refundProofReady = v2ParticipantCanSettleRefund(participant);
   const withdrawalReady = v2ParticipantCanWithdraw(participant);
 
   const prepareRegistration = useCallback(async () => {
@@ -367,6 +374,11 @@ export function MeridianSaveControl({ authenticatedAddress }: MeridianSaveContro
                   Exact PoolV2 authorization and V2-bound confidential deposit controls are
                   available below.
                 </InlineNotice>
+              ) : reservationExpired ? (
+                <InlineNotice title="Reservation recovery available" tone="warning">
+                  The public reservation deadline is strictly past. The recovery control below can
+                  release the unused slot and credit its registration bond.
+                </InlineNotice>
               ) : thresholdReady ? (
                 <InlineNotice title="Threshold settlement pending" tone="protocol">
                   The amount remains confidential. Use the explicit public-threshold control below
@@ -374,8 +386,18 @@ export function MeridianSaveControl({ authenticatedAddress }: MeridianSaveContro
                 </InlineNotice>
               ) : activationExpired ? (
                 <InlineNotice title="Activation recovery available" tone="warning">
-                  The public activation deadline has expired. Recovery will use PoolV2 expiry and
-                  refund functions without revealing the confidential pending amount.
+                  The public activation deadline is strictly past. Recovery can move the sealed
+                  obligation into the confidential refund lifecycle without revealing its amount.
+                </InlineNotice>
+              ) : refundReady ? (
+                <InlineNotice title="Confidential refund available" tone="warning">
+                  The registration is in PENDING_REFUND. The recovery control below can attempt the
+                  fixed-owner confidential transfer without revealing the refund obligation.
+                </InlineNotice>
+              ) : refundProofReady ? (
+                <InlineNotice title="Refund completion proof pending" tone="protocol">
+                  Explicitly decrypt only the current public refund-complete boolean, then review
+                  the exact TRUE or FALSE settlement.
                 </InlineNotice>
               ) : withdrawalReady ? (
                 <InlineNotice title="Active private saver" tone="private">
@@ -396,6 +418,12 @@ export function MeridianSaveControl({ authenticatedAddress }: MeridianSaveContro
           onRefresh={refresh}
         />
       ) : null}
+
+      <MeridianSaveRecovery
+        authenticatedAddress={authenticatedAddress}
+        participant={participant}
+        exactAction={exactAction}
+      />
 
       {participant !== null && withdrawalReady ? (
         <MeridianSaveWithdrawal
