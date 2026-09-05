@@ -1,10 +1,10 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { createPublicClient, http, type Hex } from "viem";
-import { sepolia } from "viem/chains";
+import type { Hex } from "viem";
 
-import { parseVeilpotSiweMessage, VEILPOT_CHAIN_ID } from "@/lib/siwe";
 import { resolveRequestOrigin } from "@/lib/request-origin";
+import { parseVeilpotSiweMessage, VEILPOT_CHAIN_ID } from "@/lib/siwe";
+import { verifyVeilpotWalletSignature } from "@/lib/wallet-signature-verification";
 
 const MESSAGE_COOKIE = "veilpot_session_message";
 const SIGNATURE_COOKIE = "veilpot_session_signature";
@@ -40,11 +40,11 @@ export async function GET(request: Request) {
       throw new Error("Session binding expired.");
     }
 
-    const publicClient = createPublicClient({
-      chain: sepolia,
-      transport: http(process.env.SEPOLIA_RPC_URL),
-    });
-    const valid = await publicClient.verifyMessage({
+    if (!/^0x[0-9a-fA-F]+$/.test(signature)) {
+      throw new Error("Invalid session signature encoding.");
+    }
+
+    const valid = await verifyVeilpotWalletSignature({
       address: fields.address,
       message,
       signature: signature as Hex,

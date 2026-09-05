@@ -49,6 +49,8 @@ const navigation = [
   { label: "Portfolio", view: "portfolio" as const, icon: Activity },
 ] as const;
 
+const SESSION_BOOTSTRAP_TIMEOUT_MS = 12_000;
+
 function compactAddress(address: string) {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
@@ -70,12 +72,22 @@ export function AppShell() {
 
   useEffect(() => {
     let cancelled = false;
-    void fetch("/api/auth/session", { credentials: "same-origin", cache: "no-store" })
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => {
+      controller.abort();
+    }, SESSION_BOOTSTRAP_TIMEOUT_MS);
+
+    void fetch("/api/auth/session", {
+      credentials: "same-origin",
+      cache: "no-store",
+      signal: controller.signal,
+    })
       .then(async (response): Promise<unknown> => {
         if (!response.ok) return null;
         const body: unknown = await response.json();
         return body;
       })
+      .catch(() => null)
       .then((body: unknown) => {
         if (cancelled) return;
         if (
@@ -98,10 +110,14 @@ export function AppShell() {
         }
       })
       .finally(() => {
+        window.clearTimeout(timeout);
         if (!cancelled) setSessionChecked(true);
       });
+
     return () => {
       cancelled = true;
+      window.clearTimeout(timeout);
+      controller.abort();
     };
   }, []);
 

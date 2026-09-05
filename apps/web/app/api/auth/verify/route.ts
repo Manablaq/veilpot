@@ -1,14 +1,14 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { createPublicClient, http, type Hex } from "viem";
-import { sepolia } from "viem/chains";
+import type { Hex } from "viem";
 
-import { parseVeilpotSiweMessage, VEILPOT_CHAIN_ID, VEILPOT_SESSION_TTL_MS } from "@/lib/siwe";
 import {
   isSameRequestOrigin,
   isSecureExternalRequest,
   resolveRequestOrigin,
 } from "@/lib/request-origin";
+import { parseVeilpotSiweMessage, VEILPOT_CHAIN_ID, VEILPOT_SESSION_TTL_MS } from "@/lib/siwe";
+import { verifyVeilpotWalletSignature } from "@/lib/wallet-signature-verification";
 
 const NONCE_COOKIE = "veilpot_siwe_nonce";
 const MESSAGE_COOKIE = "veilpot_session_message";
@@ -82,18 +82,11 @@ export async function POST(request: Request) {
     );
   }
 
-  const publicClient = createPublicClient({
-    chain: sepolia,
-    transport: http(process.env.SEPOLIA_RPC_URL),
+  const valid = await verifyVeilpotWalletSignature({
+    address: fields.address,
+    message: body.message,
+    signature: body.signature as Hex,
   });
-
-  const valid = await publicClient
-    .verifyMessage({
-      address: fields.address,
-      message: body.message,
-      signature: body.signature as Hex,
-    })
-    .catch(() => false);
 
   if (!valid)
     return NextResponse.json({ error: "Wallet signature verification failed." }, { status: 401 });
