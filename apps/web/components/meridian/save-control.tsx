@@ -24,6 +24,7 @@ import {
 
 import styles from "@/app/meridian-app.module.css";
 import { useExactAction } from "@/components/exact-action-control";
+import { MeridianSaveDepositActivation } from "@/components/meridian/save-deposit-activation";
 import {
   AddressText,
   ExplorerLink,
@@ -361,13 +362,13 @@ export function MeridianSaveControl({ authenticatedAddress }: MeridianSaveContro
 
               {depositReady ? (
                 <InlineNotice title="Ready for confidential deposit" tone="private">
-                  The reservation is live. M4-B2B will add the exact PoolV2 operator approval,
-                  V2-bound encryption and deposit review.
+                  Exact PoolV2 authorization and V2-bound confidential deposit controls are
+                  available below.
                 </InlineNotice>
               ) : thresholdReady ? (
                 <InlineNotice title="Threshold settlement pending" tone="protocol">
-                  Only the intentionally public threshold predicate may be decrypted and settled.
-                  The amount remains confidential.
+                  The amount remains confidential. Use the explicit public-threshold control below
+                  to prepare the exact proof settlement.
                 </InlineNotice>
               ) : activationExpired ? (
                 <InlineNotice title="Activation recovery available" tone="warning">
@@ -384,6 +385,15 @@ export function MeridianSaveControl({ authenticatedAddress }: MeridianSaveContro
           )}
         </Surface>
       </div>
+
+      {participant !== null && (depositReady || thresholdReady) ? (
+        <MeridianSaveDepositActivation
+          authenticatedAddress={authenticatedAddress}
+          participant={participant}
+          exactAction={exactAction}
+          onRefresh={refresh}
+        />
+      ) : null}
 
       {participant !== null ? (
         <Surface className={styles.saveTimelineCard}>
@@ -420,7 +430,7 @@ export function MeridianSaveControl({ authenticatedAddress }: MeridianSaveContro
         </Surface>
       ) : null}
 
-      {exactAction.attempt !== null ? (
+      {canReserve && exactAction.attempt !== null ? (
         <Surface className={styles.saveExactAction} elevation="raised">
           <InlineNotice title="Exact wallet attempt requires reconciliation" tone="warning">
             Another registration request will remain blocked until this exact attempt is reconciled.
@@ -451,7 +461,7 @@ export function MeridianSaveControl({ authenticatedAddress }: MeridianSaveContro
             Reconcile exact attempt
           </MeridianButton>
         </Surface>
-      ) : exactAction.review !== null ? (
+      ) : canReserve && exactAction.review !== null ? (
         <Surface className={styles.saveExactAction} elevation="raised">
           <header>
             <ShieldCheck size={18} aria-hidden="true" />
@@ -514,7 +524,7 @@ export function MeridianSaveControl({ authenticatedAddress }: MeridianSaveContro
         </Surface>
       ) : null}
 
-      {exactAction.status.kind !== "idle" ? (
+      {canReserve && exactAction.status.kind !== "idle" ? (
         <InlineNotice
           title={
             exactAction.status.kind === "included"
