@@ -27,6 +27,7 @@ import {
 } from "@/components/meridian";
 import { meridianNavigationItem, type MeridianView } from "@/components/meridian/app-navigation";
 import { MeridianAutopilotControl } from "@/components/meridian/autopilot-control";
+import { MeridianVeilDrawControl } from "@/components/meridian/veildraw-control";
 import { MeridianSaveControl } from "@/components/meridian/save-control";
 import { ThemeControl } from "@/components/theme-control";
 
@@ -39,14 +40,6 @@ interface MeridianWorkspaceProps {
   readonly onTogglePrivacy: () => void;
 }
 
-interface GuardedFeatureProps {
-  readonly icon: typeof WalletCards;
-  readonly eyebrow: string;
-  readonly title: string;
-  readonly description: string;
-  readonly nextGate: string;
-}
-
 const DEPLOYMENT_ROWS = [
   ["Pool V2", VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.pool],
   ["VeilDraw Engine V2", VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.engine],
@@ -57,33 +50,6 @@ const DEPLOYMENT_ROWS = [
 
 function compactAddress(address: string): string {
   return `${address.slice(0, 8)}…${address.slice(-6)}`;
-}
-
-function GuardedFeature({
-  icon: Icon,
-  eyebrow,
-  title,
-  description,
-  nextGate,
-}: GuardedFeatureProps) {
-  return (
-    <Surface className={styles.guardedFeature} elevation="raised">
-      <div className={styles.guardedIcon}>
-        <Icon size={20} aria-hidden="true" />
-      </div>
-
-      <span className={styles.workspaceEyebrow}>{eyebrow}</span>
-
-      <h2>{title}</h2>
-      <p>{description}</p>
-
-      <InlineNotice title="V2 safety boundary" tone="protocol">
-        This integration build intentionally leaves the transaction controls unmounted until{" "}
-        {nextGate}
-        verifies their exact V2 contract bindings.
-      </InlineNotice>
-    </Surface>
-  );
 }
 
 export function MeridianWorkspace({
@@ -232,25 +198,7 @@ export function MeridianWorkspace({
       ) : null}
 
       {view === "veildraw" ? (
-        <>
-          <GuardedFeature
-            icon={Gift}
-            eyebrow="VEILDRAW · V2"
-            title="One round. Three private prize tracks."
-            description="Snapshot import, child draws, shard selection, winner resolution and finalization will be rebuilt from the real V2 lifecycle."
-            nextGate="Meridian M6"
-          />
-
-          <div className={styles.prizeTrackGrid}>
-            {[1, 2, 3].map((prize) => (
-              <Surface className={styles.prizeTrack} key={prize}>
-                <span>PRIZE {prize.toString()}</span>
-                <strong>Private child draw</strong>
-                <small>No winner, shard or entitlement is inferred by the shell.</small>
-              </Surface>
-            ))}
-          </div>
-        </>
+        <MeridianVeilDrawControl authenticatedAddress={authenticatedAddress} />
       ) : null}
 
       {view === "activity" ? (
