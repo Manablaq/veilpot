@@ -24,6 +24,7 @@ contract VeilDrawEngineV2 is ZamaEthereumConfig {
     uint256 public constant SHARD_COUNT = 16;
     uint256 public constant PRIZE_SLOTS = 3;
     uint8 public constant DRAW_BATCH_SIZE = 8;
+    uint8 public constant SHARD_SELECTION_CHUNK_SIZE = 4;
     uint8 public constant MAX_DRAW_BUCKET_EXPONENT = 69;
     uint128 public constant MAX_DRAW_TOTAL = uint128(1) << MAX_DRAW_BUCKET_EXPONENT;
 
@@ -41,6 +42,15 @@ contract VeilDrawEngineV2 is ZamaEthereumConfig {
         FINALIZED,
         NO_WEIGHT_TERMINAL,
         UNSUPPORTED_TOTAL
+    }
+
+    /// @dev Internal two-stage winner-resolution phase. This enum does not
+    /// alter the externally compatibility-sensitive DrawState ordinals.
+    enum ResolutionPhase {
+        NONE,
+        SHARD_SELECTION,
+        SLOT_RESOLUTION,
+        COMPLETE
     }
 
     address public immutable pool;
@@ -73,6 +83,14 @@ contract VeilDrawEngineV2 is ZamaEthereumConfig {
         euint128 batchTarget;
         ebool batchSuccess;
         euint128 acceptedTarget;
+        // GATE_5_PRIVATE_RESOLUTION
+        ResolutionPhase resolutionPhase;
+        uint256 shardSelectionCursor;
+        uint256 winnerShardCursor;
+        uint256 winnerCursor;
+        euint128 shardRunningPrefix;
+        euint128 runningPrefix;
+        euint128 winnerCount;
     }
 
     mapping(uint256 => Snapshot) private _snapshots;
@@ -89,6 +107,15 @@ contract VeilDrawEngineV2 is ZamaEthereumConfig {
     mapping(uint256 => mapping(uint256 => uint256)) public snapshotPrizeDrawId;
 
     mapping(uint256 => Draw) private _draws;
+
+    /// @dev Encrypted selected-shard predicates. Never publicly decryptable.
+    mapping(uint256 => mapping(uint256 => ebool)) private _drawSelectedShards;
+
+    /// @dev Encrypted global prefix at the start of each logical shard.
+    mapping(uint256 => mapping(uint256 => euint128)) private _drawShardPrefixes;
+
+    /// @dev Encrypted historical-slot winner predicates.
+    mapping(uint256 => mapping(uint256 => ebool)) private _drawWinnerPredicates;
 
     error InvalidPool();
     error OnlyPool();
@@ -115,6 +142,10 @@ contract VeilDrawEngineV2 is ZamaEthereumConfig {
     error DrawBatchMismatch();
     error InvalidDrawBucketEvidence();
     error InvalidDrawIndex();
+    error InvalidResolutionPhase(ResolutionPhase expected, ResolutionPhase actual);
+    error DrawShardSelectionComplete();
+    error DrawWinnerResolutionComplete();
+    error DrawWinnerIncomplete();
 
     event SnapshotImportStarted(uint256 indexed snapshotId, uint256 participantCount);
 
@@ -159,6 +190,24 @@ contract VeilDrawEngineV2 is ZamaEthereumConfig {
         uint256 indexed batchId,
         bool success
     );
+
+    event DrawWinnerResolutionStarted(uint256 indexed drawId, uint256 indexed snapshotId);
+
+    event DrawShardSelectionChunkProcessed(
+        uint256 indexed drawId,
+        uint256 indexed snapshotId,
+        uint256 startShard,
+        uint256 endShard
+    );
+
+    event DrawWinnerShardProcessed(
+        uint256 indexed drawId,
+        uint256 indexed snapshotId,
+        uint256 shardIndex,
+        uint256 winnerCursor
+    );
+
+    event DrawFinalized(uint256 indexed drawId, uint256 indexed snapshotId);
 
     modifier onlyPool() {
         if (msg.sender != pool) revert OnlyPool();
@@ -620,6 +669,218 @@ contract VeilDrawEngineV2 is ZamaEthereumConfig {
     }
 
     // ---------------------------------------------------------------------
+    // Gate 5: private two-stage 16-shard winner resolution
+    // ---------------------------------------------------------------------
+
+    /// @notice Begin private winner resolution after an accepted target exists.
+    /// @dev No selected shard, target, prefix, or winner is made public.
+    function startWinnerResolution(uint256 drawId, uint256 snapshotId) external onlyPool {
+        Draw storage draw = _draw(drawId, snapshotId);
+
+        if (draw.state != DrawState.CANDIDATE_ACCEPTED) {
+            revert InvalidDrawState(DrawState.CANDIDATE_ACCEPTED, draw.state);
+        }
+
+        draw.resolutionPhase = ResolutionPhase.SHARD_SELECTION;
+
+        draw.shardSelectionCursor = 0;
+        draw.winnerShardCursor = 0;
+        draw.winnerCursor = 0;
+
+        draw.shardRunningPrefix = FHE.asEuint128(0);
+
+        draw.runningPrefix = FHE.asEuint128(0);
+
+        draw.winnerCount = FHE.asEuint128(0);
+
+        FHE.allowThis(draw.shardRunningPrefix);
+
+        FHE.allowThis(draw.runningPrefix);
+
+        FHE.allowThis(draw.winnerCount);
+
+        draw.state = DrawState.WINNER_RESOLUTION;
+
+        emit DrawWinnerResolutionStarted(drawId, snapshotId);
+    }
+
+    /// @notice Process exactly four logical shard predicates per transaction.
+    /// @dev All sixteen logical shards are processed, including encrypted-zero
+    /// padded shards beyond the public participant bound. The selected shard
+    /// itself remains encrypted.
+    function processDrawShardSelectionChunk(uint256 drawId, uint256 snapshotId) external onlyPool {
+        Draw storage draw = _draw(drawId, snapshotId);
+
+        if (draw.state != DrawState.WINNER_RESOLUTION) {
+            revert InvalidDrawState(DrawState.WINNER_RESOLUTION, draw.state);
+        }
+
+        if (draw.resolutionPhase != ResolutionPhase.SHARD_SELECTION) {
+            revert InvalidResolutionPhase(ResolutionPhase.SHARD_SELECTION, draw.resolutionPhase);
+        }
+
+        uint256 start = draw.shardSelectionCursor;
+
+        if (start >= SHARD_COUNT) {
+            revert DrawShardSelectionComplete();
+        }
+
+        uint256 end = start + SHARD_SELECTION_CHUNK_SIZE;
+
+        if (end > SHARD_COUNT) {
+            end = SHARD_COUNT;
+        }
+
+        uint256 activeShards = (draw.participantCount + SHARD_SIZE - 1) / SHARD_SIZE;
+
+        euint128 prefix = draw.shardRunningPrefix;
+
+        for (uint256 shardIndex = start; shardIndex < end; ++shardIndex) {
+            _drawShardPrefixes[drawId][shardIndex] = prefix;
+
+            FHE.allowThis(_drawShardPrefixes[drawId][shardIndex]);
+
+            euint128 shardTotal = FHE.asEuint128(0);
+
+            if (shardIndex < activeShards) {
+                shardTotal = _snapshotShardTotals[snapshotId][shardIndex];
+            }
+
+            euint128 nextPrefix = FHE.add(prefix, shardTotal);
+
+            ebool selectedShard = FHE.and(
+                FHE.le(prefix, draw.acceptedTarget),
+                FHE.lt(draw.acceptedTarget, nextPrefix)
+            );
+
+            _drawSelectedShards[drawId][shardIndex] = selectedShard;
+
+            FHE.allowThis(_drawSelectedShards[drawId][shardIndex]);
+
+            prefix = nextPrefix;
+        }
+
+        draw.shardRunningPrefix = prefix;
+
+        FHE.allowThis(draw.shardRunningPrefix);
+
+        draw.shardSelectionCursor = end;
+
+        if (end == SHARD_COUNT) {
+            draw.resolutionPhase = ResolutionPhase.SLOT_RESOLUTION;
+        }
+
+        emit DrawShardSelectionChunkProcessed(drawId, snapshotId, start, end);
+    }
+
+    /// @notice Process one fixed eight-slot shard without revealing whether
+    /// that shard is selected.
+    /// @dev Every logical shard is processed in order. Each persisted winner
+    /// predicate is gated by the encrypted selected-shard predicate.
+    function processDrawWinnerShard(uint256 drawId, uint256 snapshotId) external onlyPool {
+        Draw storage draw = _draw(drawId, snapshotId);
+
+        if (draw.state != DrawState.WINNER_RESOLUTION) {
+            revert InvalidDrawState(DrawState.WINNER_RESOLUTION, draw.state);
+        }
+
+        if (draw.resolutionPhase != ResolutionPhase.SLOT_RESOLUTION) {
+            revert InvalidResolutionPhase(ResolutionPhase.SLOT_RESOLUTION, draw.resolutionPhase);
+        }
+
+        uint256 shardIndex = draw.winnerShardCursor;
+
+        if (shardIndex >= SHARD_COUNT) {
+            revert DrawWinnerResolutionComplete();
+        }
+
+        ebool selectedShard = _drawSelectedShards[drawId][shardIndex];
+
+        euint128 prefix = _drawShardPrefixes[drawId][shardIndex];
+
+        euint128 winnerCount = draw.winnerCount;
+
+        uint256 shardStart = shardIndex * SHARD_SIZE;
+
+        for (uint256 offset = 0; offset < SHARD_SIZE; ++offset) {
+            uint256 slotIndex = shardStart + offset;
+
+            euint128 weight = FHE.asEuint128(0);
+
+            if (slotIndex < draw.participantCount) {
+                weight = _snapshotWeights[snapshotId][slotIndex];
+            }
+
+            euint128 nextPrefix = FHE.add(prefix, weight);
+
+            ebool inWinnerInterval = FHE.and(
+                FHE.le(prefix, draw.acceptedTarget),
+                FHE.lt(draw.acceptedTarget, nextPrefix)
+            );
+
+            ebool winner = FHE.and(selectedShard, inWinnerInterval);
+
+            if (slotIndex < draw.participantCount) {
+                _drawWinnerPredicates[drawId][slotIndex] = winner;
+
+                FHE.allowThis(_drawWinnerPredicates[drawId][slotIndex]);
+            }
+
+            winnerCount = FHE.add(winnerCount, FHE.asEuint128(winner));
+
+            prefix = nextPrefix;
+        }
+
+        draw.runningPrefix = prefix;
+
+        draw.winnerCount = winnerCount;
+
+        FHE.allowThis(draw.runningPrefix);
+
+        FHE.allowThis(draw.winnerCount);
+
+        draw.winnerShardCursor = shardIndex + 1;
+
+        uint256 processedSlots = (shardIndex + 1) * SHARD_SIZE;
+
+        if (processedSlots > draw.participantCount) {
+            processedSlots = draw.participantCount;
+        }
+
+        draw.winnerCursor = processedSlots;
+
+        if (draw.winnerShardCursor == SHARD_COUNT) {
+            draw.resolutionPhase = ResolutionPhase.COMPLETE;
+        }
+
+        emit DrawWinnerShardProcessed(drawId, snapshotId, shardIndex, draw.winnerCursor);
+    }
+
+    /// @notice Finalize only after the fixed sixteen-shard private resolution
+    /// has completed.
+    /// @dev Winner/shard/count/prefix ciphertexts remain private.
+    function finalizeDraw(uint256 drawId, uint256 snapshotId) external onlyPool {
+        Draw storage draw = _draw(drawId, snapshotId);
+
+        if (draw.state != DrawState.WINNER_RESOLUTION) {
+            revert InvalidDrawState(DrawState.WINNER_RESOLUTION, draw.state);
+        }
+
+        if (
+            draw.resolutionPhase != ResolutionPhase.COMPLETE ||
+            draw.shardSelectionCursor != SHARD_COUNT ||
+            draw.winnerShardCursor != SHARD_COUNT ||
+            draw.winnerCursor != draw.participantCount
+        ) {
+            revert DrawWinnerIncomplete();
+        }
+
+        draw.state = DrawState.FINALIZED;
+
+        emit DrawFinalized(drawId, snapshotId);
+    }
+
+    // ---------------------------------------------------------------------
     // Review/read surfaces
     // ---------------------------------------------------------------------
 
@@ -737,6 +998,81 @@ contract VeilDrawEngineV2 is ZamaEthereumConfig {
 
     function drawAcceptedTargetHandle(uint256 drawId) external view returns (euint128) {
         return _drawExisting(drawId).acceptedTarget;
+    }
+
+    /// @notice Return public progress only; no private selection is exposed.
+    function drawResolutionMetadata(
+        uint256 drawId
+    )
+        external
+        view
+        returns (
+            ResolutionPhase phase,
+            uint256 shardSelectionCursor,
+            uint256 winnerShardCursor,
+            uint256 winnerCursor
+        )
+    {
+        Draw storage draw = _drawExisting(drawId);
+
+        return (
+            draw.resolutionPhase,
+            draw.shardSelectionCursor,
+            draw.winnerShardCursor,
+            draw.winnerCursor
+        );
+    }
+
+    /// @notice Return one encrypted selected-shard predicate handle.
+    function drawSelectedShardHandle(
+        uint256 drawId,
+        uint256 shardIndex
+    ) external view returns (ebool) {
+        if (shardIndex >= SHARD_COUNT) {
+            revert InvalidShard();
+        }
+
+        _drawExisting(drawId);
+
+        return _drawSelectedShards[drawId][shardIndex];
+    }
+
+    /// @notice Return the encrypted global prefix frozen at one shard boundary.
+    function drawShardPrefixHandle(
+        uint256 drawId,
+        uint256 shardIndex
+    ) external view returns (euint128) {
+        if (shardIndex >= SHARD_COUNT) {
+            revert InvalidShard();
+        }
+
+        _drawExisting(drawId);
+
+        return _drawShardPrefixes[drawId][shardIndex];
+    }
+
+    /// @notice Return one encrypted winner predicate.
+    function drawWinnerPredicateHandle(
+        uint256 drawId,
+        uint256 slotIndex
+    ) external view returns (ebool) {
+        Draw storage draw = _drawExisting(drawId);
+
+        if (slotIndex >= draw.participantCount) {
+            revert InvalidDrawIndex();
+        }
+
+        return _drawWinnerPredicates[drawId][slotIndex];
+    }
+
+    /// @notice Return confidential resolution invariant handles for local
+    /// verification. None is made publicly decryptable.
+    function drawResolutionHandles(
+        uint256 drawId
+    ) external view returns (euint128 shardPrefix, euint128 runningPrefix, euint128 winnerCount) {
+        Draw storage draw = _drawExisting(drawId);
+
+        return (draw.shardRunningPrefix, draw.runningPrefix, draw.winnerCount);
     }
 
     /// @notice Public proof-domain value for deterministic off-chain review.

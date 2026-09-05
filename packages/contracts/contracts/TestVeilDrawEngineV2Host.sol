@@ -132,4 +132,22 @@ contract TestVeilDrawEngineV2Host is ZamaEthereumConfig {
     ) external {
         engine.submitDrawBatchEvidence(drawId, snapshotId, batchId, success, proof);
     }
+
+    // GATE_5_WINNER_WRAPPERS
+
+    function startWinnerResolution(uint256 drawId, uint256 snapshotId) external {
+        engine.startWinnerResolution(drawId, snapshotId);
+    }
+
+    function processDrawShardSelectionChunk(uint256 drawId, uint256 snapshotId) external {
+        engine.processDrawShardSelectionChunk(drawId, snapshotId);
+    }
+
+    function processDrawWinnerShard(uint256 drawId, uint256 snapshotId) external {
+        engine.processDrawWinnerShard(drawId, snapshotId);
+    }
+
+    function finalizeDraw(uint256 drawId, uint256 snapshotId) external {
+        engine.finalizeDraw(drawId, snapshotId);
+    }
 }
