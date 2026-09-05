@@ -6,6 +6,11 @@ surfaces.
 
 The live application is deployed at https://veilpot.vercel.app.
 
+> [!IMPORTANT] This guide describes the frozen **V1 production frontend integration**. The
+> separately deployed VeilDraw V2 contracts are not yet bound to the production frontend. See
+> [`VEILDRAW_V2_SEPOLIA_STATUS.md`](VEILDRAW_V2_SEPOLIA_STATUS.md) for the V2 deployment and
+> verification boundary.
+
 ## Integration source of truth
 
 Frontend protocol interactions consume `@veilpot/protocol-sdk` rather than maintaining independent

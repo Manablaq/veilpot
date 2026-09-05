@@ -11,6 +11,8 @@ financial state or granting a keeper standing custody.
 - **Network:** Ethereum Sepolia (`11155111`)
 - **Reviewer guide:** [`docs/README.md`](docs/README.md)
 - **Production status:** [`docs/PRODUCTION_STATUS.md`](docs/PRODUCTION_STATUS.md)
+- **VeilDraw V2 Sepolia status:**
+  [`docs/VEILDRAW_V2_SEPOLIA_STATUS.md`](docs/VEILDRAW_V2_SEPOLIA_STATUS.md)
 - **Frontend security model:** [`docs/FRONTEND_SECURITY_MODEL.md`](docs/FRONTEND_SECURITY_MODEL.md)
 - **Reproducible verification:**
   [`docs/TESTING_AND_REPRODUCIBILITY.md`](docs/TESTING_AND_REPRODUCIBILITY.md)
@@ -96,7 +98,7 @@ flowchart LR
   participant lifecycle, draw math, TWAB, yield/prize accounting, Autopilot, and claim rules.
 - [`evidence`](evidence) — frozen Gate 0 and live Sepolia deployment/runtime evidence.
 
-## Sepolia deployment
+## Production frontend deployment (V1)
 
 | Component                    | Address                                      |
 | ---------------------------- | -------------------------------------------- |
@@ -112,6 +114,27 @@ Canonical deployment evidence:
 
 Canonical live lifecycle evidence:
 [`evidence/production-sepolia/autopilot-v3/runtime-smoke.json`](evidence/production-sepolia/autopilot-v3/runtime-smoke.json)
+
+### Deployed VeilDraw V2 protocol
+
+The V2 protocol is deployed independently on Sepolia and is **not yet bound to the production
+frontend**.
+
+| Component                      | Address                                      |
+| ------------------------------ | -------------------------------------------- |
+| VeilpotPoolV2                  | `0x6F74fCadDc359159D0799fc9054642aB1f357161` |
+| VeilDrawEngineV2               | `0x6cfb163fC9483D0131e2b79c8c8DEFca7A17C232` |
+| VeilpotAutopilotVault          | `0xF724E327b94cCf09936cbd84990A71A40b99ad85` |
+| VeilpotSimulatedYieldAdapterV2 | `0x40DC00dDB52a1cD7864322e8E938e73f5D494D35` |
+| VeilpotPrizeReserve            | `0xCFfA037b25c151FBba0A909d2435D00522CdB00B` |
+
+V2 deployment evidence:
+
+[`evidence/production-sepolia/veildraw-v2/deployment.json`](evidence/production-sepolia/veildraw-v2/deployment.json)
+
+See [`docs/VEILDRAW_V2_SEPOLIA_STATUS.md`](docs/VEILDRAW_V2_SEPOLIA_STATUS.md) for the exact
+checkpoint, transaction hashes, runtime verification, test status, pristine-state boundary, and the
+30-day live-epoch limitation.
 
 ## Security and privacy invariants
 
@@ -160,13 +183,13 @@ See [`docs/FRONTEND_SECURITY_MODEL.md`](docs/FRONTEND_SECURITY_MODEL.md),
 
 The current implementation has passed:
 
-- **212** contract tests;
-- **102** deterministic reference-model tests;
+- **267** contract tests;
+- **114** deterministic reference-model tests;
 - **16** protocol-SDK tests;
 - root Prettier validation;
 - root ESLint and Solidity lint;
 - root TypeScript project-reference typecheck;
-- 45-file Solidity compilation under the local verification profile;
+- Solidity compilation under the local verification profile;
 - Gate 0 deterministic/reference and VeilDraw verification;
 - production Next.js build;
 - live Sepolia deployment/runtime evidence verification;

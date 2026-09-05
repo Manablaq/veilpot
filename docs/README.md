@@ -5,19 +5,20 @@ Veilpot.
 
 ## Start here
 
-| Document                                                           | Purpose                                                                         |
-| ------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
-| [`PRODUCTION_STATUS.md`](PRODUCTION_STATUS.md)                     | Authoritative current deployment, frontend, CI, evidence, and acceptance status |
-| [`INTEGRATION_GUIDE.md`](INTEGRATION_GUIDE.md)                     | Implemented browser-to-SDK-to-contract integration boundary                     |
-| [`FRONTEND_SECURITY_MODEL.md`](FRONTEND_SECURITY_MODEL.md)         | Browser threat model, wallet-action safety, privacy and decryption rules        |
-| [`TESTING_AND_REPRODUCIBILITY.md`](TESTING_AND_REPRODUCIBILITY.md) | Exact supported toolchain, clean-checkout gate, CI and production acceptance    |
-| [`AUTOPILOT_SECURITY_MODEL.md`](AUTOPILOT_SECURITY_MODEL.md)       | Autopilot custody, authority, schedule and recovery model                       |
-| [`GATE_1_SECURITY_MODEL.md`](GATE_1_SECURITY_MODEL.md)             | Core protocol security model                                                    |
-| [`GATE_1_PRIVACY_LEDGER.md`](GATE_1_PRIVACY_LEDGER.md)             | Confidential/public-state classification                                        |
-| [`VEILDRAW_PRIVACY.md`](VEILDRAW_PRIVACY.md)                       | VeilDraw privacy properties                                                     |
-| [`VEILDRAW_SECURITY.md`](VEILDRAW_SECURITY.md)                     | VeilDraw adversarial/security analysis                                          |
-| [`VEILDRAW_MATH.md`](VEILDRAW_MATH.md)                             | Winner-selection mathematics                                                    |
-| [`VEILDRAW_PERFORMANCE.md`](VEILDRAW_PERFORMANCE.md)               | Bounded encrypted-computation performance evidence                              |
+| Document                                                           | Purpose                                                                      |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| [`PRODUCTION_STATUS.md`](PRODUCTION_STATUS.md)                     | Authoritative production/frontend status and V1/V2 boundary                  |
+| [`VEILDRAW_V2_SEPOLIA_STATUS.md`](VEILDRAW_V2_SEPOLIA_STATUS.md)   | Deployed V2 protocol, evidence, verification, and live-lifecycle boundary    |
+| [`INTEGRATION_GUIDE.md`](INTEGRATION_GUIDE.md)                     | Implemented browser-to-SDK-to-contract integration boundary                  |
+| [`FRONTEND_SECURITY_MODEL.md`](FRONTEND_SECURITY_MODEL.md)         | Browser threat model, wallet-action safety, privacy and decryption rules     |
+| [`TESTING_AND_REPRODUCIBILITY.md`](TESTING_AND_REPRODUCIBILITY.md) | Exact supported toolchain, clean-checkout gate, CI and production acceptance |
+| [`AUTOPILOT_SECURITY_MODEL.md`](AUTOPILOT_SECURITY_MODEL.md)       | Autopilot custody, authority, schedule and recovery model                    |
+| [`GATE_1_SECURITY_MODEL.md`](GATE_1_SECURITY_MODEL.md)             | Core protocol security model                                                 |
+| [`GATE_1_PRIVACY_LEDGER.md`](GATE_1_PRIVACY_LEDGER.md)             | Confidential/public-state classification                                     |
+| [`VEILDRAW_PRIVACY.md`](VEILDRAW_PRIVACY.md)                       | VeilDraw privacy properties                                                  |
+| [`VEILDRAW_SECURITY.md`](VEILDRAW_SECURITY.md)                     | VeilDraw adversarial/security analysis                                       |
+| [`VEILDRAW_MATH.md`](VEILDRAW_MATH.md)                             | Winner-selection mathematics                                                 |
+| [`VEILDRAW_PERFORMANCE.md`](VEILDRAW_PERFORMANCE.md)               | Bounded encrypted-computation performance evidence                           |
 
 ## Live system
 
@@ -29,6 +30,12 @@ Veilpot.
 - Simulated Yield Adapter: `0xEa9868e982b98B57C52B95853EdE2552dAD74b64`
 - Prize Reserve: `0xbEe24d1060d94d435272550fAa5616faD59Ad1a1`
 
+The addresses above are the frozen V1 production frontend target.
+
+The separately deployed V2 protocol is documented in
+[`VEILDRAW_V2_SEPOLIA_STATUS.md`](VEILDRAW_V2_SEPOLIA_STATUS.md). The V2 deployment is not silently
+substituted into the live frontend.
+
 The token is Zama's official Sepolia Confidential USDT Mock and the yield integration is explicitly
 simulated for the demo environment.
 
@@ -36,15 +43,16 @@ simulated for the demo environment.
 
 1. Confirm the public application loads and identifies itself as a Sepolia testnet experience.
 2. Read [`PRODUCTION_STATUS.md`](PRODUCTION_STATUS.md).
-3. Inspect
-   [`../evidence/production-sepolia/autopilot-v3/deployment.json`](../evidence/production-sepolia/autopilot-v3/deployment.json).
+3. Read [`VEILDRAW_V2_SEPOLIA_STATUS.md`](VEILDRAW_V2_SEPOLIA_STATUS.md).
 4. Inspect
+   [`../evidence/production-sepolia/autopilot-v3/deployment.json`](../evidence/production-sepolia/autopilot-v3/deployment.json).
+5. Inspect
    [`../evidence/production-sepolia/autopilot-v3/runtime-smoke.json`](../evidence/production-sepolia/autopilot-v3/runtime-smoke.json).
-5. Review frontend consequence/decryption boundaries in
+6. Review frontend consequence/decryption boundaries in
    [`FRONTEND_SECURITY_MODEL.md`](FRONTEND_SECURITY_MODEL.md).
-6. Reproduce the clean repository gate with
+7. Reproduce the clean repository gate with
    [`TESTING_AND_REPRODUCIBILITY.md`](TESTING_AND_REPRODUCIBILITY.md).
-7. Use the Gate/VeilDraw documents below for deeper historical design evidence.
+8. Use the Gate/VeilDraw documents below for deeper historical design evidence.
 
 ## Historical engineering record
 

@@ -6,6 +6,34 @@ Historical Gate, VeilDraw, and Autopilot design documents preserve earlier engin
 They remain evidence, but this document is the source of truth for current implementation and
 submission readiness.
 
+## V1 production / V2 protocol boundary
+
+Veilpot currently has two deliberately separate verified tracks:
+
+- **V1 production application** — the browser-accepted application at https://veilpot.vercel.app
+  remains bound to the previously frozen V1 Sepolia deployment.
+- **VeilDraw V2 protocol deployment** — the additive private-sharded three-prize protocol is
+  independently deployed on Sepolia on `feature/veildraw-v2-private-multiprize`, with
+  deployment/runtime evidence committed and CI-green.
+
+The V2 deployment has not been silently substituted into the production frontend.
+
+V2 audited source checkpoint:
+
+`1fd76c6542af8e84aaf8630d285653ac43cd564a`
+
+V2 deployment-evidence checkpoint:
+
+`b24ce24fa8dcc5fb9eecbbc209e4ce5d9f7bd9f1`
+
+V2 evidence-checkpoint CI run:
+
+`33954119837` — success
+
+See [`VEILDRAW_V2_SEPOLIA_STATUS.md`](VEILDRAW_V2_SEPOLIA_STATUS.md) for the exact V2 addresses,
+transaction hashes, runtime identity, deterministic deployment plan, pristine post-deployment state,
+and live-epoch boundary.
+
 ## Current checkpoint
 
 | Surface                       | Status                               |
@@ -162,8 +190,8 @@ The current repository checkpoint has passed:
 
 | Validation                          | Result      |
 | ----------------------------------- | ----------- |
-| Contract tests                      | 212 passing |
-| Deterministic reference-model tests | 102 passing |
+| Contract tests                      | 267 passing |
+| Deterministic reference-model tests | 114 passing |
 | Protocol-SDK tests                  | 16 passing  |
 | Reference-model build               | Pass        |
 | Protocol-SDK clean build            | Pass        |

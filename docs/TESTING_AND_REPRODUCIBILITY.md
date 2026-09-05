@@ -66,8 +66,8 @@ pnpm --filter @veilpot/web build
 
 Final audit results:
 
-- reference model: **102 passing**;
-- contracts: **212 passing**;
+- reference model: **114 passing**;
+- contracts: **267 passing**;
 - protocol SDK: **16 passing**;
 - Solidity compile: **45 files compiled successfully**;
 - Gate 0 reference-model suite: **102 passing**;
@@ -85,6 +85,15 @@ The final code freeze passed both:
 
 Each completed checkout/setup, frozen install, format check, lint, typecheck, contract compile, full
 tests, and Gate 0.
+
+The additive VeilDraw V2 deployment-evidence checkpoint also passed the complete push CI pipeline:
+
+- V2 evidence checkpoint: `b24ce24fa8dcc5fb9eecbbc209e4ce5d9f7bd9f1`;
+- Gate 0 CI run: `33954119837`;
+- result: **success**.
+
+The V2 checkpoint includes **114** reference-model tests, **267** contract tests, and **16**
+protocol-SDK tests.
 
 ## Clean-checkout lint incident and fix
 
