@@ -1229,3 +1229,324 @@
     transition: none;
   }
 }
+
+/* Meridian M4 · V2 Save */
+
+.saveWorkspace {
+  display: grid;
+  gap: 16px;
+}
+
+.saveSummaryGrid {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1.15fr)
+    minmax(340px, 0.85fr);
+  gap: 16px;
+}
+
+.saveLifecycleCard,
+.saveActionCard,
+.saveTimelineCard,
+.saveExactAction {
+  padding: 26px;
+}
+
+.saveLifecycleCard {
+  min-height: 390px;
+}
+
+.saveCardHeader,
+.saveExactAction > header,
+.saveTimelineCard > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.saveCardHeader h2,
+.saveActionCard h2,
+.saveExactAction h2 {
+  margin: 8px 0 0;
+  font-size: 1.42rem;
+  font-weight: 640;
+  letter-spacing: -0.035em;
+}
+
+.saveLifecycleDetail,
+.saveActionCard > p,
+.saveExactAction > p {
+  margin: 24px 0 0;
+  color: var(--vp-text-secondary);
+  line-height: 1.65;
+}
+
+.saveLoadingState {
+  min-height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--vp-text-muted);
+  font-size: 0.74rem;
+}
+
+.saveLoadingState > svg {
+  color: var(--vp-protocol);
+  animation: vp-save-spin 900ms linear infinite;
+}
+
+@keyframes vp-save-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.savePublicMetadata {
+  margin: 30px 0 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid var(--vp-border);
+}
+
+.savePublicMetadata > div {
+  min-width: 0;
+  padding: 15px 0;
+  border-bottom: 1px solid var(--vp-border);
+}
+
+.savePublicMetadata > div:nth-child(odd) {
+  padding-right: 16px;
+}
+
+.savePublicMetadata > div:nth-child(even) {
+  padding-left: 16px;
+  border-left: 1px solid var(--vp-border);
+}
+
+.savePublicMetadata dt,
+.saveTimelineCard dt,
+.saveExactAction dt {
+  margin-bottom: 5px;
+  color: var(--vp-text-muted);
+  font-size: 0.62rem;
+}
+
+.savePublicMetadata dd,
+.saveTimelineCard dd,
+.saveExactAction dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--vp-text-secondary);
+  font-family: var(--vp-font-mono);
+  font-size: 0.68rem;
+}
+
+.saveRefreshRow {
+  margin-top: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.saveActionCard {
+  min-height: 390px;
+}
+
+.saveActionIcon {
+  width: 46px;
+  height: 46px;
+  margin-top: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  color: var(--vp-protocol-hover);
+  background: var(--vp-protocol-soft);
+}
+
+.saveBondRow {
+  margin: 26px 0 16px;
+  padding: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border: 1px solid var(--vp-border);
+  border-radius: 12px;
+  background: var(--vp-surface-raised);
+}
+
+.saveBondRow span {
+  color: var(--vp-text-muted);
+  font-size: 0.68rem;
+}
+
+.saveBondRow strong {
+  font-family: var(--vp-font-mono);
+  font-size: 0.75rem;
+}
+
+.saveActionFootnote {
+  display: block;
+  margin-top: 12px;
+  color: var(--vp-text-muted);
+  font-size: 0.64rem;
+  line-height: 1.5;
+}
+
+.saveTimelineCard {
+  padding-top: 20px;
+  padding-bottom: 20px;
+}
+
+.saveTimelineCard > header > div {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--vp-protocol);
+  font-size: 0.74rem;
+  font-weight: 650;
+}
+
+.saveTimelineCard > dl {
+  margin: 20px 0 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-top: 1px solid var(--vp-border);
+}
+
+.saveTimelineCard > dl > div {
+  min-width: 0;
+  padding: 15px 12px 0;
+}
+
+.saveTimelineCard > dl > div:first-child {
+  padding-left: 0;
+}
+
+.saveTimelineCard > dl > div + div {
+  border-left: 1px solid var(--vp-border);
+}
+
+.saveExactAction {
+  display: grid;
+  gap: 20px;
+}
+
+.saveExactAction > header {
+  justify-content: flex-start;
+}
+
+.saveExactAction > header > svg {
+  margin-top: 2px;
+  color: var(--vp-protocol);
+}
+
+.saveExactAction > dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border: 1px solid var(--vp-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.saveExactAction > dl > div {
+  min-width: 0;
+  padding: 13px 14px;
+}
+
+.saveExactAction > dl > div:nth-child(even) {
+  border-left: 1px solid var(--vp-border);
+}
+
+.saveExactAction > dl > div:nth-child(n + 3) {
+  border-top: 1px solid var(--vp-border);
+}
+
+.saveExactAction :global(.vp-technical-disclosure) code {
+  display: block;
+  overflow-wrap: anywhere;
+  color: var(--vp-text-secondary);
+  font-size: 0.62rem;
+  line-height: 1.55;
+}
+
+.saveExactActionButtons {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.saveStatusCopy {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.saveStatusCopy > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--vp-protocol-hover);
+  font-size: 0.68rem;
+  text-decoration: none;
+}
+
+@media (max-width: 1120px) {
+  .saveSummaryGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .saveLifecycleCard,
+  .saveActionCard,
+  .saveTimelineCard,
+  .saveExactAction {
+    padding: 20px;
+  }
+
+  .savePublicMetadata,
+  .saveExactAction > dl {
+    grid-template-columns: 1fr;
+  }
+
+  .savePublicMetadata > div:nth-child(odd),
+  .savePublicMetadata > div:nth-child(even) {
+    padding: 13px 0;
+    border-left: 0;
+  }
+
+  .saveExactAction > dl > div:nth-child(even) {
+    border-left: 0;
+  }
+
+  .saveExactAction > dl > div + div {
+    border-top: 1px solid var(--vp-border);
+  }
+
+  .saveTimelineCard > dl {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .saveTimelineCard > dl > div {
+    padding: 13px 10px;
+    border-bottom: 1px solid var(--vp-border);
+  }
+
+  .saveTimelineCard > dl > div:nth-child(odd) {
+    padding-left: 0;
+    border-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .saveLoadingState > svg {
+    animation: none;
+  }
+}

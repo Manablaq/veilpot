@@ -4,7 +4,6 @@ import {
   Activity,
   ArrowRight,
   CalendarClock,
-  CircleAlert,
   Gift,
   KeyRound,
   LockKeyhole,
@@ -28,6 +27,7 @@ import {
   Surface,
 } from "@/components/meridian";
 import { meridianNavigationItem, type MeridianView } from "@/components/meridian/app-navigation";
+import { MeridianSaveControl } from "@/components/meridian/save-control";
 import { ThemeControl } from "@/components/theme-control";
 
 interface MeridianWorkspaceProps {
@@ -225,44 +225,7 @@ export function MeridianWorkspace({
         </>
       ) : null}
 
-      {view === "save" ? (
-        <div className={styles.featureGrid}>
-          <GuardedFeature
-            icon={WalletCards}
-            eyebrow="SAVE · V2"
-            title="Private saving controls"
-            description="Registration, confidential deposits, withdrawals, deregistration and recovery belong here."
-            nextGate="Meridian M4"
-          />
-
-          <Surface className={styles.featureSteps}>
-            <span className={styles.workspaceEyebrow}>TRANSACTION FLOW</span>
-
-            {[
-              ["01", "Register", "Reserve a participant slot against Pool V2."],
-              [
-                "02",
-                "Deposit privately",
-                "Encrypt the amount for the exact V2 Pool and submitting wallet.",
-              ],
-              ["03", "Activate", "Settle the public lifecycle without revealing principal."],
-              [
-                "04",
-                "Withdraw safely",
-                "Prepare an exact encrypted withdrawal and preserve recovery state.",
-              ],
-            ].map(([index, label, detail]) => (
-              <div className={styles.featureStep} key={index}>
-                <span>{index}</span>
-                <div>
-                  <strong>{label}</strong>
-                  <small>{detail}</small>
-                </div>
-              </div>
-            ))}
-          </Surface>
-        </div>
-      ) : null}
+      {view === "save" ? <MeridianSaveControl authenticatedAddress={authenticatedAddress} /> : null}
 
       {view === "autopilot" ? (
         <div className={styles.featureGrid}>
@@ -437,14 +400,6 @@ export function MeridianWorkspace({
               Open wallet controls
             </MeridianButton>
           </Surface>
-        </div>
-      ) : null}
-
-      {view === "save" ? (
-        <div className={styles.integrationNotice}>
-          <CircleAlert size={16} aria-hidden="true" />
-          Transaction buttons remain intentionally absent until the exact V2 Save integration is
-          verified.
         </div>
       ) : null}
     </section>
