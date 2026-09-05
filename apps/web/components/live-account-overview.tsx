@@ -65,44 +65,45 @@ export function LiveAccountOverview({
   const loadParticipant = useCallback(async (): Promise<ParticipantPublicSnapshot | null> => {
     if (publicClient === undefined) return null;
 
-    const maximum = await publicClient.readContract({
+    const reservations = await publicClient.getContractEvents({
       address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.pool,
       abi: VEILPOT_POOL_V2_ABI,
-      functionName: "MAX_PARTICIPANTS",
+      eventName: "ParticipantReserved",
+      args: { participant: authenticatedAddress },
+      fromBlock: BigInt(VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.blocks.pool),
+      toBlock: "latest",
     });
 
-    for (let index = 0; index < Number(maximum); index += 1) {
-      const stateValue = await publicClient.readContract({
-        address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.pool,
-        abi: VEILPOT_POOL_V2_ABI,
-        functionName: "participantState",
-        args: [BigInt(index)],
-      });
+    const latestReservation = reservations.at(-1);
+    const slotIndex = latestReservation?.args.slot;
 
-      if (stateValue === PARTICIPANT_STATE.FREE || stateValue === PARTICIPANT_STATE.TOMBSTONED) {
-        continue;
-      }
-
-      const row = await publicClient.readContract({
-        address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.pool,
-        abi: VEILPOT_POOL_V2_ABI,
-        functionName: "participantMetadata",
-        args: [BigInt(index)],
-      });
-
-      if (row[1].toLowerCase() === authenticatedAddress.toLowerCase()) {
-        return {
-          slotIndex: BigInt(index),
-          state: row[0],
-          owner: row[1],
-          registrationVersion: row[2],
-          reservationNonce: row[3],
-          bondHeld: row[8],
-        };
-      }
+    if (slotIndex === undefined) {
+      return null;
     }
 
-    return null;
+    const row = await publicClient.readContract({
+      address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.pool,
+      abi: VEILPOT_POOL_V2_ABI,
+      functionName: "participantMetadata",
+      args: [slotIndex],
+    });
+
+    if (
+      row[0] === PARTICIPANT_STATE.FREE ||
+      row[0] === PARTICIPANT_STATE.TOMBSTONED ||
+      row[1].toLowerCase() !== authenticatedAddress.toLowerCase()
+    ) {
+      return null;
+    }
+
+    return {
+      slotIndex,
+      state: row[0],
+      owner: row[1],
+      registrationVersion: row[2],
+      reservationNonce: row[3],
+      bondHeld: row[8],
+    };
   }, [authenticatedAddress, publicClient]);
 
   const refresh = useCallback(async () => {

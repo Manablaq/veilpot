@@ -1,5 +1,7 @@
 "use client";
 
+import { toUserFacingError } from "@/lib/ui-error";
+
 import {
   ArrowLeft,
   ArrowRight,
@@ -218,8 +220,10 @@ function compactAddress(address: Address): string {
 }
 
 function errorMessage(error: unknown): string {
-  if (error instanceof Error && error.message.trim().length > 0) return error.message;
-  return "The action could not be completed. Nothing was submitted again automatically.";
+  return toUserFacingError(
+    error,
+    "The action could not be completed. Nothing was submitted again automatically.",
+  );
 }
 
 function participantStatus(participant: ParticipantSnapshot | null): string {
@@ -537,66 +541,49 @@ export function ActionSheet({ action, authenticatedAddress, onClose }: ActionShe
         throw new Error("The Ethereum Sepolia public client is unavailable.");
       }
 
-      const maximum = await publicClient.readContract({
+      const reservations = await publicClient.getContractEvents({
         address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.pool,
         abi: VEILPOT_POOL_V2_ABI,
-        functionName: "MAX_PARTICIPANTS",
+        eventName: "ParticipantReserved",
+        args: { participant: holder },
+        fromBlock: BigInt(VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.blocks.pool),
+        toBlock: "latest",
       });
 
-      const chunkSize = 16;
-      let found: ParticipantSnapshot | null = null;
+      const latestReservation = reservations.at(-1);
+      const slotIndex = latestReservation?.args.slot;
 
-      for (let start = 0; start < Number(maximum) && found === null; start += chunkSize) {
-        const end = Math.min(start + chunkSize, Number(maximum));
-        const slots = Array.from({ length: end - start }, (_, index) => start + index);
-
-        const states = await Promise.all(
-          slots.map(async (slotIndex) => ({
-            slotIndex,
-            state: await publicClient.readContract({
-              address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.pool,
-              abi: VEILPOT_POOL_V2_ABI,
-              functionName: "participantState",
-              args: [BigInt(slotIndex)],
-            }),
-          })),
-        );
-
-        const occupiedSlots = states.filter(
-          ({ state }) => state !== PARTICIPANT_STATE.FREE && state !== PARTICIPANT_STATE.TOMBSTONED,
-        );
-
-        const rows = await Promise.all(
-          occupiedSlots.map(async ({ slotIndex }) => {
-            const row = await publicClient.readContract({
-              address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.pool,
-              abi: VEILPOT_POOL_V2_ABI,
-              functionName: "participantMetadata",
-              args: [BigInt(slotIndex)],
-            });
-            return { slotIndex, row };
-          }),
-        );
-
-        const match = rows.find(({ row }) => row[1].toLowerCase() === holder.toLowerCase());
-
-        if (match !== undefined) {
-          found = {
-            slotIndex: BigInt(match.slotIndex),
-            state: match.row[0],
-            owner: match.row[1],
-            registrationVersion: match.row[2],
-            reservationNonce: match.row[3],
-            reservationExpiry: match.row[4],
-            activationStartedAt: match.row[5],
-            activationDeadline: match.row[6],
-            refundAttemptNonce: match.row[7],
-            bondHeld: match.row[8],
-          };
-        }
+      if (slotIndex === undefined) {
+        return null;
       }
 
-      return found;
+      const row = await publicClient.readContract({
+        address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.pool,
+        abi: VEILPOT_POOL_V2_ABI,
+        functionName: "participantMetadata",
+        args: [slotIndex],
+      });
+
+      if (
+        row[0] === PARTICIPANT_STATE.FREE ||
+        row[0] === PARTICIPANT_STATE.TOMBSTONED ||
+        row[1].toLowerCase() !== holder.toLowerCase()
+      ) {
+        return null;
+      }
+
+      return {
+        slotIndex,
+        state: row[0],
+        owner: row[1],
+        registrationVersion: row[2],
+        reservationNonce: row[3],
+        reservationExpiry: row[4],
+        activationStartedAt: row[5],
+        activationDeadline: row[6],
+        refundAttemptNonce: row[7],
+        bondHeld: row[8],
+      };
     },
     [publicClient],
   );
