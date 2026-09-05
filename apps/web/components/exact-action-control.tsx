@@ -8,17 +8,21 @@ import {
   EXACT_ACTION_REVIEW_MAX_AGE_SECONDS,
   createExactActionAttempt,
   createExactActionReview,
+  exactActionAttemptMatchesScope,
+  exactActionDestinationAllowed,
   exactActionReviewInvalidReason,
+  exactActionStorageKey,
   exactActionTransactionInvalidReason,
   isExplicitWalletRejection,
   parseExactActionAttempt,
   serializeExactActionAttempt,
   withExactActionHash,
   type ExactActionAttempt,
+  type ExactActionDeploymentScope,
   type ExactActionReview,
 } from "@/lib/exact-action";
+import { VEILPOT_V1_EXACT_ACTION_SCOPE } from "@/lib/deployment-scope";
 
-const SEPOLIA_CHAIN_ID = 11155111;
 const EXACT_ACTION_SYNC_EVENT = "veilpot:exact-action-attempt-sync";
 
 export type ExactActionStatus =
@@ -44,9 +48,14 @@ function errorMessage(error: unknown): string {
   return "The exact transaction action stopped safely.";
 }
 
-export function useExactAction(authenticatedAddress: Address) {
+export function useExactAction(
+  authenticatedAddress: Address,
+  scope: ExactActionDeploymentScope = VEILPOT_V1_EXACT_ACTION_SCOPE,
+) {
   const connection = useConnection();
-  const publicClient = usePublicClient({ chainId: SEPOLIA_CHAIN_ID });
+  const publicClient = usePublicClient({
+    chainId: scope.chainId,
+  });
   const sendMutation = useSendTransaction();
 
   const [review, setReview] = useState<ExactActionReview | null>(null);
@@ -55,9 +64,8 @@ export function useExactAction(authenticatedAddress: Address) {
   const [status, setStatus] = useState<ExactActionStatus>({ kind: "idle" });
 
   const storageKey = useMemo(
-    () =>
-      `veilpot:exact-action:unresolved:v1:${String(SEPOLIA_CHAIN_ID)}:${authenticatedAddress.toLowerCase()}`,
-    [authenticatedAddress],
+    () => exactActionStorageKey(scope, authenticatedAddress),
+    [authenticatedAddress, scope],
   );
 
   const persistAttempt = useCallback(
@@ -100,8 +108,7 @@ export function useExactAction(authenticatedAddress: Address) {
         const parsed = parseExactActionAttempt(stored);
         if (
           parsed !== null &&
-          parsed.sender.toLowerCase() === authenticatedAddress.toLowerCase() &&
-          parsed.chainId === SEPOLIA_CHAIN_ID
+          exactActionAttemptMatchesScope(parsed, scope, authenticatedAddress)
         ) {
           setAttempt(parsed);
           setStatus({
@@ -120,7 +127,7 @@ export function useExactAction(authenticatedAddress: Address) {
     } finally {
       setLoadedKey(storageKey);
     }
-  }, [authenticatedAddress, storageKey]);
+  }, [authenticatedAddress, scope, storageKey]);
 
   const storageReady = loadedKey === storageKey;
 
@@ -191,10 +198,17 @@ export function useExactAction(authenticatedAddress: Address) {
         });
         return null;
       }
+      if (!exactActionDestinationAllowed(scope, input.to)) {
+        setStatus({
+          kind: "error",
+          message: "The requested destination is outside the active Veilpot deployment scope.",
+        });
+        return null;
+      }
       if (
         connection.status !== "connected" ||
         connection.address.toLowerCase() !== authenticatedAddress.toLowerCase() ||
-        connection.chainId !== SEPOLIA_CHAIN_ID ||
+        connection.chainId !== scope.chainId ||
         publicClient === undefined
       ) {
         setStatus({
@@ -222,7 +236,7 @@ export function useExactAction(authenticatedAddress: Address) {
           ...input,
           sender: connection.address,
           value,
-          chainId: SEPOLIA_CHAIN_ID,
+          chainId: scope.chainId,
           accountNonce,
           preparedAt: Math.floor(Date.now() / 1000),
         });
@@ -242,7 +256,7 @@ export function useExactAction(authenticatedAddress: Address) {
         return null;
       }
     },
-    [attempt, authenticatedAddress, connection, publicClient, storageReady],
+    [attempt, authenticatedAddress, connection, publicClient, scope, storageReady],
   );
 
   const verifySubmitted = useCallback(
@@ -308,6 +322,15 @@ export function useExactAction(authenticatedAddress: Address) {
         kind: "blocked",
         message: "An unresolved wallet attempt must be reconciled before another wallet request.",
         ...(attempt?.hash === null || attempt?.hash === undefined ? {} : { hash: attempt.hash }),
+      });
+      return null;
+    }
+    if (!exactActionDestinationAllowed(scope, current.to)) {
+      setReview(null);
+      setStatus({
+        kind: "error",
+        message:
+          "The reviewed destination no longer belongs to the active Veilpot deployment scope.",
       });
       return null;
     }
@@ -414,6 +437,7 @@ export function useExactAction(authenticatedAddress: Address) {
     persistAttempt,
     publicClient,
     review,
+    scope,
     sendMutation,
     storageReady,
     verifySubmitted,

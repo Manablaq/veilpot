@@ -3,6 +3,12 @@ import type { Address, Hex } from "viem";
 export const EXACT_ACTION_REVIEW_MAX_AGE_SECONDS = 5 * 60;
 export const EXACT_ACTION_ATTEMPT_VERSION = 1 as const;
 
+export interface ExactActionDeploymentScope {
+  readonly storageNamespace: string;
+  readonly chainId: number;
+  readonly allowedDestinations: readonly Address[];
+}
+
 export interface ExactActionReview {
   readonly key: string;
   readonly label: string;
@@ -41,6 +47,56 @@ function isHex(value: unknown): value is Hex {
 
 function sameAddress(left: Address, right: Address): boolean {
   return left.toLowerCase() === right.toLowerCase();
+}
+
+function assertExactActionDeploymentScope(scope: ExactActionDeploymentScope): void {
+  if (
+    scope.storageNamespace.trim().length === 0 ||
+    !Number.isSafeInteger(scope.chainId) ||
+    scope.chainId <= 0 ||
+    scope.allowedDestinations.length === 0 ||
+    scope.allowedDestinations.some((address) => !isAddress(address))
+  ) {
+    throw new Error("The exact-action deployment scope is invalid.");
+  }
+}
+
+export function exactActionStorageKey(
+  scope: ExactActionDeploymentScope,
+  authenticatedAddress: Address,
+): string {
+  assertExactActionDeploymentScope(scope);
+
+  if (!isAddress(authenticatedAddress)) {
+    throw new Error("The exact-action storage owner is invalid.");
+  }
+
+  return `veilpot:exact-action:unresolved:${scope.storageNamespace}:${authenticatedAddress.toLowerCase()}`;
+}
+
+export function exactActionDestinationAllowed(
+  scope: ExactActionDeploymentScope,
+  destination: Address,
+): boolean {
+  assertExactActionDeploymentScope(scope);
+
+  if (!isAddress(destination)) {
+    return false;
+  }
+
+  return scope.allowedDestinations.some((candidate) => sameAddress(candidate, destination));
+}
+
+export function exactActionAttemptMatchesScope(
+  attempt: ExactActionAttempt,
+  scope: ExactActionDeploymentScope,
+  authenticatedAddress: Address,
+): boolean {
+  return (
+    attempt.chainId === scope.chainId &&
+    sameAddress(attempt.sender, authenticatedAddress) &&
+    exactActionDestinationAllowed(scope, attempt.to)
+  );
 }
 
 export function isExplicitWalletRejection(error: unknown): boolean {
