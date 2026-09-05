@@ -66,11 +66,11 @@ pnpm --filter @veilpot/web build
 
 Final audit results:
 
-- reference model: **102 passing**;
-- contracts: **212 passing**;
-- protocol SDK: **16 passing**;
-- Solidity compile: **45 files compiled successfully**;
-- Gate 0 reference-model suite: **102 passing**;
+- reference model: **114 passing**;
+- contracts: **268 passing**;
+- protocol SDK: **31 passing**;
+- Solidity compile: **pass**;
+- Gate 0 reference-model suite: **114 passing**;
 - Gate 0 VeilDrawProbe suite: **35 passing**;
 - production Next.js build: **pass**.
 
@@ -85,6 +85,15 @@ The final code freeze passed both:
 
 Each completed checkout/setup, frozen install, format check, lint, typecheck, contract compile, full
 tests, and Gate 0.
+
+The additive VeilDraw V2 deployment-evidence checkpoint also passed the complete push CI pipeline:
+
+- V2 evidence checkpoint: `b24ce24fa8dcc5fb9eecbbc209e4ce5d9f7bd9f1`;
+- Gate 0 CI run: `33954119837`;
+- result: **success**.
+
+The V2 checkpoint includes **114** reference-model tests, **267** contract tests, and **16**
+protocol-SDK tests.
 
 ## Clean-checkout lint incident and fix
 
@@ -111,25 +120,35 @@ pages, and produced the public/auth application routes.
 
 ## Production deployment acceptance
 
-Validated code freeze:
+Current validated application checkpoint:
 
-`9c82463bd56d3c23c0a248c9314ece9d728b76fa`
+`af7d7a5049df4798c393124494eda84b6d98dca4`
 
-Validated production deployment:
+Current push CI:
 
-`dpl_2avvhvKmog4vLyAaotkc11XNUUBK`
+`33994178317` — **success**
+
+Production deployment:
+
+`https://veilpot-4llt84a8v-mr-albert-s-projects.vercel.app`
 
 Production alias:
 
 https://veilpot.vercel.app
 
-Read-only acceptance verified:
+Release verification confirmed:
 
-- `/` -> HTTP 200;
-- `/app` -> HTTP 200;
-- `/api/auth/session` -> HTTP 200 with normal unauthenticated response when no session exists;
-- current production build -> READY;
-- no runtime errors in the final checked production window.
+- local and remote branch heads matched the application checkpoint;
+- release worktree was clean;
+- `/` returned HTTP 200;
+- `/app` returned HTTP 200;
+- contracts were unchanged;
+- protocol-SDK source was unchanged;
+- deployment evidence was unchanged; and
+- the stale-bond retry guard was deployed successfully.
+
+The documentation-only closeout that follows this application checkpoint does not require another
+on-chain lifecycle test.
 
 ## Browser acceptance
 

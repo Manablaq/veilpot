@@ -1,5 +1,7 @@
 "use client";
 
+import { toUserFacingError } from "@/lib/ui-error";
+
 import { RefreshCw, ShieldCheck, WalletCards } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { encodeFunctionData, formatEther, type Address } from "viem";
@@ -8,12 +10,13 @@ import { useConnection, usePublicClient } from "wagmi";
 import {
   PARTICIPANT_STATE,
   VEILPOT_AUTOPILOT_VAULT_ABI,
-  VEILPOT_POOL_ABI,
-  VEILPOT_SEPOLIA_DEPLOYMENT,
+  VEILPOT_POOL_V2_ABI,
+  VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT,
   participantStateName,
 } from "@veilpot/protocol-sdk";
 
 import { ExactActionReviewCard, useExactAction } from "@/components/exact-action-control";
+import { VEILPOT_V2_EXACT_ACTION_SCOPE } from "@/lib/deployment-scope";
 
 interface ParticipantPublicSnapshot {
   readonly slotIndex: bigint;
@@ -37,9 +40,7 @@ interface LiveAccountState {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error && error.message.trim().length > 0
-    ? error.message
-    : "Live Sepolia state could not be loaded.";
+  return toUserFacingError(error, "Live Sepolia state could not be loaded.");
 }
 
 function timeLabel(value: bigint): string {
@@ -54,8 +55,8 @@ export function LiveAccountOverview({
   readonly compact?: boolean;
 }) {
   const connection = useConnection();
-  const publicClient = usePublicClient({ chainId: VEILPOT_SEPOLIA_DEPLOYMENT.chainId });
-  const exact = useExactAction(authenticatedAddress);
+  const publicClient = usePublicClient({ chainId: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.chainId });
+  const exact = useExactAction(authenticatedAddress, VEILPOT_V2_EXACT_ACTION_SCOPE);
 
   const [state, setState] = useState<LiveAccountState | null>(null);
   const [loading, setLoading] = useState(false);
@@ -64,44 +65,68 @@ export function LiveAccountOverview({
   const loadParticipant = useCallback(async (): Promise<ParticipantPublicSnapshot | null> => {
     if (publicClient === undefined) return null;
 
-    const maximum = await publicClient.readContract({
-      address: VEILPOT_SEPOLIA_DEPLOYMENT.pool,
-      abi: VEILPOT_POOL_ABI,
-      functionName: "MAX_PARTICIPANTS",
+    const reservations = await publicClient.getContractEvents({
+      address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.pool,
+      abi: VEILPOT_POOL_V2_ABI,
+      eventName: "ParticipantReserved",
+      args: { participant: authenticatedAddress },
+      fromBlock: BigInt(VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.blocks.pool),
+      toBlock: "latest",
     });
 
-    for (let index = 0; index < Number(maximum); index += 1) {
-      const stateValue = await publicClient.readContract({
-        address: VEILPOT_SEPOLIA_DEPLOYMENT.pool,
-        abi: VEILPOT_POOL_ABI,
-        functionName: "participantState",
-        args: [BigInt(index)],
-      });
+    const latestReservation = reservations
+      .slice()
+      .sort((left, right) => {
+        const leftBlock = left.blockNumber;
+        const rightBlock = right.blockNumber;
 
-      if (stateValue === PARTICIPANT_STATE.FREE || stateValue === PARTICIPANT_STATE.TOMBSTONED) {
-        continue;
-      }
+        if (leftBlock < rightBlock) return -1;
+        if (leftBlock > rightBlock) return 1;
 
-      const row = await publicClient.readContract({
-        address: VEILPOT_SEPOLIA_DEPLOYMENT.pool,
-        abi: VEILPOT_POOL_ABI,
-        functionName: "participantMetadata",
-        args: [BigInt(index)],
-      });
+        return left.logIndex - right.logIndex;
+      })
+      .at(-1);
 
-      if (row[1].toLowerCase() === authenticatedAddress.toLowerCase()) {
-        return {
-          slotIndex: BigInt(index),
-          state: row[0],
-          owner: row[1],
-          registrationVersion: row[2],
-          reservationNonce: row[3],
-          bondHeld: row[8],
-        };
-      }
+    const slotIndex = latestReservation?.args.slot;
+
+    if (slotIndex === undefined || slotIndex >= 128n) {
+      return null;
     }
 
-    return null;
+    const state = await publicClient.readContract({
+      address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.pool,
+      abi: VEILPOT_POOL_V2_ABI,
+      functionName: "participantState",
+      args: [slotIndex],
+    });
+
+    if (state === PARTICIPANT_STATE.FREE || state === PARTICIPANT_STATE.TOMBSTONED) {
+      return null;
+    }
+
+    const row = await publicClient.readContract({
+      address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.pool,
+      abi: VEILPOT_POOL_V2_ABI,
+      functionName: "participantMetadata",
+      args: [slotIndex],
+    });
+
+    if (
+      row[0] === PARTICIPANT_STATE.FREE ||
+      row[0] === PARTICIPANT_STATE.TOMBSTONED ||
+      row[1].toLowerCase() !== authenticatedAddress.toLowerCase()
+    ) {
+      return null;
+    }
+
+    return {
+      slotIndex,
+      state: row[0],
+      owner: row[1],
+      registrationVersion: row[2],
+      reservationNonce: row[3],
+      bondHeld: row[8],
+    };
   }, [authenticatedAddress, publicClient]);
 
   const refresh = useCallback(async () => {
@@ -124,46 +149,46 @@ export function LiveAccountOverview({
       ] = await Promise.all([
         loadParticipant(),
         publicClient.readContract({
-          address: VEILPOT_SEPOLIA_DEPLOYMENT.pool,
-          abi: VEILPOT_POOL_ABI,
+          address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.pool,
+          abi: VEILPOT_POOL_V2_ABI,
           functionName: "activeParticipantCount",
         }),
         publicClient.readContract({
-          address: VEILPOT_SEPOLIA_DEPLOYMENT.pool,
-          abi: VEILPOT_POOL_ABI,
+          address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.pool,
+          abi: VEILPOT_POOL_V2_ABI,
           functionName: "pendingBondRefund",
           args: [authenticatedAddress],
         }),
         publicClient.readContract({
-          address: VEILPOT_SEPOLIA_DEPLOYMENT.pool,
-          abi: VEILPOT_POOL_ABI,
+          address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.pool,
+          abi: VEILPOT_POOL_V2_ABI,
           functionName: "nextWithdrawNonce",
           args: [authenticatedAddress],
         }),
         publicClient.readContract({
-          address: VEILPOT_SEPOLIA_DEPLOYMENT.vault,
+          address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.vault,
           abi: VEILPOT_AUTOPILOT_VAULT_ABI,
           functionName: "nextPlanNonce",
           args: [authenticatedAddress],
         }),
         publicClient.readContract({
-          address: VEILPOT_SEPOLIA_DEPLOYMENT.pool,
-          abi: VEILPOT_POOL_ABI,
+          address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.pool,
+          abi: VEILPOT_POOL_V2_ABI,
           functionName: "activeEpochId",
         }),
         publicClient.readContract({
-          address: VEILPOT_SEPOLIA_DEPLOYMENT.pool,
-          abi: VEILPOT_POOL_ABI,
+          address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.pool,
+          abi: VEILPOT_POOL_V2_ABI,
           functionName: "activeEpochEnd",
         }),
         publicClient.readContract({
-          address: VEILPOT_SEPOLIA_DEPLOYMENT.pool,
-          abi: VEILPOT_POOL_ABI,
+          address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.pool,
+          abi: VEILPOT_POOL_V2_ABI,
           functionName: "nextSnapshotId",
         }),
         publicClient.readContract({
-          address: VEILPOT_SEPOLIA_DEPLOYMENT.pool,
-          abi: VEILPOT_POOL_ABI,
+          address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.pool,
+          abi: VEILPOT_POOL_V2_ABI,
           functionName: "nextDrawId",
         }),
       ]);
@@ -200,7 +225,7 @@ export function LiveAccountOverview({
     if (state === null || state.pendingBondRefund === 0n) return;
 
     const data = encodeFunctionData({
-      abi: VEILPOT_POOL_ABI,
+      abi: VEILPOT_POOL_V2_ABI,
       functionName: "withdrawBond",
       args: [],
     });
@@ -209,7 +234,7 @@ export function LiveAccountOverview({
       key: "registration-bond-withdrawal",
       label: "Withdraw registration bond refund",
       consequence: `Return exactly ${formatEther(state.pendingBondRefund)} ETH of public pull-refund credit to the authenticated wallet.`,
-      to: VEILPOT_SEPOLIA_DEPLOYMENT.pool,
+      to: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.pool,
       data,
       value: 0n,
     });

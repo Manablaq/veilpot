@@ -1,43 +1,39 @@
 # Veilpot frontend integration guide
 
-This document describes the **implemented** integration boundary between the production Veilpot web
-application, `@veilpot/protocol-sdk`, the frozen Sepolia deployment, and Zama confidential-token/FHE
+This document describes the current production integration between the Veilpot web application,
+`@veilpot/protocol-sdk`, the corrected V2.x Sepolia deployment, and Zama confidential-token/FHE
 surfaces.
 
 The live application is deployed at https://veilpot.vercel.app.
 
+Current application checkpoint:
+
+`af7d7a5049df4798c393124494eda84b6d98dca4`
+
 ## Integration source of truth
 
-Frontend protocol interactions consume `@veilpot/protocol-sdk` rather than maintaining independent
-copies of contract addresses, ABIs, state ordinals, EIP-712 fields, Merkle schedule construction, or
-encrypted-input construction.
+Consequential frontend interactions consume `@veilpot/protocol-sdk`.
 
-Current application-code freeze:
+The active deployment export is:
 
-`9c82463bd56d3c23c0a248c9314ece9d728b76fa`
+`VEILPOT_SEPOLIA_V2X_DEPLOYMENT`
 
-Current protocol-SDK freeze:
+Canonical deployment evidence:
 
-`de16e473739c28dbd00c731c6a7535ab3400ad0f`
-
-Current deployment/runtime evidence freeze:
-
-`fb417f62db1ba7936b80c7cfb68b0a42c2fd4972`
+[`../evidence/production-sepolia/veildraw-v2x/deployment.json`](../evidence/production-sepolia/veildraw-v2x/deployment.json)
 
 ## Network identity
 
-The integration target is Ethereum Sepolia:
-
 - chain ID: `11155111`;
-- Pool: `0x2029D8b7AE6Abe7dAa0C2A71E960839171a34601`;
-- Autopilot Vault: `0x7dF64925Af938a0535F30dE9cFBf97BB3ab30487`;
-- Adapter: `0xEa9868e982b98B57C52B95853EdE2552dAD74b64`;
-- Reserve: `0xbEe24d1060d94d435272550fAa5616faD59Ad1a1`;
+- PoolV2: `0x0482DfAeCB4b3B76b9Efd4dEF261445D7bcCFcDA`;
+- VeilDrawEngineV2: `0x2df32104fadF449dd9Ec50E86008beE85698fb4b`;
+- Autopilot Vault: `0x12fa9F3d421aec3710Ba8dee9cFb946839fE885A`;
+- Yield Adapter V2: `0xAFb21BdD1Ca0f8e8DD4Cb71076e381A1B839582e`;
+- Prize Reserve: `0x553542D5b47b64973D99C04D83991F4AE2b307b2`;
 - confidential token: `0x4E7B06D78965594eB5EF5414c357ca21E1554491`; and
 - wrappers registry: `0x2f0750Bbb0A246059d80e94c454586a7F27a128e`.
 
-The token is Zama's official Sepolia mock asset. The yield adapter is simulated for the Sepolia
-demo. Neither is presented as a production-mainnet integration.
+The token is a Zama Sepolia mock asset and the current yield integration is simulated.
 
 ## Browser architecture
 
@@ -195,10 +191,9 @@ Retry/recovery controls follow protocol-defined liveness paths.
 
 The integration target is bound to:
 
-- [`../evidence/production-sepolia/autopilot-v3/deployment.json`](../evidence/production-sepolia/autopilot-v3/deployment.json);
-- [`../evidence/production-sepolia/autopilot-v3/runtime-smoke.json`](../evidence/production-sepolia/autopilot-v3/runtime-smoke.json);
-  and
-- `VEILPOT_SEPOLIA_DEPLOYMENT` from `@veilpot/protocol-sdk`.
+- [`../evidence/production-sepolia/veildraw-v2x/deployment.json`](../evidence/production-sepolia/veildraw-v2x/deployment.json);
+- [`LIVE_V2X_E2E.md`](LIVE_V2X_E2E.md); and
+- `VEILPOT_SEPOLIA_V2X_DEPLOYMENT` from `@veilpot/protocol-sdk`.
 
 See [`FRONTEND_SECURITY_MODEL.md`](FRONTEND_SECURITY_MODEL.md) for the browser threat model and
 [`TESTING_AND_REPRODUCIBILITY.md`](TESTING_AND_REPRODUCIBILITY.md) for exact verification steps.

@@ -1,14 +1,19 @@
 "use client";
 
+import { toUserFacingError } from "@/lib/ui-error";
+
 import { Activity, ExternalLink, RefreshCw, ShieldCheck } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import type { Address, Hex } from "viem";
+import { decodeEventLog, type Abi, type Address, type Hex } from "viem";
 import { usePublicClient } from "wagmi";
 
 import {
+  VEILDRAW_ENGINE_V2_ABI,
+  VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT,
+  VEILPOT_ADAPTER_V2_ABI,
   VEILPOT_AUTOPILOT_VAULT_ABI,
-  VEILPOT_POOL_ABI,
-  VEILPOT_SEPOLIA_DEPLOYMENT,
+  VEILPOT_POOL_V2_ABI,
+  VEILPOT_RESERVE_ABI,
 } from "@veilpot/protocol-sdk";
 
 interface ActivityItem {
@@ -16,16 +21,96 @@ interface ActivityItem {
   readonly label: string;
   readonly detail: string;
   readonly blockNumber: bigint;
+  readonly logIndex: number;
   readonly transactionHash: Hex;
 }
 
-const RECENT_ACTIVITY_BLOCKS = 5_000n;
-const RPC_LOG_CHUNK_BLOCKS = 900n;
+interface ActivitySource {
+  readonly key: string;
+  readonly label: string;
+  readonly address: Address;
+  readonly abi: Abi;
+  readonly deploymentBlock: bigint;
+}
+
+const ACTIVITY_PAGE_BLOCKS = 4_000n;
+const RPC_LOG_CHUNK_BLOCKS = 700n;
+
+const ACTIVITY_SOURCES: readonly ActivitySource[] = [
+  {
+    key: "pool-v2",
+    label: "Pool V2",
+    address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.pool,
+    abi: VEILPOT_POOL_V2_ABI,
+    deploymentBlock: BigInt(VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.blocks.pool),
+  },
+  {
+    key: "engine-v2",
+    label: "VeilDraw Engine V2",
+    address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.engine,
+    abi: VEILDRAW_ENGINE_V2_ABI,
+    deploymentBlock: BigInt(VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.engineCreation.parentBlock),
+  },
+  {
+    key: "autopilot-vault",
+    label: "Autopilot Vault",
+    address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.vault,
+    abi: VEILPOT_AUTOPILOT_VAULT_ABI,
+    deploymentBlock: BigInt(VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.blocks.vault),
+  },
+  {
+    key: "yield-adapter-v2",
+    label: "Yield Adapter V2",
+    address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.adapter,
+    abi: VEILPOT_ADAPTER_V2_ABI,
+    deploymentBlock: BigInt(VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.blocks.adapter),
+  },
+  {
+    key: "prize-reserve",
+    label: "Prize Reserve",
+    address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.reserve,
+    abi: VEILPOT_RESERVE_ABI,
+    deploymentBlock: BigInt(VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.blocks.reserve),
+  },
+];
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error && error.message.trim().length > 0
-    ? error.message
-    : "Recent public activity could not be loaded.";
+  return toUserFacingError(error, "Recent public activity could not be loaded.");
+}
+
+function containsAuthenticatedAddress(value: unknown, authenticatedAddress: Address): boolean {
+  if (typeof value === "string") {
+    return (
+      /^0x[0-9a-fA-F]{40}$/.test(value) &&
+      value.toLowerCase() === authenticatedAddress.toLowerCase()
+    );
+  }
+
+  if (Array.isArray(value)) {
+    return value.some((entry) => containsAuthenticatedAddress(entry, authenticatedAddress));
+  }
+
+  if (value !== null && typeof value === "object") {
+    return Object.values(value as Readonly<Record<string, unknown>>).some((entry) =>
+      containsAuthenticatedAddress(entry, authenticatedAddress),
+    );
+  }
+
+  return false;
+}
+
+function humanizeEventName(eventName: string): string {
+  return eventName
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function minimumDeploymentBlock(): bigint {
+  return ACTIVITY_SOURCES.reduce(
+    (minimum, source) => (source.deploymentBlock < minimum ? source.deploymentBlock : minimum),
+    ACTIVITY_SOURCES[0].deploymentBlock,
+  );
 }
 
 export function LiveActivityPanel({
@@ -33,7 +118,10 @@ export function LiveActivityPanel({
 }: {
   readonly authenticatedAddress: Address;
 }) {
-  const publicClient = usePublicClient({ chainId: VEILPOT_SEPOLIA_DEPLOYMENT.chainId });
+  const publicClient = usePublicClient({
+    chainId: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.chainId,
+  });
+
   const [items, setItems] = useState<readonly ActivityItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -41,128 +129,124 @@ export function LiveActivityPanel({
 
   const refresh = useCallback(async () => {
     if (publicClient === undefined) return;
+
     setLoading(true);
     setNotice(null);
 
     try {
-      const latest = await publicClient.getBlockNumber();
-      const earliest = latest > RECENT_ACTIVITY_BLOCKS ? latest - RECENT_ACTIVITY_BLOCKS : 0n;
+      const finalized = await publicClient.getBlock({
+        blockTag: "finalized",
+      });
+
+      const upperBlock = finalized.number;
+      const deploymentFloor = minimumDeploymentBlock();
+
+      if (upperBlock < deploymentFloor) {
+        setItems([]);
+        setSnapshotBlock(upperBlock);
+        return;
+      }
+
+      const recentFloor =
+        upperBlock + 1n > ACTIVITY_PAGE_BLOCKS ? upperBlock - ACTIVITY_PAGE_BLOCKS + 1n : 0n;
+
+      const lowerBlock = recentFloor > deploymentFloor ? recentFloor : deploymentFloor;
+
       const next: ActivityItem[] = [];
 
-      for (let fromBlock = earliest; fromBlock <= latest; fromBlock += RPC_LOG_CHUNK_BLOCKS) {
+      for (let fromBlock = lowerBlock; fromBlock <= upperBlock; fromBlock += RPC_LOG_CHUNK_BLOCKS) {
         const proposedToBlock = fromBlock + RPC_LOG_CHUNK_BLOCKS - 1n;
-        const toBlock = proposedToBlock > latest ? latest : proposedToBlock;
 
-        const [participantStates, withdrawals, bondWithdrawals, planCreated, planFunded] =
-          await Promise.all([
-            publicClient.getContractEvents({
-              address: VEILPOT_SEPOLIA_DEPLOYMENT.pool,
-              abi: VEILPOT_POOL_ABI,
-              eventName: "ParticipantStateChanged",
-              args: { participant: authenticatedAddress },
-              fromBlock,
+        const toBlock = proposedToBlock > upperBlock ? upperBlock : proposedToBlock;
+
+        const chunks = await Promise.all(
+          ACTIVITY_SOURCES.map(async (source) => {
+            if (source.deploymentBlock > toBlock) {
+              return {
+                source,
+                logs: [],
+              } as const;
+            }
+
+            const sourceFromBlock =
+              source.deploymentBlock > fromBlock ? source.deploymentBlock : fromBlock;
+
+            const logs = await publicClient.getLogs({
+              address: source.address,
+              fromBlock: sourceFromBlock,
               toBlock,
-              strict: true,
-            }),
-            publicClient.getContractEvents({
-              address: VEILPOT_SEPOLIA_DEPLOYMENT.pool,
-              abi: VEILPOT_POOL_ABI,
-              eventName: "WithdrawalProcessed",
-              args: { participant: authenticatedAddress },
-              fromBlock,
-              toBlock,
-              strict: true,
-            }),
-            publicClient.getContractEvents({
-              address: VEILPOT_SEPOLIA_DEPLOYMENT.pool,
-              abi: VEILPOT_POOL_ABI,
-              eventName: "BondWithdrawn",
-              args: { participant: authenticatedAddress },
-              fromBlock,
-              toBlock,
-              strict: true,
-            }),
-            publicClient.getContractEvents({
-              address: VEILPOT_SEPOLIA_DEPLOYMENT.vault,
-              abi: VEILPOT_AUTOPILOT_VAULT_ABI,
-              eventName: "PlanCreated",
-              args: { owner: authenticatedAddress },
-              fromBlock,
-              toBlock,
-              strict: true,
-            }),
-            publicClient.getContractEvents({
-              address: VEILPOT_SEPOLIA_DEPLOYMENT.vault,
-              abi: VEILPOT_AUTOPILOT_VAULT_ABI,
-              eventName: "PlanFunded",
-              args: { owner: authenticatedAddress },
-              fromBlock,
-              toBlock,
-              strict: true,
-            }),
-          ]);
+            });
 
-        for (const log of participantStates) {
-          next.push({
-            key: `${log.transactionHash}:participant`,
-            label: "Participant state changed",
-            detail: `Slot ${log.args.slot.toString()} · state ${String(log.args.state)}`,
-            blockNumber: log.blockNumber,
-            transactionHash: log.transactionHash,
-          });
-        }
+            return {
+              source,
+              logs,
+            } as const;
+          }),
+        );
 
-        for (const log of withdrawals) {
-          next.push({
-            key: `${log.transactionHash}:withdrawal`,
-            label: "Confidential withdrawal processed",
-            detail: `Withdrawal nonce ${log.args.withdrawalNonce.toString()} · amount remains confidential`,
-            blockNumber: log.blockNumber,
-            transactionHash: log.transactionHash,
-          });
-        }
+        for (const chunk of chunks) {
+          for (const log of chunk.logs) {
+            try {
+              const decodedUnknown: unknown = decodeEventLog({
+                abi: chunk.source.abi,
+                data: log.data,
+                topics: log.topics,
+                strict: true,
+              });
 
-        for (const log of bondWithdrawals) {
-          next.push({
-            key: `${log.transactionHash}:bond`,
-            label: "Registration bond withdrawn",
-            detail: `${log.args.amount.toString()} wei`,
-            blockNumber: log.blockNumber,
-            transactionHash: log.transactionHash,
-          });
-        }
+              if (
+                typeof decodedUnknown !== "object" ||
+                decodedUnknown === null ||
+                !("eventName" in decodedUnknown) ||
+                typeof decodedUnknown.eventName !== "string" ||
+                !("args" in decodedUnknown)
+              ) {
+                continue;
+              }
 
-        for (const log of planCreated) {
-          next.push({
-            key: `${log.transactionHash}:plan-created`,
-            label: "Autopilot plan created",
-            detail: `Owner plan nonce ${log.args.planNonce.toString()} · ${String(log.args.executionCount)} committed windows`,
-            blockNumber: log.blockNumber,
-            transactionHash: log.transactionHash,
-          });
-        }
+              const eventName = decodedUnknown.eventName;
+              const decodedArgs = decodedUnknown.args;
 
-        for (const log of planFunded) {
-          next.push({
-            key: `${log.transactionHash}:plan-funded`,
-            label: "Autopilot plan funded",
-            detail: `Plan ${log.args.planId.slice(0, 10)}… · transferred amount remains confidential`,
-            blockNumber: log.blockNumber,
-            transactionHash: log.transactionHash,
-          });
+              if (eventName === "PublicDecryptionVerified") {
+                continue;
+              }
+
+              if (!containsAuthenticatedAddress(decodedArgs, authenticatedAddress)) {
+                continue;
+              }
+
+              next.push({
+                key: [chunk.source.key, log.transactionHash, String(log.logIndex)].join(":"),
+                label: humanizeEventName(eventName),
+                detail:
+                  `${chunk.source.label} · finalized public account event; ` +
+                  "confidential values are not projected.",
+                blockNumber: log.blockNumber,
+                logIndex: log.logIndex,
+                transactionHash: log.transactionHash,
+              });
+            } catch {
+              continue;
+            }
+          }
         }
       }
 
       next.sort((left, right) => {
         if (left.blockNumber > right.blockNumber) return -1;
         if (left.blockNumber < right.blockNumber) return 1;
+
+        if (left.logIndex > right.logIndex) return -1;
+        if (left.logIndex < right.logIndex) return 1;
+
         return left.key.localeCompare(right.key);
       });
 
       setItems(next);
-      setSnapshotBlock(latest);
+      setSnapshotBlock(upperBlock);
     } catch (error: unknown) {
       setItems([]);
+      setSnapshotBlock(null);
       setNotice(errorMessage(error));
     } finally {
       setLoading(false);

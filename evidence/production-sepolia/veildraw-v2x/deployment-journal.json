@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "profile": "VEILPOT_V2X_PRODUCTION_SEPOLIA_DEPLOYMENT_JOURNAL",
+  "state": "VERIFIED",
+  "network": "sepolia",
+  "chainId": "11155111",
+  "sourceCommit": "3c21d19fc88b7747f604410f74f8cc117574ead5",
+  "frontendCheckpoint": "28093357774a0c9a305ea015cdfccd85a818aa82",
+  "deploymentPlanSha256": "cb2482bae94d02152a080a6fdbbb037fb068692853f64145c6054c5b030b010c",
+  "deployerAddress": "0x1f87Ae197af539253978d435aD45cCf28Fb95024",
+  "startingNonce": 532,
+  "token": {
+    "address": "0x4E7B06D78965594eB5EF5414c357ca21E1554491",
+    "classification": "OFFICIAL_ZAMA_TESTNET_MOCK_ASSET",
+    "productionAsset": false
+  },
+  "wrappersRegistry": "0x2f0750Bbb0A246059d80e94c454586a7F27a128e",
+  "yieldProfile": "SIMULATED_YIELD_V2_3_PRIZE",
+  "securityInvariant": "DEREGISTRATION_ZERO_REFRESHED_AFTER_EVERY_PRINCIPAL_CREDIT",
+  "deterministicCreateOrder": [
+    "VeilpotPoolV2",
+    "VeilpotAutopilotVault",
+    "VeilpotSimulatedYieldAdapterV2",
+    "VeilpotPrizeReserve"
+  ],
+  "plannedAddresses": {
+    "poolV2": "0x0482DfAeCB4b3B76b9Efd4dEF261445D7bcCFcDA",
+    "drawEngineV2": "0x2df32104fadF449dd9Ec50E86008beE85698fb4b",
+    "autopilotVault": "0x12fa9F3d421aec3710Ba8dee9cFb946839fE885A",
+    "yieldAdapterV2": "0xAFb21BdD1Ca0f8e8DD4Cb71076e381A1B839582e",
+    "prizeReserve": "0x553542D5b47b64973D99C04D83991F4AE2b307b2"
+  },
+  "expectedDeploymentData": {
+    "VeilpotPoolV2": {
+      "sha256": "03dd666cb6866f1270fa93ff1c05b9856d6ff5af9725819efc2be8398db8819d",
+      "keccak256": "0x7ae2fd11d6c168d6836d3dce595174251b5b19595adb1ed088a7b148dfa30b66"
+    },
+    "VeilpotAutopilotVault": {
+      "sha256": "78f1b25444074d94345a274fe9e602e71930d4e76363d998039888d8628f8ed9",
+      "keccak256": "0x0377b97ea25ddecd758781376c6579932de150e42a4f3e1f85c3601fda275bfe"
+    },
+    "VeilpotSimulatedYieldAdapterV2": {
+      "sha256": "3c1481a7c97a821e468144eb7ee3d887ce2e45bf713f8f30ed4d690af193a37a",
+      "keccak256": "0x4468a9db7b59a50daf8b7d966f36e28bf91f2f05039db9b6c34b901d64df2502"
+    },
+    "VeilpotPrizeReserve": {
+      "sha256": "3c66f18491c94a033c52812745a6a5a61c7b8f832af6d676c6a338342e8d76eb",
+      "keccak256": "0x2045a96ddb3bf724c2744de79c7217f7b1ef246e30f9515ae8b39b46349e91fe"
+    }
+  },
+  "deployments": {
+    "VeilpotPoolV2": {
+      "name": "VeilpotPoolV2",
+      "nonce": 532,
+      "address": "0x0482DfAeCB4b3B76b9Efd4dEF261445D7bcCFcDA",
+      "transactionHash": "0xedaf31403ba60cafcd45853599e4a9d210084a913174bed7e9a6124d2be248b2",
+      "gasEstimate": "10266837",
+      "gasLimit": "12933546",
+      "dataSha256": "03dd666cb6866f1270fa93ff1c05b9856d6ff5af9725819efc2be8398db8819d",
+      "dataKeccak256": "0x7ae2fd11d6c168d6836d3dce595174251b5b19595adb1ed088a7b148dfa30b66",
+      "blockNumber": 11640451,
+      "gasUsed": "8487168"
+    },
+    "VeilpotAutopilotVault": {
+      "name": "VeilpotAutopilotVault",
+      "nonce": 533,
+      "address": "0x12fa9F3d421aec3710Ba8dee9cFb946839fE885A",
+      "transactionHash": "0x1300e17934c4113340af603202169b48cde6d44495c6ea090c9e4cae72c7a793",
+      "gasEstimate": "1934632",
+      "gasLimit": "2518290",
+      "dataSha256": "78f1b25444074d94345a274fe9e602e71930d4e76363d998039888d8628f8ed9",
+      "dataKeccak256": "0x0377b97ea25ddecd758781376c6579932de150e42a4f3e1f85c3601fda275bfe",
+      "blockNumber": 11640452,
+      "gasUsed": "1598341"
+    },
+    "VeilpotSimulatedYieldAdapterV2": {
+      "name": "VeilpotSimulatedYieldAdapterV2",
+      "nonce": 534,
+      "address": "0xAFb21BdD1Ca0f8e8DD4Cb71076e381A1B839582e",
+      "transactionHash": "0xb2f2cba81796138cc4cc5cd58a274d51b8c9c36189bc23f925ed5c2e79520677",
+      "gasEstimate": "2467526",
+      "gasLimit": "3184407",
+      "dataSha256": "3c1481a7c97a821e468144eb7ee3d887ce2e45bf713f8f30ed4d690af193a37a",
+      "dataKeccak256": "0x4468a9db7b59a50daf8b7d966f36e28bf91f2f05039db9b6c34b901d64df2502",
+      "blockNumber": 11640454,
+      "gasUsed": "2038919"
+    },
+    "VeilpotPrizeReserve": {
+      "name": "VeilpotPrizeReserve",
+      "nonce": 535,
+      "address": "0x553542D5b47b64973D99C04D83991F4AE2b307b2",
+      "transactionHash": "0xb65d184d5499f40c46a9fc7ce92aa91bbc87265c0a9c7a6013a18f00df64ea88",
+      "gasEstimate": "3692674",
+      "gasLimit": "4715842",
+      "dataSha256": "3c66f18491c94a033c52812745a6a5a61c7b8f832af6d676c6a338342e8d76eb",
+      "dataKeccak256": "0x2045a96ddb3bf724c2744de79c7217f7b1ef246e30f9515ae8b39b46349e91fe",
+      "blockNumber": 11640455,
+      "gasUsed": "3051841"
+    }
+  },
+  "broadcastApproval": "EXPLICIT_AUTHORIZATION_FOR_CORRECTED_V2X_SEPOLIA_STACK",
+  "updatedAt": "2026-09-05T12:50:05.115Z"
+}

@@ -1,6 +1,6 @@
 import type { ZamaSDK } from "@zama-fhe/sdk";
 
-import { VEILPOT_SEPOLIA_DEPLOYMENT } from "./deployment.js";
+import { VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT, VEILPOT_SEPOLIA_DEPLOYMENT } from "./deployment.js";
 import { assertAddress, assertHex, assertUint64, type Address, type Hex } from "./types.js";
 
 export type VeilpotZamaEncryptionClient = Pick<ZamaSDK, "encrypt">;
@@ -61,6 +61,14 @@ export async function encryptPoolAmount(
   return encryptEuint64ForContract(sdk, value, VEILPOT_SEPOLIA_DEPLOYMENT.pool, userAddress);
 }
 
+export async function encryptV2PoolAmount(
+  sdk: VeilpotZamaEncryptionClient,
+  value: bigint,
+  userAddress: Address,
+): Promise<EncryptedEuint64Input> {
+  return encryptEuint64ForContract(sdk, value, VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.pool, userAddress);
+}
+
 export async function encryptYieldFundingAmount(
   sdk: VeilpotZamaEncryptionClient,
   value: bigint,
@@ -86,6 +94,19 @@ export async function encryptAutopilotFundingAmount(
     sdk,
     value,
     VEILPOT_SEPOLIA_DEPLOYMENT.confidentialToken,
+    userAddress,
+  );
+}
+
+export async function encryptV2AutopilotFundingAmount(
+  sdk: VeilpotZamaEncryptionClient,
+  value: bigint,
+  userAddress: Address,
+): Promise<EncryptedEuint64Input> {
+  return encryptEuint64ForContract(
+    sdk,
+    value,
+    VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.confidentialToken,
     userAddress,
   );
 }
@@ -125,6 +146,48 @@ export async function encryptAutopilotPlanAmounts(
   };
 }
 
+export async function encryptV2AutopilotPlanAmounts(
+  sdk: VeilpotZamaEncryptionClient,
+  periodAmount: bigint,
+  lifetimeCap: bigint,
+  userAddress: Address,
+): Promise<EncryptedAutopilotPlanAmounts> {
+  assertUint64(periodAmount, "V2 Autopilot period amount");
+  assertUint64(lifetimeCap, "V2 Autopilot lifetime cap");
+  assertAddress(userAddress, "V2 Autopilot plan owner");
+
+  const result = await sdk.encrypt({
+    values: [
+      {
+        value: periodAmount,
+        type: "euint64",
+      },
+      {
+        value: lifetimeCap,
+        type: "euint64",
+      },
+    ],
+    contractAddress: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.vault,
+    userAddress,
+  });
+
+  const encryptedPeriodAmount: unknown = result.encryptedValues[0];
+  const encryptedLifetimeCap: unknown = result.encryptedValues[1];
+  const inputProof: unknown = result.inputProof;
+
+  assertHex(encryptedPeriodAmount, "V2 Autopilot encrypted period amount");
+  assertHex(encryptedLifetimeCap, "V2 Autopilot encrypted lifetime cap");
+  assertHex(inputProof, "V2 Autopilot input proof");
+
+  return {
+    encryptedPeriodAmount,
+    encryptedLifetimeCap,
+    inputProof,
+    contractAddress: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.vault,
+    userAddress,
+  };
+}
+
 export function buildEntitlementDecryptionRequest(encryptedValue: Hex): ExplicitDecryptionRequest {
   assertHex(encryptedValue, "entitlement encrypted value");
   return {
@@ -150,6 +213,18 @@ export function buildAutopilotPlanValueDecryptionRequest(
   return {
     encryptedValue,
     contractAddress: VEILPOT_SEPOLIA_DEPLOYMENT.vault,
+    purpose: "AUTOPILOT_PLAN_USER_OPT_IN",
+  };
+}
+
+export function buildV2AutopilotPlanValueDecryptionRequest(
+  encryptedValue: Hex,
+): ExplicitDecryptionRequest {
+  assertHex(encryptedValue, "V2 Autopilot encrypted plan value");
+
+  return {
+    encryptedValue,
+    contractAddress: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.vault,
     purpose: "AUTOPILOT_PLAN_USER_OPT_IN",
   };
 }

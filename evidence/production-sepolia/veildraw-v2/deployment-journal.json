@@ -1,0 +1,498 @@
+{
+  "schemaVersion": 1,
+  "profile": "VEILPOT_V2_PRODUCTION_SEPOLIA_DEPLOYMENT",
+  "network": "sepolia",
+  "chainId": "11155111",
+  "sourceCommit": "1fd76c6542af8e84aaf8630d285653ac43cd564a",
+  "deploymentPlanSha256": "f58be73b6dc50ec09ae88e2e3ba5416967e71260182a9da4c14c498b0a1296d6",
+  "deployerAddress": "0x1f87Ae197af539253978d435aD45cCf28Fb95024",
+  "startingNonce": 528,
+  "token": {
+    "address": "0x4E7B06D78965594eB5EF5414c357ca21E1554491",
+    "classification": "OFFICIAL_ZAMA_TESTNET_MOCK_ASSET",
+    "productionAsset": false
+  },
+  "wrappersRegistry": "0x2f0750Bbb0A246059d80e94c454586a7F27a128e",
+  "yieldProfile": "SIMULATED_YIELD_V2_3_PRIZE",
+  "deterministicCreateOrder": [
+    "VeilpotPoolV2",
+    "VeilpotAutopilotVault",
+    "VeilpotSimulatedYieldAdapterV2",
+    "VeilpotPrizeReserve"
+  ],
+  "plannedAddresses": {
+    "poolV2": "0x6F74fCadDc359159D0799fc9054642aB1f357161",
+    "drawEngineV2": "0x6cfb163fC9483D0131e2b79c8c8DEFca7A17C232",
+    "autopilotVault": "0xF724E327b94cCf09936cbd84990A71A40b99ad85",
+    "yieldAdapterV2": "0x40DC00dDB52a1cD7864322e8E938e73f5D494D35",
+    "prizeReserve": "0xCFfA037b25c151FBba0A909d2435D00522CdB00B"
+  },
+  "operatorAuthorization": "EXPLICIT_AUTHORIZATION_FOR_EXACT_AUDITED_CHECKPOINT",
+  "stage": "EVIDENCE_PUBLISHED",
+  "deployments": {
+    "VeilpotPoolV2": {
+      "name": "VeilpotPoolV2",
+      "nonce": 528,
+      "address": "0x6F74fCadDc359159D0799fc9054642aB1f357161",
+      "transactionHash": "0xf7325e7f2842dbdadf6599872c833ecef0fb3e0b6a7d20ac8d6e2d43e58451e0",
+      "blockNumber": 11639048,
+      "gasEstimate": "10259772",
+      "gasLimit": "12411726",
+      "gasUsed": "8481327",
+      "effectiveGasPriceWei": "1115334711",
+      "transactionFeeWei": "9459518398441497",
+      "dataKeccak256": "0x0dba87f331860fb859b2a49439ca93caaf1c85b93fb703c74ffd9989a7b469b9",
+      "dataSha256": "952c79e215960113174b320adb5d537e05a3c4a9cf790b8443ba11cd63de4a07"
+    },
+    "VeilpotAutopilotVault": {
+      "name": "VeilpotAutopilotVault",
+      "nonce": 529,
+      "address": "0xF724E327b94cCf09936cbd84990A71A40b99ad85",
+      "transactionHash": "0x06642bab620d14f29772d4c402332fd136a6ebbb77240478f32c6350e5d6ce4f",
+      "blockNumber": 11639049,
+      "gasEstimate": "1934632",
+      "gasLimit": "2421558",
+      "gasUsed": "1598341",
+      "effectiveGasPriceWei": "1129650137",
+      "transactionFeeWei": "1805566129622717",
+      "dataKeccak256": "0x2d2b5f82b50e5fd032639ad82fa86594c287c12ee2929736f6ea68654258e8e6",
+      "dataSha256": "4c301059952532c9343da45027b0c8337f69c7f7d51506781c7a5c217cc53614"
+    },
+    "VeilpotSimulatedYieldAdapterV2": {
+      "name": "VeilpotSimulatedYieldAdapterV2",
+      "nonce": 530,
+      "address": "0x40DC00dDB52a1cD7864322e8E938e73f5D494D35",
+      "transactionHash": "0xc3d2cf2cd51b08801c0bc089f21d18d6ec5842c4d5f1091d17776450e455a715",
+      "blockNumber": 11639050,
+      "gasEstimate": "2467526",
+      "gasLimit": "3061031",
+      "gasUsed": "2038923",
+      "effectiveGasPriceWei": "1077057919",
+      "transactionFeeWei": "2196038163381237",
+      "dataKeccak256": "0x964402eaac5e9368a5a7e4c3b9e80983b0c79c4834f29f9301fd2f177c471103",
+      "dataSha256": "186ea5641493a341073b4b56f40d3fb322b7b8b4284f7b153b5ec6fedd34775e"
+    },
+    "VeilpotPrizeReserve": {
+      "name": "VeilpotPrizeReserve",
+      "nonce": 531,
+      "address": "0xCFfA037b25c151FBba0A909d2435D00522CdB00B",
+      "transactionHash": "0xdb6d2814d952a10bcbd6e2f58b6fd0fa9364f9b2eb47d7a74bbdc3d82c989f57",
+      "blockNumber": 11639051,
+      "gasEstimate": "3692660",
+      "gasLimit": "4531192",
+      "gasUsed": "3051825",
+      "effectiveGasPriceWei": "1026971392",
+      "transactionFeeWei": "3134136968390400",
+      "dataKeccak256": "0x36ceb52c363c21ca38655ef599de7dc46bf82179529279cfca23ccdf7f6a8942",
+      "dataSha256": "3a107ecc0cad3963ec36360c27a9c20aa961ce8fb66f69cfe1a1a6a07b74f205"
+    }
+  },
+  "runtimeIdentity": {
+    "VeilpotPoolV2": {
+      "localRawSha256": "c9f43d5e3877c5d44da314fdd50ed7b3393b56d4fa769818d230fdf5426c6336",
+      "deployedRawSha256": "d222522f09f4b1c55837fd856a4f54fd40d8bced5b7bb08c92feaf14acce25b6",
+      "localNormalizedSha256": "c9f43d5e3877c5d44da314fdd50ed7b3393b56d4fa769818d230fdf5426c6336",
+      "deployedNormalizedSha256": "c9f43d5e3877c5d44da314fdd50ed7b3393b56d4fa769818d230fdf5426c6336",
+      "immutableRanges": [
+        {
+          "start": 1604,
+          "length": 32
+        },
+        {
+          "start": 3311,
+          "length": 32
+        },
+        {
+          "start": 4355,
+          "length": 32
+        },
+        {
+          "start": 5052,
+          "length": 32
+        },
+        {
+          "start": 5455,
+          "length": 32
+        },
+        {
+          "start": 5531,
+          "length": 32
+        },
+        {
+          "start": 6190,
+          "length": 32
+        },
+        {
+          "start": 6489,
+          "length": 32
+        },
+        {
+          "start": 6559,
+          "length": 32
+        },
+        {
+          "start": 6859,
+          "length": 32
+        },
+        {
+          "start": 7203,
+          "length": 32
+        },
+        {
+          "start": 8021,
+          "length": 32
+        },
+        {
+          "start": 8429,
+          "length": 32
+        },
+        {
+          "start": 8680,
+          "length": 32
+        },
+        {
+          "start": 8909,
+          "length": 32
+        },
+        {
+          "start": 9145,
+          "length": 32
+        },
+        {
+          "start": 9468,
+          "length": 32
+        },
+        {
+          "start": 10060,
+          "length": 32
+        },
+        {
+          "start": 10302,
+          "length": 32
+        },
+        {
+          "start": 10516,
+          "length": 32
+        },
+        {
+          "start": 10985,
+          "length": 32
+        },
+        {
+          "start": 11224,
+          "length": 32
+        },
+        {
+          "start": 11849,
+          "length": 32
+        },
+        {
+          "start": 13129,
+          "length": 32
+        },
+        {
+          "start": 13554,
+          "length": 32
+        },
+        {
+          "start": 14835,
+          "length": 32
+        },
+        {
+          "start": 15067,
+          "length": 32
+        },
+        {
+          "start": 15859,
+          "length": 32
+        },
+        {
+          "start": 16175,
+          "length": 32
+        }
+      ]
+    },
+    "VeilDrawEngineV2": {
+      "localRawSha256": "1c54ded20ea8d291bb1301315a537f6789060a95477e1f19f528a26139e08523",
+      "deployedRawSha256": "6d799e79237f938d48da15d07c5b75c41bcd4937d7cc9818f4c85f7d91c9462a",
+      "localNormalizedSha256": "1c54ded20ea8d291bb1301315a537f6789060a95477e1f19f528a26139e08523",
+      "deployedNormalizedSha256": "1c54ded20ea8d291bb1301315a537f6789060a95477e1f19f528a26139e08523",
+      "immutableRanges": [
+        {
+          "start": 610,
+          "length": 32
+        },
+        {
+          "start": 1272,
+          "length": 32
+        },
+        {
+          "start": 1373,
+          "length": 32
+        },
+        {
+          "start": 1654,
+          "length": 32
+        },
+        {
+          "start": 2086,
+          "length": 32
+        },
+        {
+          "start": 2611,
+          "length": 32
+        },
+        {
+          "start": 2805,
+          "length": 32
+        },
+        {
+          "start": 3571,
+          "length": 32
+        },
+        {
+          "start": 4235,
+          "length": 32
+        },
+        {
+          "start": 4704,
+          "length": 32
+        },
+        {
+          "start": 6759,
+          "length": 32
+        },
+        {
+          "start": 7109,
+          "length": 32
+        },
+        {
+          "start": 7810,
+          "length": 32
+        },
+        {
+          "start": 8879,
+          "length": 32
+        },
+        {
+          "start": 9436,
+          "length": 32
+        },
+        {
+          "start": 9591,
+          "length": 32
+        },
+        {
+          "start": 10837,
+          "length": 32
+        },
+        {
+          "start": 11013,
+          "length": 32
+        }
+      ]
+    },
+    "VeilpotAutopilotVault": {
+      "localRawSha256": "a79e7a5fd69729be992e09deaf74534fbbf31c9a1b954bde67ee9280e0b6521d",
+      "deployedRawSha256": "6e1967b1931cb1c48c6822825becf1e81571ba61901776290dac0825712147fc",
+      "localNormalizedSha256": "a79e7a5fd69729be992e09deaf74534fbbf31c9a1b954bde67ee9280e0b6521d",
+      "deployedNormalizedSha256": "a79e7a5fd69729be992e09deaf74534fbbf31c9a1b954bde67ee9280e0b6521d",
+      "immutableRanges": [
+        {
+          "start": 660,
+          "length": 32
+        },
+        {
+          "start": 702,
+          "length": 32
+        },
+        {
+          "start": 1695,
+          "length": 32
+        },
+        {
+          "start": 2074,
+          "length": 32
+        },
+        {
+          "start": 2806,
+          "length": 32
+        },
+        {
+          "start": 3992,
+          "length": 32
+        },
+        {
+          "start": 4279,
+          "length": 32
+        },
+        {
+          "start": 4776,
+          "length": 32
+        },
+        {
+          "start": 4816,
+          "length": 32
+        }
+      ]
+    },
+    "VeilpotSimulatedYieldAdapterV2": {
+      "localRawSha256": "20db2bd5ce5372ab58876c5adc33e35722fab3ab93d3d078e022cf186e153615",
+      "deployedRawSha256": "fe3b26faf89fb9a9f8b4db13b3063db83ddcc56d8b44c0d516f5de617143bb98",
+      "localNormalizedSha256": "20db2bd5ce5372ab58876c5adc33e35722fab3ab93d3d078e022cf186e153615",
+      "deployedNormalizedSha256": "20db2bd5ce5372ab58876c5adc33e35722fab3ab93d3d078e022cf186e153615",
+      "immutableRanges": [
+        {
+          "start": 1132,
+          "length": 32
+        },
+        {
+          "start": 1210,
+          "length": 32
+        },
+        {
+          "start": 3058,
+          "length": 32
+        },
+        {
+          "start": 3373,
+          "length": 32
+        },
+        {
+          "start": 3421,
+          "length": 32
+        },
+        {
+          "start": 4221,
+          "length": 32
+        },
+        {
+          "start": 4807,
+          "length": 32
+        },
+        {
+          "start": 6243,
+          "length": 32
+        },
+        {
+          "start": 6290,
+          "length": 32
+        },
+        {
+          "start": 6451,
+          "length": 32
+        },
+        {
+          "start": 6498,
+          "length": 32
+        }
+      ]
+    },
+    "VeilpotPrizeReserve": {
+      "localRawSha256": "7bf278b467b358666e73a12f2856c93385504b74a7567eb27caf0b5b1e11559f",
+      "deployedRawSha256": "7ec52e964d64b07659add3dba50916d8463322441f7af4b23802911b951e3414",
+      "localNormalizedSha256": "7bf278b467b358666e73a12f2856c93385504b74a7567eb27caf0b5b1e11559f",
+      "deployedNormalizedSha256": "7bf278b467b358666e73a12f2856c93385504b74a7567eb27caf0b5b1e11559f",
+      "immutableRanges": [
+        {
+          "start": 1121,
+          "length": 32
+        },
+        {
+          "start": 1653,
+          "length": 32
+        },
+        {
+          "start": 1694,
+          "length": 32
+        },
+        {
+          "start": 2229,
+          "length": 32
+        },
+        {
+          "start": 2493,
+          "length": 32
+        },
+        {
+          "start": 3387,
+          "length": 32
+        },
+        {
+          "start": 4821,
+          "length": 32
+        },
+        {
+          "start": 5014,
+          "length": 32
+        },
+        {
+          "start": 5771,
+          "length": 32
+        },
+        {
+          "start": 6444,
+          "length": 32
+        },
+        {
+          "start": 7984,
+          "length": 32
+        },
+        {
+          "start": 8172,
+          "length": 32
+        },
+        {
+          "start": 9530,
+          "length": 32
+        },
+        {
+          "start": 9577,
+          "length": 32
+        },
+        {
+          "start": 10111,
+          "length": 32
+        },
+        {
+          "start": 12298,
+          "length": 32
+        },
+        {
+          "start": 12345,
+          "length": 32
+        },
+        {
+          "start": 12424,
+          "length": 32
+        },
+        {
+          "start": 12462,
+          "length": 32
+        },
+        {
+          "start": 12528,
+          "length": 32
+        }
+      ]
+    }
+  },
+  "verifiedBindings": [
+    "pool.confidentialToken",
+    "pool.prizeReserve",
+    "pool.veilDrawEngine",
+    "engine.pool",
+    "pool.privateAutopilotVault=EXACT_CONSTRUCTOR_DATA",
+    "pool.privateYieldAdapterV2=EXACT_CONSTRUCTOR_DATA",
+    "vault.confidentialToken",
+    "vault.pool",
+    "adapter.confidentialToken",
+    "adapter.pool",
+    "adapter.reserve",
+    "reserve.confidentialToken",
+    "reserve.pool",
+    "reserve.adapter",
+    "reserve.constructorCircularBinding=PASS"
+  ],
+  "updatedAt": "2026-09-05T07:56:50.849Z"
+}

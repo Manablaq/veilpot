@@ -11,6 +11,8 @@ financial state or granting a keeper standing custody.
 - **Network:** Ethereum Sepolia (`11155111`)
 - **Reviewer guide:** [`docs/README.md`](docs/README.md)
 - **Production status:** [`docs/PRODUCTION_STATUS.md`](docs/PRODUCTION_STATUS.md)
+- **VeilDraw V2 Sepolia status:**
+  [`docs/VEILDRAW_V2_SEPOLIA_STATUS.md`](docs/VEILDRAW_V2_SEPOLIA_STATUS.md)
 - **Frontend security model:** [`docs/FRONTEND_SECURITY_MODEL.md`](docs/FRONTEND_SECURITY_MODEL.md)
 - **Reproducible verification:**
   [`docs/TESTING_AND_REPRODUCIBILITY.md`](docs/TESTING_AND_REPRODUCIBILITY.md)
@@ -96,22 +98,34 @@ flowchart LR
   participant lifecycle, draw math, TWAB, yield/prize accounting, Autopilot, and claim rules.
 - [`evidence`](evidence) — frozen Gate 0 and live Sepolia deployment/runtime evidence.
 
-## Sepolia deployment
+## Active corrected V2.x Sepolia deployment
 
-| Component                    | Address                                      |
-| ---------------------------- | -------------------------------------------- |
-| VeilpotPool                  | `0x2029D8b7AE6Abe7dAa0C2A71E960839171a34601` |
-| VeilpotAutopilotVault        | `0x7dF64925Af938a0535F30dE9cFBf97BB3ab30487` |
-| VeilpotSimulatedYieldAdapter | `0xEa9868e982b98B57C52B95853EdE2552dAD74b64` |
-| VeilpotPrizeReserve          | `0xbEe24d1060d94d435272550fAa5616faD59Ad1a1` |
-| Confidential USDT Mock       | `0x4E7B06D78965594eB5EF5414c357ca21E1554491` |
-| Zama Wrappers Registry       | `0x2f0750Bbb0A246059d80e94c454586a7F27a128e` |
+The production web application at https://veilpot.vercel.app is bound to the corrected V2.x
+deployment exported by `VEILPOT_SEPOLIA_V2X_DEPLOYMENT`.
+
+| Component                      | Address                                      |
+| ------------------------------ | -------------------------------------------- |
+| VeilpotPoolV2                  | `0x0482DfAeCB4b3B76b9Efd4dEF261445D7bcCFcDA` |
+| VeilDrawEngineV2               | `0x2df32104fadF449dd9Ec50E86008beE85698fb4b` |
+| VeilpotAutopilotVault          | `0x12fa9F3d421aec3710Ba8dee9cFb946839fE885A` |
+| VeilpotSimulatedYieldAdapterV2 | `0xAFb21BdD1Ca0f8e8DD4Cb71076e381A1B839582e` |
+| VeilpotPrizeReserve            | `0x553542D5b47b64973D99C04D83991F4AE2b307b2` |
+| Confidential USDT Mock         | `0x4E7B06D78965594eB5EF5414c357ca21E1554491` |
+| Zama Wrappers Registry         | `0x2f0750Bbb0A246059d80e94c454586a7F27a128e` |
 
 Canonical deployment evidence:
-[`evidence/production-sepolia/autopilot-v3/deployment.json`](evidence/production-sepolia/autopilot-v3/deployment.json)
 
-Canonical live lifecycle evidence:
-[`evidence/production-sepolia/autopilot-v3/runtime-smoke.json`](evidence/production-sepolia/autopilot-v3/runtime-smoke.json)
+[`evidence/production-sepolia/veildraw-v2x/deployment.json`](evidence/production-sepolia/veildraw-v2x/deployment.json)
+
+The preceding V1 and predecessor-V2 deployments remain historical provenance and are not the current
+browser target.
+
+### Live corrected-V2.x recovery validation
+
+The current production-browser path has exercised confidential deposit, threshold settlement, refund
+completion, participant clearing, registration-bond credit, and bond withdrawal on Sepolia.
+
+See [`docs/LIVE_V2X_E2E.md`](docs/LIVE_V2X_E2E.md) for the reconciled transaction record.
 
 ## Security and privacy invariants
 
@@ -160,13 +174,13 @@ See [`docs/FRONTEND_SECURITY_MODEL.md`](docs/FRONTEND_SECURITY_MODEL.md),
 
 The current implementation has passed:
 
-- **212** contract tests;
-- **102** deterministic reference-model tests;
-- **16** protocol-SDK tests;
+- **268** contract tests;
+- **114** deterministic reference-model tests;
+- **31** protocol-SDK tests;
 - root Prettier validation;
 - root ESLint and Solidity lint;
 - root TypeScript project-reference typecheck;
-- 45-file Solidity compilation under the local verification profile;
+- Solidity compilation under the local verification profile;
 - Gate 0 deterministic/reference and VeilDraw verification;
 - production Next.js build;
 - live Sepolia deployment/runtime evidence verification;
@@ -221,8 +235,8 @@ For a fast review, use this order:
 2. Read the [`docs/README.md`](docs/README.md) reviewer map.
 3. Verify [`docs/PRODUCTION_STATUS.md`](docs/PRODUCTION_STATUS.md).
 4. Inspect the current
-   [deployment evidence](evidence/production-sepolia/autopilot-v3/deployment.json) and
-   [runtime lifecycle evidence](evidence/production-sepolia/autopilot-v3/runtime-smoke.json).
+   [corrected V2.x deployment evidence](evidence/production-sepolia/veildraw-v2x/deployment.json)
+   and [live corrected-V2.x E2E record](docs/LIVE_V2X_E2E.md).
 5. Review [`docs/FRONTEND_SECURITY_MODEL.md`](docs/FRONTEND_SECURITY_MODEL.md) and
    [`docs/GATE_1_SECURITY_MODEL.md`](docs/GATE_1_SECURITY_MODEL.md).
 6. Reproduce the test/CI boundary with

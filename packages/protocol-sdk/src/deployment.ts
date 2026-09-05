@@ -33,7 +33,7 @@ export interface VeilpotProductionDeployment {
   readonly yieldProfile: "SIMULATED_YIELD_FOR_SEPOLIA_DEMO";
 }
 
-export const VEILPOT_SEPOLIA_DEPLOYMENT = {
+export const VEILPOT_SEPOLIA_V1_DEPLOYMENT = {
   network: "sepolia",
   chainId: 11155111,
   deploymentEvidenceCommit: "dd3b53311b98a8af03f154a31cade7e4b354cf45",
@@ -65,6 +65,194 @@ export const VEILPOT_SEPOLIA_DEPLOYMENT = {
   assetClassification: "OFFICIAL_ZAMA_TESTNET_MOCK_ASSET",
   yieldProfile: "SIMULATED_YIELD_FOR_SEPOLIA_DEMO",
 } as const satisfies VeilpotProductionDeployment;
+
+/**
+ * Backwards-compatible name for the already frozen V1 production deployment.
+ *
+ * Existing V1 evidence/tests intentionally continue to use this alias.
+ * New V2 frontend integration must use VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT
+ * or VEILPOT_SEPOLIA_V2_DEPLOYMENT explicitly.
+ */
+export const VEILPOT_SEPOLIA_DEPLOYMENT = VEILPOT_SEPOLIA_V1_DEPLOYMENT;
+
+export interface VeilpotV2ProductionDeployment {
+  readonly profile: "VEILPOT_V2_PRODUCTION_SEPOLIA_DEPLOYMENT";
+  readonly network: "sepolia";
+  readonly chainId: 11155111;
+
+  readonly deploymentEvidenceCommit: string;
+  readonly deploymentEvidenceSha256: string;
+  readonly deploymentJournalSha256: string;
+  readonly deploymentSourceCommit: string;
+  readonly deploymentPlanSha256: string;
+
+  readonly deployer: Address;
+  readonly confidentialToken: Address;
+  readonly wrappersRegistry: Address;
+
+  readonly pool: Address;
+  readonly engine: Address;
+  readonly vault: Address;
+  readonly adapter: Address;
+  readonly reserve: Address;
+
+  readonly transactions: {
+    readonly pool: Hex;
+    readonly vault: Hex;
+    readonly adapter: Hex;
+    readonly reserve: Hex;
+  };
+
+  readonly blocks: {
+    readonly pool: number;
+    readonly vault: number;
+    readonly adapter: number;
+    readonly reserve: number;
+  };
+
+  readonly engineCreation: {
+    readonly method: "POOL_CREATE";
+    readonly parentTransaction: Hex;
+    readonly parentBlock: number;
+  };
+
+  readonly assetClassification: "OFFICIAL_ZAMA_TESTNET_MOCK_ASSET";
+
+  readonly yieldProfile: "SIMULATED_YIELD_V2_3_PRIZE";
+}
+
+export type VeilpotV2xProductionDeployment = Omit<VeilpotV2ProductionDeployment, "profile"> & {
+  readonly profile: "VEILPOT_V2X_PRODUCTION_SEPOLIA_DEPLOYMENT";
+};
+
+export const VEILPOT_SEPOLIA_V2_DEPLOYMENT = {
+  profile: "VEILPOT_V2_PRODUCTION_SEPOLIA_DEPLOYMENT",
+  network: "sepolia",
+  chainId: 11155111,
+
+  deploymentEvidenceCommit: "b24ce24fa8dcc5fb9eecbbc209e4ce5d9f7bd9f1",
+
+  deploymentEvidenceSha256: "536923d9a87d5238ade2837d72135c44738e6c55ab5e9a98f9c63bd6af866971",
+
+  deploymentJournalSha256: "fbc324dfc39e72da7856ebfa7fb5affcf4b86efe48437011d9520466b13bbe69",
+
+  deploymentSourceCommit: "1fd76c6542af8e84aaf8630d285653ac43cd564a",
+
+  deploymentPlanSha256: "f58be73b6dc50ec09ae88e2e3ba5416967e71260182a9da4c14c498b0a1296d6",
+
+  deployer: "0x1f87Ae197af539253978d435aD45cCf28Fb95024",
+
+  confidentialToken: "0x4E7B06D78965594eB5EF5414c357ca21E1554491",
+
+  wrappersRegistry: "0x2f0750Bbb0A246059d80e94c454586a7F27a128e",
+
+  pool: "0x6F74fCadDc359159D0799fc9054642aB1f357161",
+
+  engine: "0x6cfb163fC9483D0131e2b79c8c8DEFca7A17C232",
+
+  vault: "0xF724E327b94cCf09936cbd84990A71A40b99ad85",
+
+  adapter: "0x40DC00dDB52a1cD7864322e8E938e73f5D494D35",
+
+  reserve: "0xCFfA037b25c151FBba0A909d2435D00522CdB00B",
+
+  transactions: {
+    pool: "0xf7325e7f2842dbdadf6599872c833ecef0fb3e0b6a7d20ac8d6e2d43e58451e0",
+
+    vault: "0x06642bab620d14f29772d4c402332fd136a6ebbb77240478f32c6350e5d6ce4f",
+
+    adapter: "0xc3d2cf2cd51b08801c0bc089f21d18d6ec5842c4d5f1091d17776450e455a715",
+
+    reserve: "0xdb6d2814d952a10bcbd6e2f58b6fd0fa9364f9b2eb47d7a74bbdc3d82c989f57",
+  },
+
+  blocks: {
+    pool: 11639048,
+    vault: 11639049,
+    adapter: 11639050,
+    reserve: 11639051,
+  },
+
+  engineCreation: {
+    method: "POOL_CREATE",
+    parentTransaction: "0xf7325e7f2842dbdadf6599872c833ecef0fb3e0b6a7d20ac8d6e2d43e58451e0",
+    parentBlock: 11639048,
+  },
+
+  assetClassification: "OFFICIAL_ZAMA_TESTNET_MOCK_ASSET",
+
+  yieldProfile: "SIMULATED_YIELD_V2_3_PRIZE",
+} as const satisfies VeilpotV2ProductionDeployment;
+
+export const VEILPOT_SEPOLIA_V2X_DEPLOYMENT = {
+  profile: "VEILPOT_V2X_PRODUCTION_SEPOLIA_DEPLOYMENT",
+  network: "sepolia",
+  chainId: 11155111,
+
+  deploymentEvidenceCommit: "562ddea6e2247a219a80503fb4c7f9b3e7481a7d",
+
+  deploymentEvidenceSha256: "75bdae870611407840d40d77d8e1c1745e478e607c73e46c536126ea9f6a0009",
+
+  deploymentJournalSha256: "f45e15d844fb42ca60996ad21fb5f722b84bcf7bedd4cbeae81dd75e0e7e41ac",
+
+  deploymentSourceCommit: "3c21d19fc88b7747f604410f74f8cc117574ead5",
+
+  deploymentPlanSha256: "cb2482bae94d02152a080a6fdbbb037fb068692853f64145c6054c5b030b010c",
+
+  deployer: "0x1f87Ae197af539253978d435aD45cCf28Fb95024",
+
+  confidentialToken: "0x4E7B06D78965594eB5EF5414c357ca21E1554491",
+
+  wrappersRegistry: "0x2f0750Bbb0A246059d80e94c454586a7F27a128e",
+
+  pool: "0x0482DfAeCB4b3B76b9Efd4dEF261445D7bcCFcDA",
+
+  engine: "0x2df32104fadF449dd9Ec50E86008beE85698fb4b",
+
+  vault: "0x12fa9F3d421aec3710Ba8dee9cFb946839fE885A",
+
+  adapter: "0xAFb21BdD1Ca0f8e8DD4Cb71076e381A1B839582e",
+
+  reserve: "0x553542D5b47b64973D99C04D83991F4AE2b307b2",
+
+  transactions: {
+    pool: "0xedaf31403ba60cafcd45853599e4a9d210084a913174bed7e9a6124d2be248b2",
+
+    vault: "0x1300e17934c4113340af603202169b48cde6d44495c6ea090c9e4cae72c7a793",
+
+    adapter: "0xb2f2cba81796138cc4cc5cd58a274d51b8c9c36189bc23f925ed5c2e79520677",
+
+    reserve: "0xb65d184d5499f40c46a9fc7ce92aa91bbc87265c0a9c7a6013a18f00df64ea88",
+  },
+
+  blocks: {
+    pool: 11640451,
+    vault: 11640452,
+    adapter: 11640454,
+    reserve: 11640455,
+  },
+
+  engineCreation: {
+    method: "POOL_CREATE",
+    parentTransaction: "0xedaf31403ba60cafcd45853599e4a9d210084a913174bed7e9a6124d2be248b2",
+    parentBlock: 11640451,
+  },
+
+  assetClassification: "OFFICIAL_ZAMA_TESTNET_MOCK_ASSET",
+
+  yieldProfile: "SIMULATED_YIELD_V2_3_PRIZE",
+} as const satisfies VeilpotV2xProductionDeployment;
+
+/**
+ * Integration-branch target.
+ *
+ * The original V2 profile remains frozen historical evidence. New Meridian
+ * integration is bound to the corrected V2.x deployment.
+ *
+ * Merely exporting this value performs no transaction and does not affect the
+ * existing production Vercel deployment.
+ */
+export const VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT = VEILPOT_SEPOLIA_V2X_DEPLOYMENT;
 
 export const SUPPORTED_REGISTRATION_VERSION = 1n;
 export const REGISTRATION_BOND_WEI = 1_000_000_000_000_000n;
