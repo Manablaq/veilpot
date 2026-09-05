@@ -74,10 +74,33 @@ export function LiveAccountOverview({
       toBlock: "latest",
     });
 
-    const latestReservation = reservations.at(-1);
+    const latestReservation = reservations
+      .slice()
+      .sort((left, right) => {
+        const leftBlock = left.blockNumber;
+        const rightBlock = right.blockNumber;
+
+        if (leftBlock < rightBlock) return -1;
+        if (leftBlock > rightBlock) return 1;
+
+        return left.logIndex - right.logIndex;
+      })
+      .at(-1);
+
     const slotIndex = latestReservation?.args.slot;
 
-    if (slotIndex === undefined) {
+    if (slotIndex === undefined || slotIndex >= 128n) {
+      return null;
+    }
+
+    const state = await publicClient.readContract({
+      address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.pool,
+      abi: VEILPOT_POOL_V2_ABI,
+      functionName: "participantState",
+      args: [slotIndex],
+    });
+
+    if (state === PARTICIPANT_STATE.FREE || state === PARTICIPANT_STATE.TOMBSTONED) {
       return null;
     }
 
