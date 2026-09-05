@@ -27,6 +27,8 @@ import {
 } from "@/components/meridian";
 import { meridianNavigationItem, type MeridianView } from "@/components/meridian/app-navigation";
 import { MeridianAutopilotControl } from "@/components/meridian/autopilot-control";
+import { MeridianPrizeClaimControl } from "@/components/meridian/prize-claim-control";
+import { MeridianPrizeLifecycleControl } from "@/components/meridian/prize-control";
 import { MeridianVeilDrawControl } from "@/components/meridian/veildraw-control";
 import { MeridianSaveControl } from "@/components/meridian/save-control";
 import { ThemeControl } from "@/components/theme-control";
@@ -198,7 +200,11 @@ export function MeridianWorkspace({
       ) : null}
 
       {view === "veildraw" ? (
-        <MeridianVeilDrawControl authenticatedAddress={authenticatedAddress} />
+        <>
+          <MeridianVeilDrawControl authenticatedAddress={authenticatedAddress} />
+          <MeridianPrizeLifecycleControl authenticatedAddress={authenticatedAddress} />
+          <MeridianPrizeClaimControl authenticatedAddress={authenticatedAddress} />
+        </>
       ) : null}
 
       {view === "activity" ? (
