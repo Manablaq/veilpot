@@ -12,7 +12,7 @@
   "scripts": {
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "lint": "pnpm --filter @veilpot/reference-model build && eslint . && pnpm --filter @veilpot/contracts lint:sol",
+    "lint": "pnpm --filter @veilpot/reference-model build && pnpm --filter @veilpot/protocol-sdk build && eslint . && pnpm --filter @veilpot/contracts lint:sol",
     "typecheck": "tsc -b",
     "compile": "pnpm --filter @veilpot/contracts compile",
     "test": "pnpm --filter @veilpot/reference-model build && pnpm --filter @veilpot/reference-model test && pnpm --filter @veilpot/contracts test && pnpm --filter @veilpot/protocol-sdk test",
