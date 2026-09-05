@@ -1,5 +1,7 @@
 "use client";
 
+import { toUserFacingError } from "@/lib/ui-error";
+
 import {
   CircleCheck,
   CircleDashed,
@@ -59,9 +61,7 @@ interface ClaimCompletionSnapshot {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error && error.message.trim().length > 0
-    ? error.message
-    : "The corrected V2.x entitlement or claim action stopped safely.";
+  return toUserFacingError(error, "The corrected V2.x entitlement or claim action stopped safely.");
 }
 
 function sameAddress(left: string, right: string): boolean {
@@ -187,11 +187,7 @@ function compactAddress(address: string): string {
   return `${address.slice(0, 8)}…${address.slice(-6)}`;
 }
 
-export function MeridianPrizeClaimControl({
-  authenticatedAddress,
-}: {
-  readonly authenticatedAddress: Address;
-}) {
+export function PrizeClaimV2({ authenticatedAddress }: { readonly authenticatedAddress: Address }) {
   const connection = useConnection();
   const publicClient = usePublicClient({
     chainId: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.chainId,
@@ -869,9 +865,7 @@ export function MeridianPrizeClaimControl({
       });
 
       if (!sameHex(localDigest, onchainDigest)) {
-        throw new Error(
-          "Corrected V2.x local claim digest does not match the active Prize Reserve.",
-        );
+        throw new Error("Local claim digest does not match the active Prize Reserve.");
       }
 
       setClaimAuthorization(authorization);
@@ -879,7 +873,7 @@ export function MeridianPrizeClaimControl({
       setClaimSignature(null);
 
       setNotice(
-        "Exact corrected V2.x claim authorization prepared for one hour. No wallet signature was requested.",
+        "Exact claim authorization prepared for one hour. No wallet signature was requested.",
       );
     } catch (error: unknown) {
       resetPreparedClaim();
@@ -942,7 +936,7 @@ export function MeridianPrizeClaimControl({
 
       setClaimSignature(signature);
       setNotice(
-        "Exact corrected V2.x EIP-712 authorization signed and read-only validated. No prize transaction was submitted.",
+        "Exact EIP-712 authorization signed and read-only validated. No prize transaction was submitted.",
       );
     } catch (error: unknown) {
       setClaimSignature(null);
@@ -984,7 +978,7 @@ export function MeridianPrizeClaimControl({
 
       await exact.prepare({
         key: `prize-v2:claim:${claimAuthorization.drawId.toString()}:${claimAuthorization.slotIndex.toString()}:${claimAuthorization.nonce.toString()}`,
-        label: "Claim exact corrected V2.x prize entitlement",
+        label: "Claim exact private prize entitlement",
         consequence:
           "Submit the already signed historical-owner authorization to the active Prize Reserve. The reserve transfers only the encrypted entitlement and starts public proof-backed completion evidence. The payout amount remains confidential.",
         to: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.reserve,
@@ -1124,7 +1118,7 @@ export function MeridianPrizeClaimControl({
       <article className="workspace-card block">
         <Gift size={21} aria-hidden="true" />
 
-        <span className="eyebrow">PRIVATE ENTITLEMENT + CLAIM · CORRECTED V2.x</span>
+        <span className="eyebrow">PRIVATE ENTITLEMENT + CLAIM</span>
 
         <h2>Claim without exposing the prize amount.</h2>
 
@@ -1212,9 +1206,7 @@ export function MeridianPrizeClaimControl({
 
             <div>
               <strong>Select an exact draw</strong>
-              <p>
-                Meridian does not infer a claim from the wallet&apos;s current participant slot.
-              </p>
+              <p>Veilpot does not infer a claim from the wallet&apos;s current participant slot.</p>
             </div>
           </div>
         ) : prize === null ? (
@@ -1225,7 +1217,7 @@ export function MeridianPrizeClaimControl({
               <strong>No initialized Prize Reserve record</strong>
               <p>
                 Draw {selectedDrawId.toString()} has no readable initialized prize state in the
-                active corrected V2.x Reserve.
+                active Prize Reserve.
               </p>
             </div>
           </div>

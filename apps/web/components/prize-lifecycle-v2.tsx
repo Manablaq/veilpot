@@ -1,5 +1,7 @@
 "use client";
 
+import { toUserFacingError } from "@/lib/ui-error";
+
 import { CircleCheck, CircleDashed, Gift, LockKeyhole, RefreshCw, ShieldCheck } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { encodeFunctionData, type Address, type Hex } from "viem";
@@ -55,9 +57,7 @@ interface PrizeRoundSnapshot {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error && error.message.trim().length > 0
-    ? error.message
-    : "The corrected V2.x yield/prize action stopped safely.";
+  return toUserFacingError(error, "The corrected V2.x yield/prize action stopped safely.");
 }
 
 function parsePublicBoolean(value: unknown): boolean {
@@ -165,7 +165,7 @@ function currentSeconds(): bigint {
   return BigInt(Math.floor(Date.now() / 1000));
 }
 
-export function MeridianPrizeLifecycleControl({
+export function PrizeLifecycleV2({
   authenticatedAddress,
 }: {
   readonly authenticatedAddress: Address;
@@ -719,14 +719,14 @@ export function MeridianPrizeLifecycleControl({
       <article className="workspace-card block">
         <Gift size={21} aria-hidden="true" />
 
-        <span className="eyebrow">YIELD + PRIZE · CORRECTED V2.x</span>
+        <span className="eyebrow">YIELD + PRIZE</span>
 
         <h2>Finish the three-prize round without revealing private amounts.</h2>
 
         <p>
-          This surface uses Pool V2, VeilDraw Engine V2, Yield Adapter V2 and Prize Reserve from the
-          active Sepolia deployment. Yield is simulated testnet yield. The confidential token is an
-          official Zama testnet mock asset.
+          Live Sepolia state comes directly from the Pool, VeilDraw Engine, Yield Adapter and Prize
+          Reserve. Yield is simulated testnet yield. The confidential token is an official Zama
+          testnet mock asset.
         </p>
 
         <div className="workspace-inline-actions">
@@ -739,7 +739,7 @@ export function MeridianPrizeLifecycleControl({
             }}
           >
             <RefreshCw size={15} aria-hidden="true" />
-            Refresh V2.x lifecycle
+            Refresh prize lifecycle
           </button>
 
           {round !== null && round.allChildrenFinalized && !round.roundRecognized ? (
@@ -763,7 +763,7 @@ export function MeridianPrizeLifecycleControl({
 
             <div>
               <strong>No allocated three-prize round discovered</strong>
-              <p>Meridian does not fabricate yield, prize, winner or entitlement state.</p>
+              <p>Veilpot does not fabricate yield, prize, winner or entitlement state.</p>
             </div>
           </div>
         ) : (
@@ -929,9 +929,8 @@ export function MeridianPrizeLifecycleControl({
                 <div>
                   <strong>Encrypted entitlement assignment complete</strong>
                   <p>
-                    No entitlement is decrypted here. M6-B2B will add the separate owner opt-in
-                    authorization, explicit private reveal, corrected V2.x EIP-712 signature and
-                    separate claim submission.
+                    No entitlement is decrypted here. Authorization, private reveal, signing and
+                    claim submission remain separate explicit owner actions.
                   </p>
                 </div>
               </div>

@@ -3690,3 +3690,125 @@ html[data-theme="dark"] .notification-panel .notification-toolbar .settings-link
   background: var(--control-hover);
   color: var(--ink);
 }
+
+/* F7 — final visual stabilization */
+.financial-form-grid label {
+  min-width: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.financial-form-grid label > span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.financial-form-grid input,
+.financial-form-grid select,
+.financial-form-grid textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  padding: 0 0.85rem;
+  font: inherit;
+  outline: none;
+}
+
+.financial-form-grid textarea {
+  min-height: 96px;
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+  resize: vertical;
+}
+
+.financial-form-grid input:focus,
+.financial-form-grid select:focus,
+.financial-form-grid textarea:focus {
+  border-color: color-mix(in srgb, var(--forest) 62%, var(--line));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--forest) 12%, transparent);
+}
+
+.workspace-card,
+.workspace-card-main,
+.financial-state-card,
+.financial-step-card,
+.financial-transaction-status,
+.financial-state-card > div,
+.financial-step-card > div,
+.financial-transaction-status > div {
+  min-width: 0;
+}
+
+.financial-state-card p,
+.financial-step-card p,
+.financial-transaction-status p,
+.operator-verification-card p,
+.wallet-error,
+.workspace-card p {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.financial-state-card strong,
+.financial-transaction-status strong {
+  overflow-wrap: anywhere;
+}
+
+html[data-theme="dark"] .wallet-panel {
+  color-scheme: dark;
+}
+
+html[data-theme="dark"] .wallet-panel .wallet-identity-card,
+html[data-theme="dark"] .wallet-panel .wallet-health-grid > div {
+  background: var(--panel-strong);
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+html[data-theme="dark"] .wallet-panel .wallet-health-grid span,
+html[data-theme="dark"] .wallet-panel .wallet-health-grid small,
+html[data-theme="dark"] .wallet-panel .wallet-identity-card span,
+html[data-theme="dark"] .wallet-panel .wallet-identity-card small,
+html[data-theme="dark"] .wallet-panel .device-row span,
+html[data-theme="dark"] .wallet-panel .device-row small,
+html[data-theme="dark"] .wallet-panel .wallet-control-row span {
+  color: var(--muted);
+}
+
+html[data-theme="dark"] .wallet-panel .wallet-health-grid strong,
+html[data-theme="dark"] .wallet-panel .wallet-control-row strong,
+html[data-theme="dark"] .wallet-panel .device-row strong {
+  color: var(--ink);
+}
+
+html[data-theme="dark"] .wallet-panel .wallet-disclosure {
+  background: var(--success-soft-bg);
+  color: var(--forest-2);
+  border: 1px solid color-mix(in srgb, var(--forest) 22%, transparent);
+}
+
+html[data-theme="dark"] .wallet-panel .wallet-disclosure p {
+  color: var(--ink-soft);
+}
+
+html[data-theme="dark"] .wallet-panel .wallet-control-row:hover,
+html[data-theme="dark"] .wallet-panel .wallet-control-row:focus-visible {
+  background: var(--control-hover);
+}
+
+html[data-theme="dark"] .wallet-panel .danger-outline-button {
+  background: transparent;
+  color: var(--danger);
+}
+
+@media (max-width: 680px) {
+  .financial-form-grid {
+    grid-template-columns: 1fr;
+  }
+}

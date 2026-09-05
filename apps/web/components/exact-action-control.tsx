@@ -594,10 +594,13 @@ export function useExactAction(
 
 export function ExactActionReviewCard({
   controller,
+  onOpenWallet,
 }: {
   readonly controller: ReturnType<typeof useExactAction>;
+  readonly onOpenWallet?: () => void | Promise<void>;
 }) {
   const { review, attempt, status } = controller;
+  const openWalletAction = onOpenWallet ?? controller.openWallet;
 
   return (
     <div className="financial-plan-review">
@@ -666,7 +669,7 @@ export function ExactActionReviewCard({
             type="button"
             disabled={controller.isWalletPending}
             onClick={() => {
-              void controller.openWallet();
+              void openWalletAction();
             }}
           >
             Open exact wallet review

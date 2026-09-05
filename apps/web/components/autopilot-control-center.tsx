@@ -1,5 +1,7 @@
 "use client";
 
+import { toUserFacingError } from "@/lib/ui-error";
+
 import {
   CalendarClock,
   CircleCheck,
@@ -21,23 +23,23 @@ import { useConnection, usePublicClient } from "wagmi";
 import {
   PARTICIPANT_STATE,
   VEILPOT_AUTOPILOT_VAULT_ABI,
-  VEILPOT_POOL_ABI,
-  VEILPOT_SEPOLIA_DEPLOYMENT,
+  VEILPOT_POOL_V2_ABI,
+  VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT,
   autopilotPlanStateName,
-  buildAdvanceMissedAutopilotWindowCall,
-  buildAutopilotFundingCall,
-  buildAutopilotPlanIdCall,
-  buildAutopilotPlanMetadataCall,
+  buildV2AdvanceMissedAutopilotWindowCall,
+  buildV2AutopilotFundingCall,
+  buildV2AutopilotPlanIdCall,
+  buildV2AutopilotPlanMetadataCall,
   buildAutopilotSchedule,
-  buildCreateAutopilotPlanCall,
-  buildExecuteAutopilotPlanCall,
-  buildPauseAutopilotPlanCall,
-  buildResumeAutopilotPlanCall,
-  buildRevokeAutopilotPlanCall,
-  buildSkipAutopilotWindowCall,
-  buildWithdrawAutopilotPlanFundsCall,
-  encryptAutopilotFundingAmount,
-  encryptAutopilotPlanAmounts,
+  buildV2CreateAutopilotPlanCall,
+  buildV2ExecuteAutopilotPlanCall,
+  buildV2PauseAutopilotPlanCall,
+  buildV2ResumeAutopilotPlanCall,
+  buildV2RevokeAutopilotPlanCall,
+  buildV2SkipAutopilotWindowCall,
+  buildV2WithdrawAutopilotPlanFundsCall,
+  encryptV2AutopilotFundingAmount,
+  encryptV2AutopilotPlanAmounts,
 } from "@veilpot/protocol-sdk";
 
 import {
@@ -52,6 +54,7 @@ import {
   type PersistedAutopilotScheduleRecord,
 } from "@/lib/autopilot";
 import { ExactActionReviewCard, useExactAction } from "@/components/exact-action-control";
+import { VEILPOT_V2_EXACT_ACTION_SCOPE } from "@/lib/deployment-scope";
 
 const WEEKDAYS = [
   "Monday",
@@ -115,9 +118,7 @@ const INITIAL_DRAFT: CreationDraft = {
 };
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error && error.message.trim().length > 0
-    ? error.message
-    : "The Autopilot action stopped safely.";
+  return toUserFacingError(error, "The Autopilot action stopped safely.");
 }
 
 async function retryRpc<T>(operation: () => Promise<T>): Promise<T> {
@@ -153,10 +154,10 @@ export function AutopilotControlCenter({
   readonly authenticatedAddress: Address;
 }) {
   const connection = useConnection();
-  const publicClient = usePublicClient({ chainId: VEILPOT_SEPOLIA_DEPLOYMENT.chainId });
-  const metadata = useMetadata(VEILPOT_SEPOLIA_DEPLOYMENT.confidentialToken);
+  const publicClient = usePublicClient({ chainId: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.chainId });
+  const metadata = useMetadata(VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.confidentialToken);
   const zama = useZamaSDK();
-  const exact = useExactAction(authenticatedAddress);
+  const exact = useExactAction(authenticatedAddress, VEILPOT_V2_EXACT_ACTION_SCOPE);
 
   const [participant, setParticipant] = useState<ParticipantSnapshot | null>(null);
   const [plans, setPlans] = useState<readonly LivePlan[]>([]);
@@ -185,15 +186,15 @@ export function AutopilotControlCenter({
     if (publicClient === undefined) return null;
 
     const maximum = await publicClient.readContract({
-      address: VEILPOT_SEPOLIA_DEPLOYMENT.pool,
-      abi: VEILPOT_POOL_ABI,
+      address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.pool,
+      abi: VEILPOT_POOL_V2_ABI,
       functionName: "MAX_PARTICIPANTS",
     });
 
     for (let index = 0; index < Number(maximum); index += 1) {
       const state = await publicClient.readContract({
-        address: VEILPOT_SEPOLIA_DEPLOYMENT.pool,
-        abi: VEILPOT_POOL_ABI,
+        address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.pool,
+        abi: VEILPOT_POOL_V2_ABI,
         functionName: "participantState",
         args: [BigInt(index)],
       });
@@ -202,8 +203,8 @@ export function AutopilotControlCenter({
       }
 
       const row = await publicClient.readContract({
-        address: VEILPOT_SEPOLIA_DEPLOYMENT.pool,
-        abi: VEILPOT_POOL_ABI,
+        address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.pool,
+        abi: VEILPOT_POOL_V2_ABI,
         functionName: "participantMetadata",
         args: [BigInt(index)],
       });
@@ -226,7 +227,7 @@ export function AutopilotControlCenter({
       publicClient === undefined ||
       connection.status !== "connected" ||
       connection.address.toLowerCase() !== authenticatedAddress.toLowerCase() ||
-      connection.chainId !== VEILPOT_SEPOLIA_DEPLOYMENT.chainId
+      connection.chainId !== VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.chainId
     ) {
       setNotice("Connect the authenticated wallet on Ethereum Sepolia.");
       return;
@@ -245,9 +246,9 @@ export function AutopilotControlCenter({
 
       const pinnedBlock = latest.number;
       const pinnedHash = latest.hash;
-      const deploymentBlock = BigInt(VEILPOT_SEPOLIA_DEPLOYMENT.blocks.vault);
+      const deploymentBlock = BigInt(VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.blocks.vault);
       const nextPlanNonce = await publicClient.readContract({
-        address: VEILPOT_SEPOLIA_DEPLOYMENT.vault,
+        address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.vault,
         abi: VEILPOT_AUTOPILOT_VAULT_ABI,
         functionName: "nextPlanNonce",
         args: [owner],
@@ -266,7 +267,7 @@ export function AutopilotControlCenter({
 
           const logs = await retryRpc(() =>
             publicClient.getContractEvents({
-              address: VEILPOT_SEPOLIA_DEPLOYMENT.vault,
+              address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.vault,
               abi: VEILPOT_AUTOPILOT_VAULT_ABI,
               eventName: "PlanCreated",
               args: { owner },
@@ -305,8 +306,8 @@ export function AutopilotControlCenter({
       let schedules: readonly PersistedAutopilotScheduleRecord[] = [];
       try {
         schedules = loadAutopilotScheduleRecords(window.localStorage, {
-          chainId: VEILPOT_SEPOLIA_DEPLOYMENT.chainId,
-          vault: VEILPOT_SEPOLIA_DEPLOYMENT.vault,
+          chainId: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.chainId,
+          vault: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.vault,
           owner,
         });
       } catch (error: unknown) {
@@ -319,7 +320,7 @@ export function AutopilotControlCenter({
       const nextPlans: LivePlan[] = [];
       for (const event of ordered) {
         const row = await publicClient.readContract({
-          ...buildAutopilotPlanMetadataCall(event.planId),
+          ...buildV2AutopilotPlanMetadataCall(event.planId),
           blockNumber: pinnedBlock,
         });
 
@@ -338,8 +339,8 @@ export function AutopilotControlCenter({
 
         reconcileAutopilotPlanMetadata(event, planMetadata);
         const schedule = findAutopilotScheduleRecord(schedules, {
-          chainId: VEILPOT_SEPOLIA_DEPLOYMENT.chainId,
-          vault: VEILPOT_SEPOLIA_DEPLOYMENT.vault,
+          chainId: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.chainId,
+          vault: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.vault,
           owner,
           planId: event.planId,
           scheduleRoot: event.scheduleRoot,
@@ -383,8 +384,8 @@ export function AutopilotControlCenter({
         try {
           saveAutopilotScheduleRecord(window.localStorage, {
             version: 1,
-            chainId: VEILPOT_SEPOLIA_DEPLOYMENT.chainId,
-            vault: VEILPOT_SEPOLIA_DEPLOYMENT.vault,
+            chainId: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.chainId,
+            vault: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.vault,
             owner: authenticatedAddress,
             planId: pendingCreation.planId,
             scheduleRoot: pendingCreation.scheduleRoot,
@@ -414,7 +415,7 @@ export function AutopilotControlCenter({
       publicClient === undefined ||
       connection.status !== "connected" ||
       connection.address.toLowerCase() !== authenticatedAddress.toLowerCase() ||
-      connection.chainId !== VEILPOT_SEPOLIA_DEPLOYMENT.chainId ||
+      connection.chainId !== VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.chainId ||
       tokenDecimals === undefined
     ) {
       setNotice("Authenticated Sepolia wallet and token metadata are required.");
@@ -459,14 +460,14 @@ export function AutopilotControlCenter({
       }
 
       const planNonce = await publicClient.readContract({
-        address: VEILPOT_SEPOLIA_DEPLOYMENT.vault,
+        address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.vault,
         abi: VEILPOT_AUTOPILOT_VAULT_ABI,
         functionName: "nextPlanNonce",
         args: [connection.address],
       });
 
       const planId = await publicClient.readContract(
-        buildAutopilotPlanIdCall(
+        buildV2AutopilotPlanIdCall(
           connection.address,
           liveParticipant.registrationVersion,
           liveParticipant.reservationNonce,
@@ -483,7 +484,7 @@ export function AutopilotControlCenter({
       });
       const schedule = buildAutopilotSchedule(planId, windows);
 
-      const encrypted = await encryptAutopilotPlanAmounts(
+      const encrypted = await encryptV2AutopilotPlanAmounts(
         zama,
         periodAmount,
         lifetimeCap,
@@ -493,7 +494,7 @@ export function AutopilotControlCenter({
       const [postParticipant, postNonce] = await Promise.all([
         loadParticipant(),
         publicClient.readContract({
-          address: VEILPOT_SEPOLIA_DEPLOYMENT.vault,
+          address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.vault,
           abi: VEILPOT_AUTOPILOT_VAULT_ABI,
           functionName: "nextPlanNonce",
           args: [connection.address],
@@ -512,7 +513,7 @@ export function AutopilotControlCenter({
         );
       }
 
-      const descriptor = buildCreateAutopilotPlanCall({
+      const descriptor = buildV2CreateAutopilotPlanCall({
         encrypted,
         owner: connection.address,
         slotIndex: postParticipant.slotIndex,
@@ -590,7 +591,7 @@ export function AutopilotControlCenter({
       }
 
       const row = await publicClient.readContract(
-        buildAutopilotPlanMetadataCall(selectedPlan.event.planId),
+        buildV2AutopilotPlanMetadataCall(selectedPlan.event.planId),
       );
       const latest: AutopilotPlanMetadataSnapshot = {
         state: row[0],
@@ -609,9 +610,9 @@ export function AutopilotControlCenter({
         throw new Error("REVOKED and COMPLETED plans cannot receive new funding.");
       }
 
-      const encrypted = await encryptAutopilotFundingAmount(zama, amount, connection.address);
+      const encrypted = await encryptV2AutopilotFundingAmount(zama, amount, connection.address);
 
-      const descriptor = buildAutopilotFundingCall({
+      const descriptor = buildV2AutopilotFundingCall({
         encrypted,
         owner: connection.address,
         planId: selectedPlan.event.planId,
@@ -715,7 +716,7 @@ export function AutopilotControlCenter({
       const planId = selectedPlan.event.planId;
 
       if (action === "pause") {
-        const descriptor = buildPauseAutopilotPlanCall(planId);
+        const descriptor = buildV2PauseAutopilotPlanCall(planId);
         await stageDescriptor(
           `autopilot-pause:${planId}`,
           "Pause Autopilot plan",
@@ -725,7 +726,7 @@ export function AutopilotControlCenter({
         return;
       }
       if (action === "resume") {
-        const descriptor = buildResumeAutopilotPlanCall(planId);
+        const descriptor = buildV2ResumeAutopilotPlanCall(planId);
         await stageDescriptor(
           `autopilot-resume:${planId}`,
           "Resume Autopilot plan",
@@ -735,7 +736,7 @@ export function AutopilotControlCenter({
         return;
       }
       if (action === "revoke") {
-        const descriptor = buildRevokeAutopilotPlanCall(planId);
+        const descriptor = buildV2RevokeAutopilotPlanCall(planId);
         await stageDescriptor(
           `autopilot-revoke:${planId}`,
           "Permanently revoke Autopilot plan",
@@ -745,7 +746,7 @@ export function AutopilotControlCenter({
         return;
       }
       if (action === "withdraw") {
-        const descriptor = buildWithdrawAutopilotPlanFundsCall(planId);
+        const descriptor = buildV2WithdrawAutopilotPlanFundsCall(planId);
         await stageDescriptor(
           `autopilot-withdraw-funds:${planId}`,
           "Withdraw all accounted Vault funds",
@@ -771,7 +772,7 @@ export function AutopilotControlCenter({
       };
 
       if (action === "execute") {
-        const descriptor = buildExecuteAutopilotPlanCall(input);
+        const descriptor = buildV2ExecuteAutopilotPlanCall(input);
         await stageDescriptor(
           `autopilot-execute:${planId}:${currentWindow.index.toString()}`,
           "Execute exact due Autopilot window",
@@ -779,7 +780,7 @@ export function AutopilotControlCenter({
           descriptor,
         );
       } else if (action === "skip") {
-        const descriptor = buildSkipAutopilotWindowCall(input);
+        const descriptor = buildV2SkipAutopilotWindowCall(input);
         await stageDescriptor(
           `autopilot-skip:${planId}:${currentWindow.index.toString()}`,
           "Skip exact next Autopilot window",
@@ -787,7 +788,7 @@ export function AutopilotControlCenter({
           descriptor,
         );
       } else {
-        const descriptor = buildAdvanceMissedAutopilotWindowCall(input);
+        const descriptor = buildV2AdvanceMissedAutopilotWindowCall(input);
         await stageDescriptor(
           `autopilot-advance:${planId}:${currentWindow.index.toString()}`,
           "Advance exact expired Autopilot window",
