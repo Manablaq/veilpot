@@ -121,6 +121,10 @@ export interface VeilpotV2ProductionDeployment {
   readonly yieldProfile: "SIMULATED_YIELD_V2_3_PRIZE";
 }
 
+export type VeilpotV2xProductionDeployment = Omit<VeilpotV2ProductionDeployment, "profile"> & {
+  readonly profile: "VEILPOT_V2X_PRODUCTION_SEPOLIA_DEPLOYMENT";
+};
+
 export const VEILPOT_SEPOLIA_V2_DEPLOYMENT = {
   profile: "VEILPOT_V2_PRODUCTION_SEPOLIA_DEPLOYMENT",
   network: "sepolia",
@@ -180,13 +184,75 @@ export const VEILPOT_SEPOLIA_V2_DEPLOYMENT = {
   yieldProfile: "SIMULATED_YIELD_V2_3_PRIZE",
 } as const satisfies VeilpotV2ProductionDeployment;
 
+export const VEILPOT_SEPOLIA_V2X_DEPLOYMENT = {
+  profile: "VEILPOT_V2X_PRODUCTION_SEPOLIA_DEPLOYMENT",
+  network: "sepolia",
+  chainId: 11155111,
+
+  deploymentEvidenceCommit: "562ddea6e2247a219a80503fb4c7f9b3e7481a7d",
+
+  deploymentEvidenceSha256: "75bdae870611407840d40d77d8e1c1745e478e607c73e46c536126ea9f6a0009",
+
+  deploymentJournalSha256: "f45e15d844fb42ca60996ad21fb5f722b84bcf7bedd4cbeae81dd75e0e7e41ac",
+
+  deploymentSourceCommit: "3c21d19fc88b7747f604410f74f8cc117574ead5",
+
+  deploymentPlanSha256: "cb2482bae94d02152a080a6fdbbb037fb068692853f64145c6054c5b030b010c",
+
+  deployer: "0x1f87Ae197af539253978d435aD45cCf28Fb95024",
+
+  confidentialToken: "0x4E7B06D78965594eB5EF5414c357ca21E1554491",
+
+  wrappersRegistry: "0x2f0750Bbb0A246059d80e94c454586a7F27a128e",
+
+  pool: "0x0482DfAeCB4b3B76b9Efd4dEF261445D7bcCFcDA",
+
+  engine: "0x2df32104fadF449dd9Ec50E86008beE85698fb4b",
+
+  vault: "0x12fa9F3d421aec3710Ba8dee9cFb946839fE885A",
+
+  adapter: "0xAFb21BdD1Ca0f8e8DD4Cb71076e381A1B839582e",
+
+  reserve: "0x553542D5b47b64973D99C04D83991F4AE2b307b2",
+
+  transactions: {
+    pool: "0xedaf31403ba60cafcd45853599e4a9d210084a913174bed7e9a6124d2be248b2",
+
+    vault: "0x1300e17934c4113340af603202169b48cde6d44495c6ea090c9e4cae72c7a793",
+
+    adapter: "0xb2f2cba81796138cc4cc5cd58a274d51b8c9c36189bc23f925ed5c2e79520677",
+
+    reserve: "0xb65d184d5499f40c46a9fc7ce92aa91bbc87265c0a9c7a6013a18f00df64ea88",
+  },
+
+  blocks: {
+    pool: 11640451,
+    vault: 11640452,
+    adapter: 11640454,
+    reserve: 11640455,
+  },
+
+  engineCreation: {
+    method: "POOL_CREATE",
+    parentTransaction: "0xedaf31403ba60cafcd45853599e4a9d210084a913174bed7e9a6124d2be248b2",
+    parentBlock: 11640451,
+  },
+
+  assetClassification: "OFFICIAL_ZAMA_TESTNET_MOCK_ASSET",
+
+  yieldProfile: "SIMULATED_YIELD_V2_3_PRIZE",
+} as const satisfies VeilpotV2xProductionDeployment;
+
 /**
  * Integration-branch target.
+ *
+ * The original V2 profile remains frozen historical evidence. New Meridian
+ * integration is bound to the corrected V2.x deployment.
  *
  * Merely exporting this value performs no transaction and does not affect the
  * existing production Vercel deployment.
  */
-export const VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT = VEILPOT_SEPOLIA_V2_DEPLOYMENT;
+export const VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT = VEILPOT_SEPOLIA_V2X_DEPLOYMENT;
 
 export const SUPPORTED_REGISTRATION_VERSION = 1n;
 export const REGISTRATION_BOND_WEI = 1_000_000_000_000_000n;

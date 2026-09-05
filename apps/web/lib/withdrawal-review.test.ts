@@ -12,8 +12,8 @@ import {
 
 const HOLDER = "0x1f87Ae197af539253978d435aD45cCf28Fb95024" as WithdrawalAddress;
 const OTHER = "0x1111111111111111111111111111111111111111" as WithdrawalAddress;
-const POOL = "0x6F74fCadDc359159D0799fc9054642aB1f357161" as WithdrawalAddress;
-const WRONG_POOL = "0x2029D8b7AE6Abe7dAa0C2A71E960839171a34601" as WithdrawalAddress;
+const POOL = "0x0482DfAeCB4b3B76b9Efd4dEF261445D7bcCFcDA" as WithdrawalAddress;
+const WRONG_POOL = "0x6F74fCadDc359159D0799fc9054642aB1f357161" as WithdrawalAddress;
 const CHAIN_ID = 11155111;
 
 const participant: WithdrawalParticipantBinding = {

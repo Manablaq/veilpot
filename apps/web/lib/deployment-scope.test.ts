@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT,
   VEILPOT_SEPOLIA_DEPLOYMENT,
+  VEILPOT_SEPOLIA_V2_DEPLOYMENT,
 } from "@veilpot/protocol-sdk";
 
 import {
@@ -43,6 +44,20 @@ void test("creates a distinct V2 exact-action namespace rooted in PoolV2", () =>
       VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.chainId,
     )}:${VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.pool.toLowerCase()}:${USER.toLowerCase()}`,
   );
+});
+
+void test("does not reuse the superseded V2 Pool namespace after the V2.x switch", () => {
+  const active = exactActionStorageKey(VEILPOT_V2_EXACT_ACTION_SCOPE, USER);
+
+  const superseded = `veilpot:exact-action:unresolved:v2:${String(
+    VEILPOT_SEPOLIA_V2_DEPLOYMENT.chainId,
+  )}:${VEILPOT_SEPOLIA_V2_DEPLOYMENT.pool.toLowerCase()}:${USER.toLowerCase()}`;
+
+  assert.notEqual(active, superseded);
+
+  assert.equal(active.includes(VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.pool.toLowerCase()), true);
+
+  assert.equal(active.includes(VEILPOT_SEPOLIA_V2_DEPLOYMENT.pool.toLowerCase()), false);
 });
 
 void test("scopes every M4 Save persistence key to V2", () => {
@@ -128,7 +143,7 @@ void test("scopes every M4 Save persistence key to V2", () => {
   }
 });
 
-void test("allows active V2 destinations and rejects the historical V1 Pool", () => {
+void test("allows active V2.x destinations and rejects historical V1 and superseded V2 Pools", () => {
   assert.equal(
     exactActionDestinationAllowed(
       VEILPOT_V2_EXACT_ACTION_SCOPE,
@@ -157,6 +172,14 @@ void test("allows active V2 destinations and rejects the historical V1 Pool", ()
     exactActionDestinationAllowed(VEILPOT_V2_EXACT_ACTION_SCOPE, VEILPOT_SEPOLIA_DEPLOYMENT.pool),
     false,
   );
+
+  assert.equal(
+    exactActionDestinationAllowed(
+      VEILPOT_V2_EXACT_ACTION_SCOPE,
+      VEILPOT_SEPOLIA_V2_DEPLOYMENT.pool,
+    ),
+    false,
+  );
 });
 
 void test("rejects stale V1, wrong-wallet and wrong-chain attempts from V2 scope", () => {
@@ -182,6 +205,18 @@ void test("rejects stale V1, wrong-wallet and wrong-chain attempts from V2 scope
       {
         ...attempt,
         to: VEILPOT_SEPOLIA_DEPLOYMENT.pool,
+      },
+      VEILPOT_V2_EXACT_ACTION_SCOPE,
+      USER,
+    ),
+    false,
+  );
+
+  assert.equal(
+    exactActionAttemptMatchesScope(
+      {
+        ...attempt,
+        to: VEILPOT_SEPOLIA_V2_DEPLOYMENT.pool,
       },
       VEILPOT_V2_EXACT_ACTION_SCOPE,
       USER,

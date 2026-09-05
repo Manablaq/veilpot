@@ -12,6 +12,7 @@ import {
   VEILPOT_SEPOLIA_DEPLOYMENT,
   VEILPOT_SEPOLIA_V1_DEPLOYMENT,
   VEILPOT_SEPOLIA_V2_DEPLOYMENT,
+  VEILPOT_SEPOLIA_V2X_DEPLOYMENT,
 } from "../src/index.js";
 
 function asRecord(value: unknown, label: string): Record<string, unknown> {
@@ -33,10 +34,10 @@ async function sha256File(path: string): Promise<string> {
 }
 
 describe("VeilDraw V2 protocol SDK identity", function () {
-  it("preserves the frozen V1 deployment alias while making V2 the explicit integration target", function () {
+  it("preserves frozen V1 and V2 identities while making corrected V2.x the active integration target", function () {
     expect(VEILPOT_SEPOLIA_DEPLOYMENT).to.equal(VEILPOT_SEPOLIA_V1_DEPLOYMENT);
 
-    expect(VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT).to.equal(VEILPOT_SEPOLIA_V2_DEPLOYMENT);
+    expect(VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT).to.equal(VEILPOT_SEPOLIA_V2X_DEPLOYMENT);
 
     expect(VEILPOT_SEPOLIA_V1_DEPLOYMENT.pool).to.equal(
       "0x2029D8b7AE6Abe7dAa0C2A71E960839171a34601",
@@ -44,6 +45,14 @@ describe("VeilDraw V2 protocol SDK identity", function () {
 
     expect(VEILPOT_SEPOLIA_V2_DEPLOYMENT.pool).to.equal(
       "0x6F74fCadDc359159D0799fc9054642aB1f357161",
+    );
+
+    expect(VEILPOT_SEPOLIA_V2X_DEPLOYMENT.pool).to.equal(
+      "0x0482DfAeCB4b3B76b9Efd4dEF261445D7bcCFcDA",
+    );
+
+    expect(VEILPOT_SEPOLIA_V2X_DEPLOYMENT.deploymentEvidenceCommit).to.equal(
+      "562ddea6e2247a219a80503fb4c7f9b3e7481a7d",
     );
   });
 
@@ -147,6 +156,94 @@ describe("VeilDraw V2 protocol SDK identity", function () {
     expect(VEILPOT_SEPOLIA_V2_DEPLOYMENT.engineCreation.parentBlock).to.equal(
       VEILPOT_SEPOLIA_V2_DEPLOYMENT.blocks.pool,
     );
+  });
+
+  it("pins the corrected V2.x profile to the verified Sepolia deployment evidence", async function () {
+    const evidencePath = resolve(
+      process.cwd(),
+      "../../evidence/production-sepolia/veildraw-v2x/deployment.json",
+    );
+
+    const journalPath = resolve(
+      process.cwd(),
+      "../../evidence/production-sepolia/veildraw-v2x/deployment-journal.json",
+    );
+
+    expect(await sha256File(evidencePath)).to.equal(
+      VEILPOT_SEPOLIA_V2X_DEPLOYMENT.deploymentEvidenceSha256,
+    );
+
+    expect(await sha256File(journalPath)).to.equal(
+      VEILPOT_SEPOLIA_V2X_DEPLOYMENT.deploymentJournalSha256,
+    );
+
+    const evidence = asRecord(await readJson(evidencePath), "V2.x deployment evidence");
+
+    expect(evidence.profile).to.equal(VEILPOT_SEPOLIA_V2X_DEPLOYMENT.profile);
+    expect(evidence.stage).to.equal("VERIFIED");
+    expect(evidence.network).to.equal(VEILPOT_SEPOLIA_V2X_DEPLOYMENT.network);
+    expect(evidence.chainId).to.equal(String(VEILPOT_SEPOLIA_V2X_DEPLOYMENT.chainId));
+    expect(evidence.sourceCommit).to.equal(VEILPOT_SEPOLIA_V2X_DEPLOYMENT.deploymentSourceCommit);
+    expect(evidence.deploymentPlanSha256).to.equal(
+      VEILPOT_SEPOLIA_V2X_DEPLOYMENT.deploymentPlanSha256,
+    );
+    expect(evidence.deployerAddress).to.equal(VEILPOT_SEPOLIA_V2X_DEPLOYMENT.deployer);
+    expect(evidence.wrappersRegistry).to.equal(VEILPOT_SEPOLIA_V2X_DEPLOYMENT.wrappersRegistry);
+    expect(evidence.yieldProfile).to.equal(VEILPOT_SEPOLIA_V2X_DEPLOYMENT.yieldProfile);
+    expect(evidence.securityFix).to.equal(
+      "REFRESH_DEREGISTRATION_ZERO_FROM_CURRENT_PRINCIPAL_AFTER_EVERY_PRINCIPAL_CREDIT",
+    );
+
+    const token = asRecord(evidence.token, "V2.x token");
+
+    expect(token.address).to.equal(VEILPOT_SEPOLIA_V2X_DEPLOYMENT.confidentialToken);
+    expect(token.classification).to.equal(VEILPOT_SEPOLIA_V2X_DEPLOYMENT.assetClassification);
+
+    const planned = asRecord(evidence.plannedAddresses, "V2.x planned addresses");
+
+    expect(planned.poolV2).to.equal(VEILPOT_SEPOLIA_V2X_DEPLOYMENT.pool);
+    expect(planned.drawEngineV2).to.equal(VEILPOT_SEPOLIA_V2X_DEPLOYMENT.engine);
+    expect(planned.autopilotVault).to.equal(VEILPOT_SEPOLIA_V2X_DEPLOYMENT.vault);
+    expect(planned.yieldAdapterV2).to.equal(VEILPOT_SEPOLIA_V2X_DEPLOYMENT.adapter);
+    expect(planned.prizeReserve).to.equal(VEILPOT_SEPOLIA_V2X_DEPLOYMENT.reserve);
+
+    const deployments = asRecord(evidence.deployments, "V2.x deployments");
+
+    const pool = asRecord(deployments.VeilpotPoolV2, "V2.x Pool deployment");
+    const vault = asRecord(deployments.VeilpotAutopilotVault, "V2.x Vault deployment");
+    const adapter = asRecord(deployments.VeilpotSimulatedYieldAdapterV2, "V2.x Adapter deployment");
+    const reserve = asRecord(deployments.VeilpotPrizeReserve, "V2.x Reserve deployment");
+
+    expect(pool.address).to.equal(VEILPOT_SEPOLIA_V2X_DEPLOYMENT.pool);
+    expect(pool.transactionHash).to.equal(VEILPOT_SEPOLIA_V2X_DEPLOYMENT.transactions.pool);
+    expect(pool.blockNumber).to.equal(VEILPOT_SEPOLIA_V2X_DEPLOYMENT.blocks.pool);
+
+    expect(vault.address).to.equal(VEILPOT_SEPOLIA_V2X_DEPLOYMENT.vault);
+    expect(vault.transactionHash).to.equal(VEILPOT_SEPOLIA_V2X_DEPLOYMENT.transactions.vault);
+    expect(vault.blockNumber).to.equal(VEILPOT_SEPOLIA_V2X_DEPLOYMENT.blocks.vault);
+
+    expect(adapter.address).to.equal(VEILPOT_SEPOLIA_V2X_DEPLOYMENT.adapter);
+    expect(adapter.transactionHash).to.equal(VEILPOT_SEPOLIA_V2X_DEPLOYMENT.transactions.adapter);
+    expect(adapter.blockNumber).to.equal(VEILPOT_SEPOLIA_V2X_DEPLOYMENT.blocks.adapter);
+
+    expect(reserve.address).to.equal(VEILPOT_SEPOLIA_V2X_DEPLOYMENT.reserve);
+    expect(reserve.transactionHash).to.equal(VEILPOT_SEPOLIA_V2X_DEPLOYMENT.transactions.reserve);
+    expect(reserve.blockNumber).to.equal(VEILPOT_SEPOLIA_V2X_DEPLOYMENT.blocks.reserve);
+
+    expect(VEILPOT_SEPOLIA_V2X_DEPLOYMENT.engineCreation.method).to.equal("POOL_CREATE");
+
+    expect(VEILPOT_SEPOLIA_V2X_DEPLOYMENT.engineCreation.parentTransaction).to.equal(
+      VEILPOT_SEPOLIA_V2X_DEPLOYMENT.transactions.pool,
+    );
+
+    expect(VEILPOT_SEPOLIA_V2X_DEPLOYMENT.engineCreation.parentBlock).to.equal(
+      VEILPOT_SEPOLIA_V2X_DEPLOYMENT.blocks.pool,
+    );
+
+    const previous = asRecord(evidence.previousV2Deployment, "previous V2 deployment");
+
+    expect(previous.mutated).to.equal(false);
+    expect(previous.supersededForNewIntegration).to.equal(true);
   });
 
   it("keeps each generated V2 SDK ABI structurally identical to its exact compiled artifact", async function () {
