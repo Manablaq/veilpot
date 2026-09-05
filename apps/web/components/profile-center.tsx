@@ -86,7 +86,12 @@ export function ProfileCenter({
             <span>PRIVATE PORTFOLIO</span>
             <LockKeyhole size={15} />
           </header>
-          <PrivacyValue value="Not decrypted" label="confidential savings value" large />
+          <PrivacyValue
+            value="Not decrypted"
+            label="confidential savings value"
+            large
+            revealable={false}
+          />
           <div className="profile-portfolio-stats">
             <div>
               <span>Active pots</span>

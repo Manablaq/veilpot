@@ -9,6 +9,7 @@ interface PrivacyValueProps {
   readonly masked?: string;
   readonly large?: boolean;
   readonly compact?: boolean;
+  readonly revealable?: boolean;
 }
 
 export function PrivacyValue({
@@ -17,8 +18,10 @@ export function PrivacyValue({
   masked = "Private",
   large = false,
   compact = false,
+  revealable = true,
 }: PrivacyValueProps) {
   const [revealed, setRevealed] = useState(false);
+  const visible = revealable && revealed;
 
   return (
     <div
@@ -26,26 +29,29 @@ export function PrivacyValue({
     >
       <div className="privacy-value-toolbar">
         <span>
-          <LockKeyhole size={13} /> {revealed ? "Temporarily visible" : "Encrypted"}
+          <LockKeyhole size={13} />{" "}
+          {visible ? "Temporarily visible" : revealable ? "Encrypted" : "Encrypted · not decrypted"}
         </span>
-        <button
-          type="button"
-          onClick={() => {
-            setRevealed((current) => !current);
-          }}
-          aria-label={revealed ? `Hide ${label}` : `Reveal ${label}`}
-          aria-pressed={revealed}
-        >
-          {revealed ? <EyeOff size={15} /> : <Eye size={15} />}
-          {revealed ? "Hide" : "Reveal"}
-        </button>
+        {revealable ? (
+          <button
+            type="button"
+            onClick={() => {
+              setRevealed((current) => !current);
+            }}
+            aria-label={visible ? `Hide ${label}` : `Reveal ${label}`}
+            aria-pressed={visible}
+          >
+            {visible ? <EyeOff size={15} /> : <Eye size={15} />}
+            {visible ? "Hide" : "Reveal"}
+          </button>
+        ) : null}
       </div>
 
       <div
-        className={revealed ? "privacy-value-display revealed" : "privacy-value-display masked"}
+        className={visible ? "privacy-value-display revealed" : "privacy-value-display masked"}
         aria-live="polite"
       >
-        {revealed ? (
+        {visible ? (
           <strong>{value}</strong>
         ) : (
           <div className="privacy-mask-line" aria-hidden="true">

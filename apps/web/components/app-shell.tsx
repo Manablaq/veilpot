@@ -468,8 +468,8 @@ export function AppShell() {
                   <span className="eyebrow">YOUR PRIVATE ACCOUNT</span>
                   <h1>Your private account is ready.</h1>
                   <p>
-                    Live protocol state stays authoritative. Private values remain hidden unless you
-                    explicitly reveal them.
+                    Live protocol state stays authoritative. Private values remain encrypted unless
+                    you explicitly decrypt them through an authorized account action.
                   </p>
                 </div>
                 <button
@@ -515,7 +515,12 @@ export function AppShell() {
                       <i /> Private
                     </span>
                   </header>
-                  <PrivacyValue value="Not decrypted" label="confidential savings value" large />
+                  <PrivacyValue
+                    value="Not decrypted"
+                    label="confidential savings value"
+                    large
+                    revealable={false}
+                  />
                   <div className="summary-facts">
                     <div>
                       <span>Active pots</span>
