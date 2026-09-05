@@ -750,7 +750,8 @@ a:focus-visible {
 }
 .wallet-choice {
   border: 1px solid var(--line);
-  background: white;
+  background: var(--control-bg);
+  color: var(--ink);
   border-radius: 14px;
   padding: 14px;
   display: grid;
@@ -762,8 +763,8 @@ a:focus-visible {
 }
 .wallet-choice:hover,
 .wallet-choice.selected {
-  border-color: rgba(22, 70, 60, 0.42);
-  background: #f4f7f3;
+  border-color: var(--line-strong);
+  background: var(--surface-2);
 }
 .wallet-choice-icon {
   width: 38px;
@@ -779,18 +780,20 @@ a:focus-visible {
   gap: 3px;
 }
 .wallet-choice-copy strong {
+  color: var(--ink);
   font-size: 14px;
 }
 .wallet-choice-copy small {
-  color: #75817c;
+  color: var(--muted);
   font-size: 11px;
 }
 .wallet-choice-tag {
   font-size: 9px;
   padding: 5px 7px;
-  background: var(--paper-2);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
   border-radius: 999px;
-  color: #68746f;
+  color: var(--ink-soft);
   font-weight: 700;
 }
 .wallet-dialog-safety {
@@ -799,9 +802,10 @@ a:focus-visible {
   align-items: flex-start;
   padding: 14px;
   margin-top: 16px;
-  background: #edf2ec;
+  background: var(--success-soft-bg);
+  border: 1px solid rgba(115, 185, 159, 0.18);
   border-radius: 12px;
-  color: var(--forest);
+  color: var(--forest-2);
   font-size: 11px;
   line-height: 1.45;
 }
