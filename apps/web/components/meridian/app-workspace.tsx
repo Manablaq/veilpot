@@ -5,7 +5,6 @@ import {
   ArrowRight,
   CalendarClock,
   Gift,
-  KeyRound,
   LockKeyhole,
   Network,
   ShieldCheck,
@@ -27,6 +26,7 @@ import {
   Surface,
 } from "@/components/meridian";
 import { meridianNavigationItem, type MeridianView } from "@/components/meridian/app-navigation";
+import { MeridianAutopilotControl } from "@/components/meridian/autopilot-control";
 import { MeridianSaveControl } from "@/components/meridian/save-control";
 import { ThemeControl } from "@/components/theme-control";
 
@@ -228,28 +228,7 @@ export function MeridianWorkspace({
       {view === "save" ? <MeridianSaveControl authenticatedAddress={authenticatedAddress} /> : null}
 
       {view === "autopilot" ? (
-        <div className={styles.featureGrid}>
-          <GuardedFeature
-            icon={CalendarClock}
-            eyebrow="AUTOPILOT · V2"
-            title="Bounded automation"
-            description="Plan creation, confidential funding, exact windows, pause, resume, revoke and recovery will use the V2-bound Vault."
-            nextGate="Meridian M5"
-          />
-
-          <Surface className={styles.boundaryCard}>
-            <KeyRound size={20} aria-hidden="true" />
-
-            <span className={styles.workspaceEyebrow}>AUTHORITY BOUNDARY</span>
-
-            <h2>Execution is not custody.</h2>
-
-            <p>
-              Permissionless keepers can execute a valid committed window. They do not receive
-              withdrawal rights, prize claim rights or private decryption access.
-            </p>
-          </Surface>
-        </div>
+        <MeridianAutopilotControl authenticatedAddress={authenticatedAddress} />
       ) : null}
 
       {view === "veildraw" ? (
