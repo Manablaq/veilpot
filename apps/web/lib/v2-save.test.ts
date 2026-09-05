@@ -5,8 +5,12 @@ import { PARTICIPANT_STATE, SUPPORTED_REGISTRATION_VERSION } from "@veilpot/prot
 
 import {
   v2ParticipantCanDeposit,
+  v2BondCreditAvailable,
+  v2ParticipantCanAttemptRefund,
   v2ParticipantCanExpireActivation,
+  v2ParticipantCanExpireReservation,
   v2ParticipantCanReserve,
+  v2ParticipantCanSettleRefund,
   v2ParticipantCanSettleThreshold,
   v2ParticipantCanWithdraw,
   v2SaveLifecycle,
@@ -107,4 +111,77 @@ void test("maps every consequential public participant lifecycle without inventi
   );
 
   assert.equal(v2SaveLifecycle(participant(255)).key, "unknown");
+});
+
+void test("matches the strict reservation-expiry boundary", () => {
+  const reserved = participant(PARTICIPANT_STATE.RESERVED);
+
+  assert.equal(v2ParticipantCanExpireReservation(reserved, 200n), false);
+  assert.equal(v2ParticipantCanExpireReservation(reserved, 201n), true);
+
+  assert.equal(
+    v2ParticipantCanExpireReservation(
+      {
+        ...reserved,
+        bondHeld: false,
+      },
+      201n,
+    ),
+    false,
+  );
+
+  assert.equal(
+    v2ParticipantCanExpireReservation(
+      {
+        ...reserved,
+        registrationVersion: SUPPORTED_REGISTRATION_VERSION + 1n,
+      },
+      201n,
+    ),
+    false,
+  );
+});
+
+void test("allows confidential refund attempts only from supported PENDING_REFUND registrations", () => {
+  const pending = participant(PARTICIPANT_STATE.PENDING_REFUND);
+
+  assert.equal(v2ParticipantCanAttemptRefund(pending), true);
+
+  assert.equal(
+    v2ParticipantCanAttemptRefund(participant(PARTICIPANT_STATE.REFUND_ATTEMPT_PENDING_PROOF)),
+    false,
+  );
+
+  assert.equal(
+    v2ParticipantCanAttemptRefund({
+      ...pending,
+      registrationVersion: SUPPORTED_REGISTRATION_VERSION + 1n,
+    }),
+    false,
+  );
+});
+
+void test("allows refund-proof settlement only for a current positive attempt nonce", () => {
+  const pendingProof = {
+    ...participant(PARTICIPANT_STATE.REFUND_ATTEMPT_PENDING_PROOF),
+    refundAttemptNonce: 9n,
+  };
+
+  assert.equal(v2ParticipantCanSettleRefund(pendingProof), true);
+
+  assert.equal(
+    v2ParticipantCanSettleRefund({
+      ...pendingProof,
+      refundAttemptNonce: 0n,
+    }),
+    false,
+  );
+
+  assert.equal(v2ParticipantCanSettleRefund(participant(PARTICIPANT_STATE.PENDING_REFUND)), false);
+});
+
+void test("treats the bond pull-credit independently from participant presence", () => {
+  assert.equal(v2BondCreditAvailable(0n), false);
+  assert.equal(v2BondCreditAvailable(1n), true);
+  assert.equal(v2BondCreditAvailable(1_000_000_000_000_000n), true);
 });

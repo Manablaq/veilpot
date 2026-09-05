@@ -139,3 +139,38 @@ export function v2ParticipantCanWithdraw(participant: V2ParticipantSnapshot | nu
     participant.registrationVersion === SUPPORTED_REGISTRATION_VERSION
   );
 }
+
+export function v2ParticipantCanExpireReservation(
+  participant: V2ParticipantSnapshot | null,
+  nowSeconds: bigint,
+): boolean {
+  return (
+    participant !== null &&
+    participant.state === PARTICIPANT_STATE.RESERVED &&
+    participant.registrationVersion === SUPPORTED_REGISTRATION_VERSION &&
+    participant.bondHeld &&
+    participant.reservationExpiry !== 0n &&
+    nowSeconds > participant.reservationExpiry
+  );
+}
+
+export function v2ParticipantCanAttemptRefund(participant: V2ParticipantSnapshot | null): boolean {
+  return (
+    participant !== null &&
+    participant.state === PARTICIPANT_STATE.PENDING_REFUND &&
+    participant.registrationVersion === SUPPORTED_REGISTRATION_VERSION
+  );
+}
+
+export function v2ParticipantCanSettleRefund(participant: V2ParticipantSnapshot | null): boolean {
+  return (
+    participant !== null &&
+    participant.state === PARTICIPANT_STATE.REFUND_ATTEMPT_PENDING_PROOF &&
+    participant.registrationVersion === SUPPORTED_REGISTRATION_VERSION &&
+    participant.refundAttemptNonce > 0n
+  );
+}
+
+export function v2BondCreditAvailable(pendingBondRefund: bigint): boolean {
+  return pendingBondRefund > 0n;
+}
