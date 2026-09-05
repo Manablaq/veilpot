@@ -67,16 +67,16 @@ session restoration, or background refresh.
 
 ```mermaid
 flowchart LR
-    U[User wallet] --> W[Next.js web app]
-    W --> S[Wallet-signature session]
-    W --> SDK[@veilpot/protocol-sdk]
-    SDK --> P[VeilpotPool]
-    SDK --> V[VeilpotAutopilotVault]
-    SDK --> R[VeilpotPrizeReserve]
-    P <--> Y[VeilpotSimulatedYieldAdapter]
+    U["User wallet"] --> W["Next.js web app"]
+    W --> S["Wallet-signature session"]
+    W --> SDK["Veilpot protocol SDK"]
+    SDK --> P["VeilpotPool"]
+    SDK --> V["VeilpotAutopilotVault"]
+    SDK --> R["VeilpotPrizeReserve"]
+    P <--> Y["VeilpotSimulatedYieldAdapter"]
     P <--> R
     V --> P
-    SDK --> Z[Zama SDK / confidential token]
+    SDK --> Z["Zama SDK / confidential token"]
     P --> Z
     V --> Z
     Y --> Z
