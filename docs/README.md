@@ -7,7 +7,7 @@ Veilpot.
 
 | Document                                                           | Purpose                                                                      |
 | ------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
-| [`PRODUCTION_STATUS.md`](PRODUCTION_STATUS.md)                     | Authoritative production/frontend status and V1/V2 boundary                  |
+| [`PRODUCTION_STATUS.md`](PRODUCTION_STATUS.md)                     | Authoritative current corrected V2.x production and release status           |
 | [`VEILDRAW_V2_SEPOLIA_STATUS.md`](VEILDRAW_V2_SEPOLIA_STATUS.md)   | Deployed V2 protocol, evidence, verification, and live-lifecycle boundary    |
 | [`INTEGRATION_GUIDE.md`](INTEGRATION_GUIDE.md)                     | Implemented browser-to-SDK-to-contract integration boundary                  |
 | [`FRONTEND_SECURITY_MODEL.md`](FRONTEND_SECURITY_MODEL.md)         | Browser threat model, wallet-action safety, privacy and decryption rules     |
@@ -24,20 +24,18 @@ Veilpot.
 
 - Production frontend: https://veilpot.vercel.app
 - Network: Ethereum Sepolia (`11155111`)
-- Current application-code freeze: `9c82463bd56d3c23c0a248c9314ece9d728b76fa`
-- Pool: `0x2029D8b7AE6Abe7dAa0C2A71E960839171a34601`
-- Autopilot Vault: `0x7dF64925Af938a0535F30dE9cFBf97BB3ab30487`
-- Simulated Yield Adapter: `0xEa9868e982b98B57C52B95853EdE2552dAD74b64`
-- Prize Reserve: `0xbEe24d1060d94d435272550fAa5616faD59Ad1a1`
+- Current application checkpoint: `af7d7a5049df4798c393124494eda84b6d98dca4`
+- PoolV2: `0x0482DfAeCB4b3B76b9Efd4dEF261445D7bcCFcDA`
+- VeilDrawEngineV2: `0x2df32104fadF449dd9Ec50E86008beE85698fb4b`
+- Autopilot Vault: `0x12fa9F3d421aec3710Ba8dee9cFb946839fE885A`
+- Simulated Yield Adapter V2: `0xAFb21BdD1Ca0f8e8DD4Cb71076e381A1B839582e`
+- Prize Reserve: `0x553542D5b47b64973D99C04D83991F4AE2b307b2`
 
-The addresses above are the frozen V1 production frontend target.
+The production browser uses the corrected V2.x deployment. Historical V1 and predecessor-V2
+documents remain preserved only as engineering provenance.
 
-The separately deployed V2 protocol is documented in
-[`VEILDRAW_V2_SEPOLIA_STATUS.md`](VEILDRAW_V2_SEPOLIA_STATUS.md). The V2 deployment is not silently
-substituted into the live frontend.
-
-The token is Zama's official Sepolia Confidential USDT Mock and the yield integration is explicitly
-simulated for the demo environment.
+The configured token is Zama's Sepolia Confidential USDT Mock and yield is simulated for the testnet
+demonstration.
 
 ## Reviewer evidence path
 
@@ -45,9 +43,8 @@ simulated for the demo environment.
 2. Read [`PRODUCTION_STATUS.md`](PRODUCTION_STATUS.md).
 3. Read [`VEILDRAW_V2_SEPOLIA_STATUS.md`](VEILDRAW_V2_SEPOLIA_STATUS.md).
 4. Inspect
-   [`../evidence/production-sepolia/autopilot-v3/deployment.json`](../evidence/production-sepolia/autopilot-v3/deployment.json).
-5. Inspect
-   [`../evidence/production-sepolia/autopilot-v3/runtime-smoke.json`](../evidence/production-sepolia/autopilot-v3/runtime-smoke.json).
+   [`../evidence/production-sepolia/veildraw-v2x/deployment.json`](../evidence/production-sepolia/veildraw-v2x/deployment.json).
+5. Read [`LIVE_V2X_E2E.md`](LIVE_V2X_E2E.md).
 6. Review frontend consequence/decryption boundaries in
    [`FRONTEND_SECURITY_MODEL.md`](FRONTEND_SECURITY_MODEL.md).
 7. Reproduce the clean repository gate with

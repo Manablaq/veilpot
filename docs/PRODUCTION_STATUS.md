@@ -6,33 +6,19 @@ Historical Gate, VeilDraw, and Autopilot design documents preserve earlier engin
 They remain evidence, but this document is the source of truth for current implementation and
 submission readiness.
 
-## V1 production / V2 protocol boundary
+## Current production integration
 
-Veilpot currently has two deliberately separate verified tracks:
+Veilpot's live browser application is integrated with the corrected V2.x Sepolia deployment.
 
-- **V1 production application** — the browser-accepted application at https://veilpot.vercel.app
-  remains bound to the previously frozen V1 Sepolia deployment.
-- **VeilDraw V2 protocol deployment** — the additive private-sharded three-prize protocol is
-  independently deployed on Sepolia on `feature/veildraw-v2-private-multiprize`, with
-  deployment/runtime evidence committed and CI-green.
+- Live application: https://veilpot.vercel.app
+- Network: Ethereum Sepolia (`11155111`)
+- Current application checkpoint: `af7d7a5049df4798c393124494eda84b6d98dca4`
+- Corrected deployment evidence:
+  [`../evidence/production-sepolia/veildraw-v2x/deployment.json`](../evidence/production-sepolia/veildraw-v2x/deployment.json)
+- Live recovery validation: [`LIVE_V2X_E2E.md`](LIVE_V2X_E2E.md)
 
-The V2 deployment has not been silently substituted into the production frontend.
-
-V2 audited source checkpoint:
-
-`1fd76c6542af8e84aaf8630d285653ac43cd564a`
-
-V2 deployment-evidence checkpoint:
-
-`b24ce24fa8dcc5fb9eecbbc209e4ce5d9f7bd9f1`
-
-V2 evidence-checkpoint CI run:
-
-`33954119837` — success
-
-See [`VEILDRAW_V2_SEPOLIA_STATUS.md`](VEILDRAW_V2_SEPOLIA_STATUS.md) for the exact V2 addresses,
-transaction hashes, runtime identity, deterministic deployment plan, pristine post-deployment state,
-and live-epoch boundary.
+The former V1 production binding and predecessor V2 deployment are superseded for current frontend
+integration but remain available in Git history and historical evidence.
 
 ## Current checkpoint
 
@@ -54,10 +40,10 @@ and live-epoch boundary.
 | Submission media              | External publication pending         |
 
 - Live application: https://veilpot.vercel.app
-- Application-code freeze: `9c82463bd56d3c23c0a248c9314ece9d728b76fa`
-- Production deployment validated for that code freeze: `dpl_2avvhvKmog4vLyAaotkc11XNUUBK`
-- Push CI run: `33941687165`
-- Pull-request CI run: `33941688451`
+- Application-code checkpoint: `af7d7a5049df4798c393124494eda84b6d98dca4`
+- Production deployment: `https://veilpot-4llt84a8v-mr-albert-s-projects.vercel.app`
+- Push CI run: `33994178317` — success
+- Pull-request CI baseline: `33941688451` — success on the preceding integration checkpoint
 - Final browser acceptance completed: `2026-09-05`
 
 A later repository head may contain documentation-only closeout changes. The application-code freeze
@@ -69,23 +55,15 @@ Network: Ethereum Sepolia
 
 Chain ID: `11155111`
 
-Deployer:
+| Component                      | Address                                      |        Block |
+| ------------------------------ | -------------------------------------------- | -----------: |
+| VeilpotPoolV2                  | `0x0482DfAeCB4b3B76b9Efd4dEF261445D7bcCFcDA` |   `11640451` |
+| VeilDrawEngineV2               | `0x2df32104fadF449dd9Ec50E86008beE85698fb4b` | Pool-created |
+| VeilpotAutopilotVault          | `0x12fa9F3d421aec3710Ba8dee9cFb946839fE885A` |   `11640452` |
+| VeilpotSimulatedYieldAdapterV2 | `0xAFb21BdD1Ca0f8e8DD4Cb71076e381A1B839582e` |   `11640454` |
+| VeilpotPrizeReserve            | `0x553542D5b47b64973D99C04D83991F4AE2b307b2` |   `11640455` |
 
-`0x1f87Ae197af539253978d435aD45cCf28Fb95024`
-
-| Component                    | Address                                      | Deployment nonce |    Block |
-| ---------------------------- | -------------------------------------------- | ---------------: | -------: |
-| VeilpotPool                  | `0x2029D8b7AE6Abe7dAa0C2A71E960839171a34601` |              490 | 11614331 |
-| VeilpotAutopilotVault        | `0x7dF64925Af938a0535F30dE9cFBf97BB3ab30487` |              491 | 11614332 |
-| VeilpotSimulatedYieldAdapter | `0xEa9868e982b98B57C52B95853EdE2552dAD74b64` |              492 | 11614333 |
-| VeilpotPrizeReserve          | `0xbEe24d1060d94d435272550fAa5616faD59Ad1a1` |              493 | 11614334 |
-
-Deployment transactions:
-
-- Pool: `0xe4eebc4ddede885450523b93b289e85f240dfefe0b1781d7b53f387437ad4ea0`
-- Vault: `0x5f96f76ced42c123cbcd0fb2090e3bf79159d371183e5751602b98aface3fe96`
-- Adapter: `0xf748b2dd137ec2f61f0b9b85311e001f378019a412672bcdb78eebcae7c04810`
-- Reserve: `0x67d27897e2d2a52497b6679504215a72868bfdc0153ae1181e85642e796f1fef`
+The active deployment is independently bound in `@veilpot/protocol-sdk`.
 
 ## Zama testnet dependencies
 
@@ -106,40 +84,17 @@ yield adapter as a production-mainnet asset or production yield source.
 
 ## Deployment and runtime evidence
 
-The canonical current deployment record is:
+Canonical corrected V2.x deployment evidence:
 
-[`../evidence/production-sepolia/autopilot-v3/deployment.json`](../evidence/production-sepolia/autopilot-v3/deployment.json)
+[`../evidence/production-sepolia/veildraw-v2x/deployment.json`](../evidence/production-sepolia/veildraw-v2x/deployment.json)
 
-Deployment evidence SHA-256:
+Live production-browser validation:
 
-`939127735c3ea54763992b8238b09a37a4474d66f6774c0eab5f619328ffcd98`
+[`LIVE_V2X_E2E.md`](LIVE_V2X_E2E.md)
 
-The canonical current runtime lifecycle record is:
-
-[`../evidence/production-sepolia/autopilot-v3/runtime-smoke.json`](../evidence/production-sepolia/autopilot-v3/runtime-smoke.json)
-
-Runtime evidence SHA-256:
-
-`147c83636f21ac13b8e26174cce1abe1a02d18f496d42d00aa53a7e8d0b8729a`
-
-Immutable runtime journal SHA-256:
-
-`cb9fa6873acbfb04c58be61c643f2a9413aae75aea6afa3143298eac98a5c3ff`
-
-The live evidence covers:
-
-- registration and threshold-proof settlement;
-- registration-bond recovery;
-- confidential Autopilot plan creation;
-- ERC-7984 `confidentialTransferAndCall` plan funding;
-- scheduled permissionless Autopilot execution;
-- transient operator grant/pull/revoke behavior;
-- replay rejection after consumed execution;
-- principal withdrawal and TWAB checkpointing;
-- KMS-backed deregistration proof settlement;
-- terminal participant tombstoning;
-- historical beneficiary/weight binding after tombstoning; and
-- absence of residual wallet/Vault operator edges after completion.
+The live E2E reconciles the confidential deposit, threshold settlement, refund-completion
+settlement, final FREE participant state, registration-bond credit, successful bond withdrawal, and
+the later stale-display duplicate that correctly reverted with `InvalidBond`.
 
 ## Browser frontend status
 
@@ -190,9 +145,9 @@ The current repository checkpoint has passed:
 
 | Validation                          | Result      |
 | ----------------------------------- | ----------- |
-| Contract tests                      | 267 passing |
+| Contract tests                      | 268 passing |
 | Deterministic reference-model tests | 114 passing |
-| Protocol-SDK tests                  | 16 passing  |
+| Protocol-SDK tests                  | 31 passing  |
 | Reference-model build               | Pass        |
 | Protocol-SDK clean build            | Pass        |
 | Root TypeScript typecheck           | Pass        |
