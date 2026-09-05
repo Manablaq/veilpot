@@ -307,6 +307,7 @@ async function deploySystem() {
     await token.getAddress(),
     predictedReserve,
     "0x1111111111111111111111111111111111111111",
+    predictedAdapter,
   )) as unknown as PoolV2;
 
   await pool.waitForDeployment();

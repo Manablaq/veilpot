@@ -13,6 +13,7 @@ import {
 import {ZamaEthereumConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
 import {IERC7984} from "@openzeppelin/confidential-contracts/interfaces/IERC7984.sol";
 import {VeilDrawEngineV2} from "./VeilDrawEngineV2.sol";
+import {IVeilpotYieldAdapterV2} from "./interfaces/IVeilpotYieldAdapterV2.sol";
 
 /* solhint-disable use-natspec, gas-struct-packing, immutable-vars-naming, gas-indexed-events,
    gas-strict-inequalities, function-max-lines, gas-increment-by-one */
@@ -121,6 +122,10 @@ contract VeilpotPoolV2 is ZamaEthereumConfig {
     /// @notice Dedicated non-custodial confidential draw engine.
     /// @dev Created by this Pool so Engine.pool is permanently address(this).
     VeilDrawEngineV2 public immutable veilDrawEngine;
+
+    /// @notice Immutable approved V2 yield adapter; no caller-selected ACL recipient.
+    IVeilpotYieldAdapterV2 private immutable _yieldAdapterV2;
+
     Participant[128] private _participants;
     mapping(address => uint256) private _participantIndexPlusOne;
     mapping(address => uint256) public nextDepositNonce;
@@ -170,6 +175,7 @@ contract VeilpotPoolV2 is ZamaEthereumConfig {
     error OnlyPrizeReserve();
     error MissingPrizeAcl();
     error MissingEngineAcl();
+    error InvalidYieldAdapter();
     error InvalidBond();
     error AlreadyRegistered();
     error CapacityFull();
@@ -287,13 +293,21 @@ contract VeilpotPoolV2 is ZamaEthereumConfig {
         _entered = 0;
     }
 
-    constructor(IERC7984 token, address prizeReserve_, address autopilotVault_) {
+    constructor(
+        IERC7984 token,
+        address prizeReserve_,
+        address autopilotVault_,
+        address yieldAdapterV2_
+    ) {
         if (address(token) == address(0)) revert InvalidToken();
         if (prizeReserve_ == address(0)) revert InvalidPrizeReserve();
         if (autopilotVault_ == address(0)) revert InvalidRecipient();
+        if (yieldAdapterV2_ == address(0)) revert InvalidYieldAdapter();
+
         confidentialToken = token;
         prizeReserve = prizeReserve_;
         _autopilotVault = autopilotVault_;
+        _yieldAdapterV2 = IVeilpotYieldAdapterV2(yieldAdapterV2_);
 
         // Separate contract, immutable Pool binding, no mutable post-deploy setter.
         veilDrawEngine = new VeilDrawEngineV2(address(this));
@@ -862,6 +876,60 @@ contract VeilpotPoolV2 is ZamaEthereumConfig {
         nextDrawId = drawIds[2];
 
         nextDrawSnapshotId = snapshotId + 1;
+    }
+
+    /// @notice Recognize simulated yield once for one fully finalized three-prize round.
+    /// @dev The immutable snapshot total receives only transaction-scoped ACL to the
+    /// immutable adapter. Yield cannot be committed before every child reaches finality.
+    function recognizeRoundYield(uint256 snapshotId) external nonReentrant {
+        if (snapshotId == 0 || snapshotId > nextSnapshotId || !_snapshotFinalized[snapshotId]) {
+            revert SnapshotNotReadyForDraw();
+        }
+
+        uint256[3] memory drawIds;
+
+        drawIds[0] = snapshotPrizeDrawId[snapshotId][0];
+        drawIds[1] = snapshotPrizeDrawId[snapshotId][1];
+        drawIds[2] = snapshotPrizeDrawId[snapshotId][2];
+
+        if (
+            drawIds[0] == 0 ||
+            snapshotDrawId[snapshotId] != drawIds[0] ||
+            drawIds[1] != drawIds[0] + 1 ||
+            drawIds[2] != drawIds[1] + 1
+        ) {
+            revert InvalidDraw();
+        }
+
+        VeilDrawEngineV2.DrawState engineState;
+        uint256 engineSnapshot;
+        uint256 ignoredParticipantCount;
+        uint256 ignoredBatchId;
+        uint8 ignoredBucketExponent;
+        uint256 ignoredAttemptNonce;
+
+        for (uint256 index = 0; index < 3; ++index) {
+            (
+                engineState,
+                engineSnapshot,
+                ignoredParticipantCount,
+                ignoredBatchId,
+                ignoredBucketExponent,
+                ignoredAttemptNonce
+            ) = veilDrawEngine.drawMetadataV2(drawIds[index]);
+
+            if (
+                engineState != VeilDrawEngineV2.DrawState.FINALIZED || engineSnapshot != snapshotId
+            ) {
+                revert InvalidDraw();
+            }
+        }
+
+        euint128 rawTotalTwab = _snapshotTotals[snapshotId];
+
+        FHE.allowTransient(rawTotalTwab, address(_yieldAdapterV2));
+
+        _yieldAdapterV2.recognizeRoundYield(snapshotId, drawIds, rawTotalTwab);
     }
 
     function prepareDrawBucketEvidence(uint256 drawId, uint256 snapshotId) external nonReentrant {

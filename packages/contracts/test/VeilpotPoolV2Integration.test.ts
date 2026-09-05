@@ -229,6 +229,7 @@ async function fixture() {
     await token.getAddress(),
     owner.address,
     "0x1111111111111111111111111111111111111111",
+    "0x2222222222222222222222222222222222222222",
   )) as unknown as PoolV2;
 
   await pool.waitForDeployment();
