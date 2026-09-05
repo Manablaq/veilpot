@@ -567,10 +567,10 @@ async function sponsor(
 
   const input = await encrypted64(await reserve.getAddress(), signer, amount);
 
+  const userReserve = reserve.connect(signer) as unknown as PrizeReserve;
+
   return waitFor(
-    reserve
-      .connect(signer)
-      .fundSponsorForDraw(drawId, input.handle, input.proof, signer.address, nonce) as Tx,
+    userReserve.fundSponsorForDraw(drawId, input.handle, input.proof, signer.address, nonce),
   );
 }
 
@@ -731,6 +731,7 @@ describe("VeilpotPrizeReserve unchanged source against real PoolV2", function ()
 
   it("fails closed for an unfinished sibling draw and freezes funding once prize preparation starts", async function () {
     const { owner, token, pool, reserve } = await setupFinalizedDrawOne();
+    const ownerReserve = reserve.connect(owner) as unknown as PrizeReserve;
 
     // Draw 2 exists, but remains at BUCKET_DISCOVERY.
     expect((await pool.drawMetadata(2n))[0]).to.equal(DRAW_STATE.BUCKET_DISCOVERY);
@@ -738,9 +739,13 @@ describe("VeilpotPrizeReserve unchanged source against real PoolV2", function ()
     const unfinishedInput = await encrypted64(await reserve.getAddress(), owner, 100n);
 
     await expect(
-      reserve
-        .connect(owner)
-        .fundSponsorForDraw(2n, unfinishedInput.handle, unfinishedInput.proof, owner.address, 0n),
+      ownerReserve.fundSponsorForDraw(
+        2n,
+        unfinishedInput.handle,
+        unfinishedInput.proof,
+        owner.address,
+        0n,
+      ),
     ).to.be.revertedWithCustomError(reserve, "DrawNotFinalized");
 
     await sponsor(token, reserve, owner, 1n, 1_000n, 0n);
@@ -750,9 +755,7 @@ describe("VeilpotPrizeReserve unchanged source against real PoolV2", function ()
     const frozenInput = await encrypted64(await reserve.getAddress(), owner, 1n);
 
     await expect(
-      reserve
-        .connect(owner)
-        .fundSponsorForDraw(1n, frozenInput.handle, frozenInput.proof, owner.address, 1n),
+      ownerReserve.fundSponsorForDraw(1n, frozenInput.handle, frozenInput.proof, owner.address, 1n),
     ).to.be.revertedWithCustomError(reserve, "PrizeFundingFrozen");
 
     expect(await reserve.nextSponsorFundingNonce(owner.address)).to.equal(1n);

@@ -207,7 +207,9 @@ async function setWeight(
 ): Promise<void> {
   const input = await encrypted64(await host.getAddress(), signer, value);
 
-  await waitFor(host.connect(signer).setWeight(BigInt(slotIndex), input.handle, input.proof) as Tx);
+  const userHost = host.connect(signer) as unknown as Host;
+
+  await waitFor(userHost.setWeight(BigInt(slotIndex), input.handle, input.proof));
 }
 
 async function importSnapshot(
@@ -599,7 +601,9 @@ async function setReservePrize(
 ): Promise<void> {
   const input = await encrypted64(await reserve.getAddress(), signer, amount);
 
-  await waitFor(reserve.connect(signer).setPrize(input.handle, input.proof) as Tx);
+  const userReserve = reserve.connect(signer) as unknown as EntitlementReserve;
+
+  await waitFor(userReserve.setPrize(input.handle, input.proof));
 }
 
 async function decrypt64(handle: Handle): Promise<bigint> {

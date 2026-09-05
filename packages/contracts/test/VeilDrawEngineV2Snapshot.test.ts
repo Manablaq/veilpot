@@ -91,7 +91,9 @@ async function setWeight(
 ): Promise<void> {
   const input = await encrypted64(await host.getAddress(), signer, value);
 
-  await waitFor(host.connect(signer).setWeight(BigInt(slotIndex), input.handle, input.proof) as Tx);
+  const userHost = host.connect(signer) as unknown as Host;
+
+  await waitFor(userHost.setWeight(BigInt(slotIndex), input.handle, input.proof));
 }
 
 describe("VeilDrawEngineV2 encrypted snapshot/shard layer", function () {

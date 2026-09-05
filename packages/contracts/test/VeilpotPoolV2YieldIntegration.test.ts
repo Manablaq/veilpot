@@ -526,17 +526,16 @@ async function fundAdapter(
 
   const latest = await hre.ethers.provider.getBlock("latest");
 
+  const userToken = token.connect(signer) as unknown as Token;
+  const userAdapter = adapter.connect(signer) as unknown as YieldAdapterV2;
+
   await waitFor(
-    token
-      .connect(signer)
-      .setOperator(await adapter.getAddress(), BigInt((latest?.timestamp ?? 0) + 3_600)) as Tx,
+    userToken.setOperator(await adapter.getAddress(), BigInt((latest?.timestamp ?? 0) + 3_600)),
   );
 
   const input = await encrypted64(await adapter.getAddress(), signer, amount);
 
-  return waitFor(
-    adapter.connect(signer).fundYieldLiquidity(input.handle, input.proof, signer.address, 0n) as Tx,
-  );
+  return waitFor(userAdapter.fundYieldLiquidity(input.handle, input.proof, signer.address, 0n));
 }
 
 async function settleAndSweep(adapter: YieldAdapterV2, drawId: bigint): Promise<void> {

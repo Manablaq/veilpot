@@ -130,7 +130,7 @@ export function resolvePrivateShardedWinner(
   if (
     winnerIndex >= weights.length ||
     weights[winnerIndex] === undefined ||
-    weights[winnerIndex]! <= 0n
+    weights[winnerIndex] <= 0n
   ) {
     throw new Error("private sharded winner violated the positive-weight invariant");
   }

@@ -2,10 +2,21 @@
   "extends": "solhint:recommended",
   "rules": {
     "compiler-version": ["error", "0.8.27"],
-    "func-visibility": ["error", { "ignoreConstructors": true }],
+    "func-visibility": [
+      "error",
+      {
+        "ignoreConstructors": true
+      }
+    ],
     "gas-custom-errors": "off",
     "max-states-count": "off",
     "max-line-length": "off",
-    "not-rely-on-time": "off"
+    "not-rely-on-time": "off",
+    "use-natspec": "off",
+    "gas-struct-packing": "off",
+    "immutable-vars-naming": "off",
+    "gas-strict-inequalities": "off",
+    "function-max-lines": "off",
+    "one-contract-per-file": "off"
   }
 }
