@@ -45,6 +45,14 @@ export interface V2SaveStorageKeys {
   readonly operatorApproval: string;
   readonly deposit: string;
   readonly thresholdSettlement: string;
+  readonly withdrawal: string;
+  readonly deregistrationPreparation: string;
+  readonly deregistrationSettlement: string;
+  readonly reservationExpiry: string;
+  readonly activationExpiry: string;
+  readonly refundAttempt: string;
+  readonly refundSettlement: string;
+  readonly bondWithdrawal: string;
 }
 
 export function v2SaveStorageKeys(authenticatedAddress: Address): V2SaveStorageKeys {
@@ -60,5 +68,13 @@ export function v2SaveStorageKeys(authenticatedAddress: Address): V2SaveStorageK
     operatorApproval: `veilpot:operator-approval:unresolved:v2:${chainId}:${token}:${pool}:${owner}`,
     deposit: `veilpot:deposit:unresolved:v2:${chainId}:${pool}:${owner}`,
     thresholdSettlement: `veilpot:threshold-settlement:unresolved:v2:${chainId}:${pool}:${owner}`,
+    withdrawal: `veilpot:withdrawal:unresolved:v2:${chainId}:${pool}:${owner}`,
+    deregistrationPreparation: `veilpot:deregistration-prepare:unresolved:v2:${chainId}:${pool}:${owner}`,
+    deregistrationSettlement: `veilpot:deregistration-settlement:unresolved:v2:${chainId}:${pool}:${owner}`,
+    reservationExpiry: `veilpot:reservation-expiry:unresolved:v2:${chainId}:${pool}:${owner}`,
+    activationExpiry: `veilpot:activation-expiry:unresolved:v2:${chainId}:${pool}:${owner}`,
+    refundAttempt: `veilpot:refund-attempt:unresolved:v2:${chainId}:${pool}:${owner}`,
+    refundSettlement: `veilpot:refund-settlement:unresolved:v2:${chainId}:${pool}:${owner}`,
+    bondWithdrawal: `veilpot:bond-withdrawal:unresolved:v2:${chainId}:${pool}:${owner}`,
   });
 }

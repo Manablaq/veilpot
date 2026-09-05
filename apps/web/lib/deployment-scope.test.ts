@@ -65,6 +65,67 @@ void test("scopes every M4 Save persistence key to V2", () => {
     keys.thresholdSettlement,
     `veilpot:threshold-settlement:unresolved:v2:${chainId}:${pool}:${owner}`,
   );
+
+  assert.equal(keys.withdrawal, `veilpot:withdrawal:unresolved:v2:${chainId}:${pool}:${owner}`);
+
+  assert.equal(
+    keys.deregistrationPreparation,
+    `veilpot:deregistration-prepare:unresolved:v2:${chainId}:${pool}:${owner}`,
+  );
+
+  assert.equal(
+    keys.deregistrationSettlement,
+    `veilpot:deregistration-settlement:unresolved:v2:${chainId}:${pool}:${owner}`,
+  );
+
+  assert.equal(
+    keys.reservationExpiry,
+    `veilpot:reservation-expiry:unresolved:v2:${chainId}:${pool}:${owner}`,
+  );
+
+  assert.equal(
+    keys.activationExpiry,
+    `veilpot:activation-expiry:unresolved:v2:${chainId}:${pool}:${owner}`,
+  );
+
+  assert.equal(
+    keys.refundAttempt,
+    `veilpot:refund-attempt:unresolved:v2:${chainId}:${pool}:${owner}`,
+  );
+
+  assert.equal(
+    keys.refundSettlement,
+    `veilpot:refund-settlement:unresolved:v2:${chainId}:${pool}:${owner}`,
+  );
+
+  assert.equal(
+    keys.bondWithdrawal,
+    `veilpot:bond-withdrawal:unresolved:v2:${chainId}:${pool}:${owner}`,
+  );
+
+  const consequentialKeys = [
+    keys.operatorApproval,
+    keys.deposit,
+    keys.thresholdSettlement,
+    keys.withdrawal,
+    keys.deregistrationPreparation,
+    keys.deregistrationSettlement,
+    keys.reservationExpiry,
+    keys.activationExpiry,
+    keys.refundAttempt,
+    keys.refundSettlement,
+    keys.bondWithdrawal,
+  ];
+
+  assert.equal(new Set(consequentialKeys).size, consequentialKeys.length);
+
+  for (const key of consequentialKeys) {
+    assert.equal(key.includes(`:v2:${chainId}:`), true);
+
+    assert.equal(key.includes(pool), true);
+
+    assert.equal(key.endsWith(owner), true);
+  }
 });
 
 void test("allows active V2 destinations and rejects the historical V1 Pool", () => {
