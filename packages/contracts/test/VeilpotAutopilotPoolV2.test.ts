@@ -53,6 +53,16 @@ interface Pool extends ethers.BaseContract {
   principalHandle(slot: bigint): Promise<Handle>;
   twabAccumulatorHandle(slot: bigint): Promise<Handle>;
   canonicalReceivedHandle(): Promise<Handle>;
+  withdraw(
+    amount: Handle,
+    proof: string,
+    registrationVersion: bigint,
+    reservationNonce: bigint,
+    withdrawalNonce: bigint,
+  ): Tx;
+  deregistrationZeroHandle(slot: bigint): Promise<Handle>;
+  prepareDeregistration(slot: bigint): Tx;
+  settleDeregistration(slot: bigint, clearZero: boolean, proof: string): Tx;
   pullAutopilotContribution(slot: bigint, reservationNonce: bigint, authorizedAmount: Handle): Tx;
 }
 
@@ -628,6 +638,88 @@ describe("Veilpot Gate 8C frozen AutopilotVault against PoolV2", function () {
         pair.keeper,
       ),
     );
+  });
+
+  it("invalidates a previously TRUE deregistration proof after a positive Autopilot principal credit", async function () {
+    const pair = await deployPair();
+    const activation = await activate(pair, 2_000_000n);
+
+    const plan = await createSingleExecutionPlan(
+      pair,
+      activation.reservationNonce,
+      500_000n,
+      500_000n,
+    );
+
+    await fundPlan(pair, plan.planId, 500_000n);
+
+    const userPool = pair.pool.connect(pair.owner) as unknown as Pool;
+
+    const withdrawal = await encrypted64(await pair.pool.getAddress(), pair.owner, 2_000_000n);
+
+    await waitFor(
+      userPool.withdraw(
+        withdrawal.handle,
+        withdrawal.proof,
+        REGISTRATION_VERSION,
+        activation.reservationNonce,
+        0n,
+      ),
+    );
+
+    expect(await decrypt64(await pair.pool.principalHandle(SLOT))).to.equal(0n);
+
+    const staleZeroHandle = await pair.pool.deregistrationZeroHandle(SLOT);
+
+    const staleZero = await publicBool(staleZeroHandle);
+
+    expect(staleZero.value).to.equal(true);
+
+    await setTimestamp(plan.notBefore);
+
+    await waitFor(
+      (pair.vault.connect(pair.keeper) as unknown as Vault).execute(
+        plan.planId,
+        0n,
+        plan.notBefore,
+        plan.notAfter,
+        [],
+      ),
+    );
+
+    expect(await decrypt64(await pair.pool.principalHandle(SLOT))).to.equal(500_000n);
+
+    await expect(userPool.settleDeregistration(SLOT, true, staleZero.proof)).to.be.reverted;
+
+    const metadataAfterStaleProof = await pair.pool.participantMetadata(SLOT);
+
+    expect(BigInt(String(metadataAfterStaleProof[0]))).to.equal(3n);
+
+    expect(String(metadataAfterStaleProof[1]).toLowerCase()).to.equal(
+      pair.owner.address.toLowerCase(),
+    );
+
+    await waitFor(userPool.prepareDeregistration(SLOT));
+
+    const freshZeroHandle = await pair.pool.deregistrationZeroHandle(SLOT);
+
+    expect(freshZeroHandle.toLowerCase()).not.to.equal(staleZeroHandle.toLowerCase());
+
+    const freshZero = await publicBool(freshZeroHandle);
+
+    expect(freshZero.value).to.equal(false);
+
+    await expect(
+      userPool.settleDeregistration(SLOT, false, freshZero.proof),
+    ).to.be.revertedWithCustomError(pair.pool, "DeregistrationNotActive");
+
+    const finalMetadata = await pair.pool.participantMetadata(SLOT);
+
+    expect(BigInt(String(finalMetadata[0]))).to.equal(3n);
+
+    expect(String(finalMetadata[1]).toLowerCase()).to.equal(pair.owner.address.toLowerCase());
+
+    expect(await decrypt64(await pair.pool.principalHandle(SLOT))).to.equal(500_000n);
   });
 
   it("debits Vault funds and lifetime budget only by a partial token actual return", async function () {

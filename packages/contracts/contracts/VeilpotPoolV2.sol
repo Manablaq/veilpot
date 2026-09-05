@@ -1443,6 +1443,9 @@ contract VeilpotPoolV2 is ZamaEthereumConfig {
         participant.principal = FHE.add(participant.principal, amount);
 
         FHE.allowThis(participant.principal);
+
+        participant.deregistrationZero = FHE.eq(participant.principal, FHE.asEuint64(0));
+        FHE.allowThis(participant.deregistrationZero);
     }
 
     function _activeDeregistrationParticipant(
