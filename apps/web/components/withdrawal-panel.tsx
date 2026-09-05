@@ -4,7 +4,16 @@ import { toUserFacingError } from "@/lib/ui-error";
 
 import { CircleCheck, LockKeyhole, RefreshCw, ShieldCheck, WalletCards } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { encodeFunctionData, formatEther, parseUnits, type Address, type Hex } from "viem";
+import {
+  createPublicClient,
+  encodeFunctionData,
+  formatEther,
+  http,
+  parseUnits,
+  type Address,
+  type Hex,
+} from "viem";
+import { sepolia } from "viem/chains";
 import { useMetadata, useZamaSDK } from "@zama-fhe/react-sdk";
 import { useConnection, usePublicClient } from "wagmi";
 
@@ -72,6 +81,14 @@ interface SimpleRecoveryAction {
   readonly data: Hex;
   readonly value: bigint;
 }
+
+const bondSafetyClient = createPublicClient({
+  chain: sepolia,
+  transport: http("https://ethereum-sepolia-rpc.publicnode.com", {
+    retryCount: 1,
+    timeout: 12_000,
+  }),
+});
 
 function errorMessage(error: unknown): string {
   return toUserFacingError(
@@ -315,17 +332,16 @@ export function WithdrawalPanel({
   }, [authenticatedAddress, publicClient]);
 
   const readBondCredit = useCallback(async (): Promise<bigint> => {
-    if (publicClient === undefined) {
-      throw new Error("The Ethereum Sepolia public client is unavailable.");
-    }
+    const blockNumber = await bondSafetyClient.getBlockNumber();
 
-    return publicClient.readContract({
+    return bondSafetyClient.readContract({
       address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.pool,
       abi: VEILPOT_POOL_V2_ABI,
       functionName: "pendingBondRefund",
       args: [authenticatedAddress],
+      blockNumber,
     });
-  }, [authenticatedAddress, publicClient]);
+  }, [authenticatedAddress]);
 
   const readLatestTimestamp = useCallback(async (): Promise<bigint> => {
     if (publicClient === undefined) {
@@ -550,6 +566,14 @@ export function WithdrawalPanel({
 
     if (currentReviewKind === "withdrawal") {
       setAmount("");
+    }
+
+    if (currentReviewKind === "bond-withdrawal") {
+      setBondCredit(0n);
+      setNotice(
+        "The registration-bond withdrawal is conclusively included. The public bond credit is now consumed.",
+      );
+      return;
     }
 
     setNotice(
@@ -1069,6 +1093,15 @@ export function WithdrawalPanel({
           data: action.data,
           value: 0n,
         });
+
+        if (kind === "bond-withdrawal") {
+          await bondSafetyClient.call({
+            account: holder,
+            to: action.to,
+            data: action.data,
+            value: 0n,
+          });
+        }
 
         await exact.openWallet();
       } catch (error: unknown) {
