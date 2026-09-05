@@ -1,5 +1,7 @@
 "use client";
 
+import { toUserFacingError } from "@/lib/ui-error";
+
 import { CircleCheck, LockKeyhole, RefreshCw, ShieldCheck, WalletCards } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { encodeFunctionData, formatEther, parseUnits, type Address, type Hex } from "viem";
@@ -72,9 +74,10 @@ interface SimpleRecoveryAction {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error && error.message.trim().length > 0
-    ? error.message
-    : "The corrected V2.x Save lifecycle stopped safely.";
+  return toUserFacingError(
+    error,
+    "The recovery action stopped safely. Nothing was submitted automatically.",
+  );
 }
 
 function sameAddress(left: Address, right: Address): boolean {
@@ -243,70 +246,49 @@ export function WithdrawalPanel({
       throw new Error("The Ethereum Sepolia public client is unavailable.");
     }
 
-    const maximum = await publicClient.readContract({
+    const reservations = await publicClient.getContractEvents({
       address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.pool,
       abi: VEILPOT_POOL_V2_ABI,
-      functionName: "MAX_PARTICIPANTS",
+      eventName: "ParticipantReserved",
+      args: { participant: authenticatedAddress },
+      fromBlock: BigInt(VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.blocks.pool),
+      toBlock: "latest",
     });
 
-    if (maximum < 0n || maximum > 128n) {
-      throw new Error("PoolV2 returned an unsupported participant bound.");
+    const latestReservation = reservations.at(-1);
+    const slotIndex = latestReservation?.args.slot;
+
+    if (slotIndex === undefined) {
+      return null;
     }
 
-    let found: V2ParticipantSnapshot | null = null;
+    const row = await publicClient.readContract({
+      address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.pool,
+      abi: VEILPOT_POOL_V2_ABI,
+      functionName: "participantMetadata",
+      args: [slotIndex],
+    });
 
-    for (let index = 0; index < Number(maximum); index += 1) {
-      const slotIndex = BigInt(index);
-
-      const stateValue = await publicClient.readContract({
-        address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.pool,
-        abi: VEILPOT_POOL_V2_ABI,
-        functionName: "participantState",
-        args: [slotIndex],
-      });
-
-      if (stateValue === PARTICIPANT_STATE.FREE || stateValue === PARTICIPANT_STATE.TOMBSTONED) {
-        continue;
-      }
-
-      const row = await publicClient.readContract({
-        address: VEILPOT_ACTIVE_SEPOLIA_DEPLOYMENT.pool,
-        abi: VEILPOT_POOL_V2_ABI,
-        functionName: "participantMetadata",
-        args: [slotIndex],
-      });
-
-      if (row[0] !== stateValue) {
-        throw new Error("Participant state changed during the authoritative PoolV2.x read.");
-      }
-
-      if (!sameAddress(row[1], authenticatedAddress)) {
-        continue;
-      }
-
-      const next: V2ParticipantSnapshot = {
-        slotIndex,
-        state: row[0],
-        owner: row[1],
-        registrationVersion: row[2],
-        reservationNonce: row[3],
-        reservationExpiry: row[4],
-        activationStartedAt: row[5],
-        activationDeadline: row[6],
-        refundAttemptNonce: row[7],
-        bondHeld: row[8],
-      };
-
-      if (found !== null) {
-        throw new Error(
-          "More than one live PoolV2.x registration was found for the authenticated wallet.",
-        );
-      }
-
-      found = next;
+    if (
+      row[0] === PARTICIPANT_STATE.FREE ||
+      row[0] === PARTICIPANT_STATE.TOMBSTONED ||
+      !sameAddress(row[1], authenticatedAddress)
+    ) {
+      return null;
     }
 
-    return found;
+    return {
+      slotIndex,
+      state: row[0],
+      owner: row[1],
+      registrationVersion: row[2],
+      reservationNonce: row[3],
+      reservationExpiry: row[4],
+      activationStartedAt: row[5],
+      activationDeadline: row[6],
+      refundAttemptNonce: row[7],
+      bondHeld: row[8],
+    };
   }, [authenticatedAddress, publicClient]);
 
   const readBondCredit = useCallback(async (): Promise<bigint> => {
@@ -1907,9 +1889,7 @@ export function WithdrawalPanel({
       return;
     }
 
-    setNotice(
-      "The current exact review does not belong to this corrected V2.x Save lifecycle surface.",
-    );
+    setNotice("The current exact review no longer belongs to this recovery action.");
   }, [
     exact.review,
     openDeregistrationPreparation,
@@ -2074,14 +2054,14 @@ export function WithdrawalPanel({
             <ShieldCheck size={20} />
 
             <div>
-              <strong>Corrected V2.x Save lifecycle</strong>
+              <strong>Private savings recovery</strong>
 
               <p>
                 {loading
-                  ? "Checking authoritative PoolV2.x state…"
+                  ? "Checking live account state…"
                   : participant === null
                     ? "No live participant registration is currently present."
-                    : `Current public state: ${participantStateName(participant.state)}.`}
+                    : `Current recovery state: ${participantStateName(participant.state)}.`}
               </p>
             </div>
           </div>
