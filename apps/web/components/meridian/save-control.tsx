@@ -25,6 +25,7 @@ import {
 import styles from "@/app/meridian-app.module.css";
 import { useExactAction } from "@/components/exact-action-control";
 import { MeridianSaveDepositActivation } from "@/components/meridian/save-deposit-activation";
+import { MeridianSaveDeregistration } from "@/components/meridian/save-deregistration";
 import { MeridianSaveWithdrawal } from "@/components/meridian/save-withdrawal";
 import {
   AddressText,
@@ -378,8 +379,8 @@ export function MeridianSaveControl({ authenticatedAddress }: MeridianSaveContro
                 </InlineNotice>
               ) : withdrawalReady ? (
                 <InlineNotice title="Active private saver" tone="private">
-                  Principal remains sealed. V2-bound confidential withdrawal is available below.
-                  Zero-principal deregistration remains a separate B3-B3 proof flow.
+                  Principal remains sealed. Confidential withdrawal and explicit zero-principal
+                  deregistration are available below on the corrected V2.x Pool.
                 </InlineNotice>
               ) : null}
             </>
@@ -398,6 +399,15 @@ export function MeridianSaveControl({ authenticatedAddress }: MeridianSaveContro
 
       {participant !== null && withdrawalReady ? (
         <MeridianSaveWithdrawal
+          authenticatedAddress={authenticatedAddress}
+          participant={participant}
+          exactAction={exactAction}
+          onRefresh={refresh}
+        />
+      ) : null}
+
+      {participant !== null && withdrawalReady ? (
+        <MeridianSaveDeregistration
           authenticatedAddress={authenticatedAddress}
           participant={participant}
           exactAction={exactAction}
