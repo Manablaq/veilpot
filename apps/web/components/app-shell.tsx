@@ -30,6 +30,7 @@ import { useConnection, useDisconnect } from "wagmi";
 import { ActionSheet, type PreviewAction } from "@/components/action-sheet";
 import { NetworkPill, VeilpotMark } from "@/components/brand";
 import { CommandMenu } from "@/components/command-menu";
+import { LiveAccountOverview } from "@/components/live-account-overview";
 import { MobileDrawer } from "@/components/mobile-drawer";
 import { NotificationCenter } from "@/components/notification-center";
 import { PrivacyValue } from "@/components/privacy-value";
@@ -38,7 +39,7 @@ import { SignInGate, type AuthSession } from "@/components/sign-in-gate";
 import { ThemeControl } from "@/components/theme-control";
 import { WalletCenter } from "@/components/wallet-center";
 import { type WorkspaceView, WorkspacePanel } from "@/components/workspace-panel";
-import { PRODUCT, PRODUCT_PREVIEW_ACTIVITY, PRODUCT_PREVIEW_PLANS } from "@/lib/product";
+import { PRODUCT } from "@/lib/product";
 
 const navigation = [
   { label: "Home", view: "home" as const, icon: Home },
@@ -59,6 +60,7 @@ export function AppShell() {
   const [sessionChecked, setSessionChecked] = useState(false);
   const [privacyShield, setPrivacyShield] = useState(true);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
   const [profileOpen, setProfileOpen] = useState(false);
   const [walletOpen, setWalletOpen] = useState(false);
   const [action, setAction] = useState<PreviewAction>(null);
@@ -141,6 +143,31 @@ export function AppShell() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
 
+  useEffect(() => {
+    const onNavigate = (event: Event) => {
+      const next = (event as CustomEvent<string>).detail;
+      if (
+        next === "home" ||
+        next === "pots" ||
+        next === "autopilot" ||
+        next === "draws" ||
+        next === "portfolio" ||
+        next === "activity" ||
+        next === "statements" ||
+        next === "privacy" ||
+        next === "trust" ||
+        next === "help" ||
+        next === "settings"
+      ) {
+        navigate(next);
+      }
+    };
+    window.addEventListener("veilpot:navigate", onNavigate);
+    return () => {
+      window.removeEventListener("veilpot:navigate", onNavigate);
+    };
+  }, [navigate]);
+
   const connectionMismatch = useMemo(() => {
     if (!session || !connection.address) return false;
     return connection.address.toLowerCase() !== session.address.toLowerCase();
@@ -166,6 +193,10 @@ export function AppShell() {
   }
 
   const openAction = (next: Exclude<PreviewAction, null>) => {
+    if (next === "plan") {
+      navigate("autopilot");
+      return;
+    }
     setAction(next);
   };
 
@@ -262,15 +293,19 @@ export function AppShell() {
             <LockKeyhole size={16} />
           </button>
           <button
-            className="header-icon has-indicator"
+            className={notificationUnreadCount > 0 ? "header-icon has-indicator" : "header-icon"}
             type="button"
-            aria-label="Notifications"
+            aria-label={
+              notificationUnreadCount > 0
+                ? `Notifications · ${notificationUnreadCount.toString()} unread`
+                : "Notifications"
+            }
             onClick={() => {
               setNotificationsOpen(true);
             }}
           >
             <Bell size={16} />
-            <i />
+            {notificationUnreadCount > 0 ? <i /> : null}
           </button>
           <button
             className="account-button"
@@ -393,6 +428,7 @@ export function AppShell() {
         <section className="human-main-content">
           {activeView !== "home" ? (
             <WorkspacePanel
+              authenticatedAddress={session.address}
               view={activeView}
               onNavigate={navigate}
               onNewPot={() => {
@@ -430,6 +466,7 @@ export function AppShell() {
                   <Plus size={16} /> New saving pot
                 </button>
               </div>
+              <LiveAccountOverview authenticatedAddress={session.address} compact />
               <section className="today-card">
                 <div className="today-card-status">
                   <CircleCheck size={19} />
@@ -544,124 +581,65 @@ export function AppShell() {
               <section className="human-section">
                 <header className="human-section-header">
                   <div>
-                    <span className="eyebrow">PRODUCT PREVIEW</span>
-                    <h2>Preview the saving-pot experience.</h2>
+                    <span className="eyebrow">LIVE SAVING POTS</span>
+                    <h2>Canonical Autopilot plans live in one place.</h2>
                   </div>
                   <button
                     type="button"
                     onClick={() => {
-                      navigate("pots");
+                      navigate("autopilot");
                     }}
                   >
-                    View all pots <ChevronRight size={15} />
+                    Open Autopilot <ChevronRight size={15} />
                   </button>
                 </header>
-                <div className="pot-table">
-                  {PRODUCT_PREVIEW_PLANS.map((plan) => (
-                    <article className="pot-row" key={plan.id}>
-                      <div className="pot-icon">
-                        <Vault size={17} />
-                      </div>
-                      <div className="pot-name">
-                        <strong>{plan.name}</strong>
-                        <span>{plan.cadence}</span>
-                      </div>
-                      <div className="pot-progress">
-                        <div>
-                          <i style={{ width: `${String(plan.progress)}%` }} />
-                        </div>
-                        <span>{String(plan.progress)}%</span>
-                      </div>
-                      <div className="pot-meta">
-                        <span>Next</span>
-                        <strong>{plan.next}</strong>
-                      </div>
-                      <div className="pot-meta">
-                        <span>Runway</span>
-                        <strong>{String(plan.runway)} funded</strong>
-                      </div>
-                      <button
-                        type="button"
-                        aria-label={`Open ${plan.name}`}
-                        onClick={() => {
-                          navigate("pots");
-                        }}
-                      >
-                        <ChevronRight size={17} />
-                      </button>
-                    </article>
-                  ))}
-                </div>
+                <p>
+                  Veilpot no longer substitutes illustrative progress, runway, contribution dates,
+                  or balances for account state. Discover plans from the Sepolia Vault.
+                </p>
               </section>
               <div className="lower-grid">
                 <section className="human-section draw-summary">
                   <header className="human-section-header compact">
                     <div>
-                      <span className="eyebrow">VEILDRAW PREVIEW</span>
-                      <h2>Private draw lifecycle</h2>
+                      <span className="eyebrow">LIVE VEILDRAW</span>
+                      <h2>Inspect the current encrypted draw lifecycle.</h2>
                     </div>
                     <Gift size={18} />
                   </header>
-                  <div className="draw-state">
-                    <span className="draw-state-mark">
-                      <i />
-                    </span>
-                    <div>
-                      <strong>Example lifecycle only</strong>
-                      <p>
-                        This visual explains VeilDraw without claiming a live draw. Private outcomes
-                        are never revealed automatically.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="draw-progress">
-                    <i className="complete" />
-                    <i className="complete" />
-                    <i className="active" />
-                    <i />
-                  </div>
-                  <div className="draw-progress-labels">
-                    <span>Snapshot</span>
-                    <span>Randomness</span>
-                    <span>Finality</span>
-                    <span>Private result</span>
-                  </div>
+                  <p>
+                    Snapshot, proof, batch, winner-resolution, and PrizeReserve controls read
+                    canonical Sepolia state. Winner data is never inferred or automatically
+                    revealed.
+                  </p>
                   <button
                     type="button"
                     onClick={() => {
                       navigate("draws");
                     }}
                   >
-                    Open draw details <ChevronRight size={15} />
+                    Open live draw controls <ChevronRight size={15} />
                   </button>
                 </section>
                 <section className="human-section activity-summary">
                   <header className="human-section-header compact">
                     <div>
-                      <span className="eyebrow">ACTIVITY PREVIEW</span>
-                      <h2>How protocol events appear</h2>
+                      <span className="eyebrow">LIVE ACTIVITY</span>
+                      <h2>Read recent public protocol events.</h2>
                     </div>
                     <Activity size={18} />
                   </header>
-                  <div className="human-activity-list">
-                    {PRODUCT_PREVIEW_ACTIVITY.map((item) => (
-                      <div className="human-activity-row" key={item.title}>
-                        <span className={`activity-state-dot ${item.state}`} />
-                        <div>
-                          <strong>{item.title}</strong>
-                          <span>{item.detail}</span>
-                        </div>
-                        <time>{item.time}</time>
-                      </div>
-                    ))}
-                  </div>
+                  <p>
+                    Account activity is loaded from Sepolia events. Confidential transferred values
+                    are never reconstructed from presentation fixtures.
+                  </p>
                   <button
                     type="button"
                     onClick={() => {
                       navigate("activity");
                     }}
                   >
-                    View full activity <ChevronRight size={15} />
+                    Open live activity <ChevronRight size={15} />
                   </button>
                 </section>
               </div>
@@ -751,7 +729,10 @@ export function AppShell() {
             setNotificationsOpen(true);
           }}
         >
-          <Bell size={18} /> Alerts
+          <Bell size={18} />{" "}
+          {notificationUnreadCount > 0
+            ? `Alerts (${Math.min(notificationUnreadCount, 99).toString()})`
+            : "Alerts"}
         </button>
         <button
           type="button"
@@ -772,6 +753,8 @@ export function AppShell() {
       />
       <NotificationCenter
         open={notificationsOpen}
+        authenticatedAddress={session.address}
+        onUnreadCountChange={setNotificationUnreadCount}
         onClose={() => {
           setNotificationsOpen(false);
         }}

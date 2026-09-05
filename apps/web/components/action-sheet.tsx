@@ -16,8 +16,9 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { formatEther, parseUnits } from "viem";
+import { encodeFunctionData, formatEther, formatUnits, parseUnits } from "viem";
 import {
+  useConfidentialBalance,
   useConfidentialIsOperator,
   useConfidentialSetOperator,
   useMetadata,
@@ -37,7 +38,6 @@ import {
   buildCreateAutopilotPlanCall,
   buildDepositCall,
   buildReserveParticipantSlotCall,
-  buildWithdrawalCall,
   encryptAutopilotFundingAmount,
   encryptAutopilotPlanAmounts,
   encryptPoolAmount,
@@ -71,6 +71,38 @@ import {
   type OperatorApprovalReview,
   type OperatorApprovalSubmissionRecord,
 } from "@/lib/operator-approval";
+import {
+  DEPOSIT_REVIEW_MAX_AGE_SECONDS,
+  MAX_REGISTRATION_DEPOSIT_BASE_UNITS,
+  MIN_REGISTRATION_DEPOSIT_BASE_UNITS,
+  createDepositReview,
+  createDepositSubmissionRecord,
+  depositReviewInvalidReason,
+  depositTransactionInvalidReason,
+  parseDepositSubmissionRecord,
+  serializeDepositSubmissionRecord,
+  withDepositSubmissionHash,
+  type DepositReview,
+  type DepositSubmissionRecord,
+} from "@/lib/deposit-review";
+import { isExplicitWalletRejection } from "@/lib/exact-action";
+import {
+  ACTIVE_STATE,
+  PENDING_REFUND_STATE,
+  THRESHOLD_REVIEW_MAX_AGE_SECONDS,
+  createThresholdSettlementReview,
+  createThresholdSubmissionRecord,
+  parsePublicBoolean,
+  parseThresholdSubmissionRecord,
+  serializeThresholdSubmissionRecord,
+  thresholdReviewInvalidReason,
+  thresholdSettlementTransactionInvalidReason,
+  withThresholdSubmissionHash,
+  type ThresholdSettlementReview,
+  type ThresholdSubmissionRecord,
+} from "@/lib/threshold-settlement";
+
+import { WithdrawalPanel } from "@/components/withdrawal-panel";
 
 export type PreviewAction = "plan" | "deposit" | "withdraw" | null;
 
@@ -219,6 +251,16 @@ export function ActionSheet({ action, authenticatedAddress, onClose }: ActionShe
     { enabled: action === "deposit" && connection.address !== undefined },
   );
   const operatorMutation = useConfidentialSetOperator(VEILPOT_SEPOLIA_DEPLOYMENT.confidentialToken);
+  const readinessBalanceQuery = useConfidentialBalance(
+    {
+      address: VEILPOT_SEPOLIA_DEPLOYMENT.confidentialToken,
+      account: connection.address,
+    },
+    {
+      enabled: false,
+      retry: false,
+    },
+  );
 
   const [participant, setParticipant] = useState<ParticipantSnapshot | null>(null);
   const [participantLoading, setParticipantLoading] = useState(false);
@@ -230,6 +272,22 @@ export function ActionSheet({ action, authenticatedAddress, onClose }: ActionShe
   const [operatorSubmission, setOperatorSubmission] =
     useState<OperatorApprovalSubmissionRecord | null>(null);
   const [operatorSubmissionLoadedKey, setOperatorSubmissionLoadedKey] = useState<string | null>(
+    null,
+  );
+  const [depositReview, setDepositReview] = useState<DepositReview | null>(null);
+  const [depositNotice, setDepositNotice] = useState<string | null>(null);
+  const [depositPreparing, setDepositPreparing] = useState(false);
+  const [depositSubmission, setDepositSubmission] = useState<DepositSubmissionRecord | null>(null);
+  const [depositSubmissionLoadedKey, setDepositSubmissionLoadedKey] = useState<string | null>(null);
+  const [readinessBalance, setReadinessBalance] = useState<bigint | null>(null);
+  const [readinessBalanceError, setReadinessBalanceError] = useState<string | null>(null);
+  const [thresholdReview, setThresholdReview] = useState<ThresholdSettlementReview | null>(null);
+  const [thresholdNotice, setThresholdNotice] = useState<string | null>(null);
+  const [thresholdDecrypting, setThresholdDecrypting] = useState(false);
+  const [thresholdSubmission, setThresholdSubmission] = useState<ThresholdSubmissionRecord | null>(
+    null,
+  );
+  const [thresholdSubmissionLoadedKey, setThresholdSubmissionLoadedKey] = useState<string | null>(
     null,
   );
   const [plan, setPlan] = useState<PlanDraft>(INITIAL_PLAN);
@@ -255,6 +313,12 @@ export function ActionSheet({ action, authenticatedAddress, onClose }: ActionShe
   const operatorSubmissionStorageKey = `veilpot:operator-approval:unresolved:v1:${String(
     VEILPOT_SEPOLIA_DEPLOYMENT.chainId,
   )}:${VEILPOT_SEPOLIA_DEPLOYMENT.confidentialToken.toLowerCase()}:${VEILPOT_SEPOLIA_DEPLOYMENT.pool.toLowerCase()}:${authenticatedAddress.toLowerCase()}`;
+  const depositSubmissionStorageKey = `veilpot:deposit:unresolved:v1:${String(
+    VEILPOT_SEPOLIA_DEPLOYMENT.chainId,
+  )}:${VEILPOT_SEPOLIA_DEPLOYMENT.pool.toLowerCase()}:${authenticatedAddress.toLowerCase()}`;
+  const thresholdSubmissionStorageKey = `veilpot:threshold-settlement:unresolved:v1:${String(
+    VEILPOT_SEPOLIA_DEPLOYMENT.chainId,
+  )}:${VEILPOT_SEPOLIA_DEPLOYMENT.pool.toLowerCase()}:${authenticatedAddress.toLowerCase()}`;
 
   const preserveOperatorSubmission = useCallback(
     (record: OperatorApprovalSubmissionRecord) => {
@@ -279,6 +343,30 @@ export function ActionSheet({ action, authenticatedAddress, onClose }: ActionShe
       // In-memory state has already been cleared after conclusive reconciliation.
     }
   }, [operatorSubmissionStorageKey]);
+
+  const preserveDepositSubmission = useCallback(
+    (record: DepositSubmissionRecord) => {
+      setDepositSubmission(record);
+      try {
+        window.localStorage.setItem(
+          depositSubmissionStorageKey,
+          serializeDepositSubmissionRecord(record),
+        );
+      } catch {
+        // In-memory blocking remains active if browser storage is unavailable.
+      }
+    },
+    [depositSubmissionStorageKey],
+  );
+
+  const clearDepositSubmission = useCallback(() => {
+    setDepositSubmission(null);
+    try {
+      window.localStorage.removeItem(depositSubmissionStorageKey);
+    } catch {
+      // In-memory state has already been cleared after conclusive reconciliation.
+    }
+  }, [depositSubmissionStorageKey]);
 
   useEffect(() => {
     try {
@@ -311,9 +399,101 @@ export function ActionSheet({ action, authenticatedAddress, onClose }: ActionShe
   const operatorSubmissionStorageReady =
     operatorSubmissionLoadedKey === operatorSubmissionStorageKey;
 
+  const preserveThresholdSubmission = useCallback(
+    (record: ThresholdSubmissionRecord) => {
+      setThresholdSubmission(record);
+      try {
+        window.localStorage.setItem(
+          thresholdSubmissionStorageKey,
+          serializeThresholdSubmissionRecord(record),
+        );
+      } catch {
+        // In-memory blocking remains active if browser storage is unavailable.
+      }
+    },
+    [thresholdSubmissionStorageKey],
+  );
+
+  const clearThresholdSubmission = useCallback(() => {
+    setThresholdSubmission(null);
+    try {
+      window.localStorage.removeItem(thresholdSubmissionStorageKey);
+    } catch {
+      // In-memory state is already clear after conclusive reconciliation.
+    }
+  }, [thresholdSubmissionStorageKey]);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(depositSubmissionStorageKey);
+      if (stored === null) {
+        setDepositSubmission(null);
+      } else {
+        const parsed = parseDepositSubmissionRecord(stored);
+        const matchesCurrentContext =
+          parsed !== null &&
+          parsed.holder.toLowerCase() === authenticatedAddress.toLowerCase() &&
+          parsed.pool.toLowerCase() === VEILPOT_SEPOLIA_DEPLOYMENT.pool.toLowerCase() &&
+          parsed.token.toLowerCase() ===
+            VEILPOT_SEPOLIA_DEPLOYMENT.confidentialToken.toLowerCase() &&
+          parsed.chainId === VEILPOT_SEPOLIA_DEPLOYMENT.chainId;
+
+        if (matchesCurrentContext) {
+          setDepositSubmission(parsed);
+        } else {
+          window.localStorage.removeItem(depositSubmissionStorageKey);
+          setDepositSubmission(null);
+        }
+      }
+    } catch {
+      setDepositSubmission(null);
+    } finally {
+      setDepositSubmissionLoadedKey(depositSubmissionStorageKey);
+    }
+  }, [authenticatedAddress, depositSubmissionStorageKey]);
+
+  const depositSubmissionStorageReady = depositSubmissionLoadedKey === depositSubmissionStorageKey;
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(thresholdSubmissionStorageKey);
+      if (stored === null) {
+        setThresholdSubmission(null);
+      } else {
+        const parsed = parseThresholdSubmissionRecord(stored);
+        const matchesCurrentContext =
+          parsed !== null &&
+          parsed.holder.toLowerCase() === authenticatedAddress.toLowerCase() &&
+          parsed.pool.toLowerCase() === VEILPOT_SEPOLIA_DEPLOYMENT.pool.toLowerCase() &&
+          parsed.chainId === VEILPOT_SEPOLIA_DEPLOYMENT.chainId;
+        if (matchesCurrentContext) {
+          setThresholdSubmission(parsed);
+        } else {
+          window.localStorage.removeItem(thresholdSubmissionStorageKey);
+          setThresholdSubmission(null);
+        }
+      }
+    } catch {
+      setThresholdSubmission(null);
+    } finally {
+      setThresholdSubmissionLoadedKey(thresholdSubmissionStorageKey);
+    }
+  }, [authenticatedAddress, thresholdSubmissionStorageKey]);
+
+  const thresholdSubmissionStorageReady =
+    thresholdSubmissionLoadedKey === thresholdSubmissionStorageKey;
+
   useEffect(() => {
     setOperatorReview(null);
     setOperatorReviewNotice(null);
+    setDepositReview(null);
+    setDepositNotice(null);
+    setDepositPreparing(false);
+    setReadinessBalance(null);
+    setReadinessBalanceError(null);
+    setThresholdReview(null);
+    setThresholdNotice(null);
+    setThresholdDecrypting(false);
 
     if (action !== null) {
       setLocalAction(action);
@@ -340,6 +520,14 @@ export function ActionSheet({ action, authenticatedAddress, onClose }: ActionShe
   useEffect(() => {
     setOperatorReview(null);
     setOperatorReviewNotice(null);
+    setDepositReview(null);
+    setDepositNotice(null);
+    setDepositPreparing(false);
+    setReadinessBalance(null);
+    setReadinessBalanceError(null);
+    setThresholdReview(null);
+    setThresholdNotice(null);
+    setThresholdDecrypting(false);
     setDiscoveredPlans([]);
     setAutopilotDiscoveryError(null);
     setAutopilotScheduleWarning(null);
@@ -1099,130 +1287,1310 @@ export function ActionSheet({ action, authenticatedAddress, onClose }: ActionShe
     };
   }, [operatorReview]);
 
-  const submitRegistrationDeposit = useCallback(async () => {
+  const revealReadinessBalance = useCallback(async () => {
+    setReadinessBalance(null);
+    setReadinessBalanceError(null);
+
     if (
-      !canUseWallet ||
-      participant?.state !== PARTICIPANT_STATE.RESERVED ||
-      parsedAmount === null
+      connection.status !== "connected" ||
+      connection.address.toLowerCase() !== authenticatedAddress.toLowerCase() ||
+      connection.chainId !== VEILPOT_SEPOLIA_DEPLOYMENT.chainId
     ) {
+      setReadinessBalanceError(
+        "Connect the authenticated wallet on Ethereum Sepolia before decrypting this balance.",
+      );
       return;
     }
 
-    setTransaction({ kind: "wallet", label: "Encrypting your amount locally" });
-
     try {
-      const encrypted = await encryptPoolAmount(zama, parsedAmount, address);
-      const depositNonce = await publicClient.readContract({
-        address: VEILPOT_SEPOLIA_DEPLOYMENT.pool,
-        abi: VEILPOT_POOL_ABI,
-        functionName: "nextDepositNonce",
-        args: [address],
-      });
+      const result = await readinessBalanceQuery.refetch();
+      if (result.error !== null) throw result.error;
+      if (result.data === undefined) {
+        throw new Error("The confidential balance decryption returned no value.");
+      }
+      setReadinessBalance(result.data);
+    } catch (error: unknown) {
+      setReadinessBalanceError(errorMessage(error));
+    }
+  }, [authenticatedAddress, connection, readinessBalanceQuery]);
 
-      const descriptor = buildDepositCall({
-        encrypted,
-        depositor: address,
-        reservationNonce: participant.reservationNonce,
-        depositNonce,
-      });
-
-      setTransaction({
-        kind: "wallet",
-        label: "Review and approve the confidential deposit",
-      });
-
-      const hash = await writeMutation.mutateAsync(descriptor);
-      const receipt = await publicClient.waitForTransactionReceipt({ hash });
-
-      if (receipt.status !== "success") {
-        throw new Error("The confidential deposit transaction reverted.");
+  const reconcileMinedDeposit = useCallback(
+    async (record: DepositSubmissionRecord, hash: Hex) => {
+      if (publicClient === undefined) {
+        throw new Error("The Ethereum Sepolia public client is unavailable.");
       }
 
-      setTransaction({
-        kind: "included",
-        label: "Deposit included — confidential activation settlement is still pending",
-        hash,
+      const [receipt, minedTransaction] = await Promise.all([
+        publicClient.getTransactionReceipt({ hash }),
+        publicClient.getTransaction({ hash }),
+      ]);
+
+      if (receipt.status === "reverted") {
+        clearDepositSubmission();
+        setDepositReview(null);
+        setTransaction({
+          kind: "reverted",
+          label: "Confidential deposit transaction reverted",
+          hash,
+          message:
+            "The exact reviewed transaction was mined with failure. A future deposit requires a new encryption and review; Veilpot did not retry.",
+        });
+        return;
+      }
+
+      const identityReason = depositTransactionInvalidReason(record, {
+        from: minedTransaction.from,
+        to: minedTransaction.to,
+        input: minedTransaction.input,
+        nonce: minedTransaction.nonce,
+        value: minedTransaction.value,
       });
+
+      if (identityReason !== null) {
+        setTransaction({
+          kind: "submitted",
+          label: "Mined deposit failed exact transaction-identity verification",
+          hash,
+          message: `${identityReason} Keep this record blocked and do not submit another deposit.`,
+        });
+        return;
+      }
+
+      clearDepositSubmission();
+      setDepositReview(null);
+
       try {
-        await refreshParticipant();
-      } catch (error: unknown) {
+        const liveParticipant = await loadParticipant(record.holder);
+        setParticipant(liveParticipant);
+
+        const exactBinding =
+          liveParticipant !== null &&
+          liveParticipant.slotIndex === record.participantSlotIndex &&
+          liveParticipant.reservationNonce === record.reservationNonce;
+
+        if (
+          exactBinding &&
+          (liveParticipant.state === PARTICIPANT_STATE.PENDING_ACTIVATION ||
+            liveParticipant.state === PARTICIPANT_STATE.ACTIVE)
+        ) {
+          setDepositNotice(
+            liveParticipant.state === PARTICIPANT_STATE.PENDING_ACTIVATION
+              ? "The exact deposit is mined and reconciled. Confidential threshold settlement is the next separate step."
+              : "The exact deposit is mined and the participant is already ACTIVE.",
+          );
+          setTransaction({
+            kind: "included",
+            label:
+              liveParticipant.state === PARTICIPANT_STATE.PENDING_ACTIVATION
+                ? "Exact confidential deposit included — activation settlement pending"
+                : "Exact confidential deposit fully reconciled",
+            hash,
+          });
+          return;
+        }
+
+        const currentState =
+          liveParticipant === null
+            ? "no current live participant registration"
+            : participantStateName(liveParticipant.state);
+        setDepositNotice(
+          `The exact deposit is mined and its raw transaction identity is reconciled. The live lifecycle has since advanced to ${currentState}. Continue from current state; the old encrypted deposit review cannot be reused.`,
+        );
         setTransaction({
           kind: "included",
-          label:
-            "Deposit included - confidential activation settlement is still pending. Participant refresh needs review. Do not resubmit it automatically. " +
-            errorMessage(error),
+          label: "Exact confidential deposit included and conclusively reconciled",
           hash,
+          warning:
+            "The participant lifecycle advanced after this exact deposit. The old deposit attempt is closed; refresh and continue from live state rather than retrying it.",
+        });
+      } catch (stateError: unknown) {
+        setDepositNotice(
+          "The exact deposit is mined and its raw transaction identity is reconciled. Current participant state could not be refreshed, but the old deposit attempt is conclusively closed and must not be retried.",
+        );
+        setTransaction({
+          kind: "included",
+          label: "Exact confidential deposit included and conclusively reconciled",
+          hash,
+          warning:
+            "Live participant refresh failed after conclusive transaction inclusion. " +
+            errorMessage(stateError),
         });
       }
-    } catch (error: unknown) {
-      setTransaction({ kind: "error", message: errorMessage(error) });
-    }
-  }, [
-    address,
-    canUseWallet,
-    parsedAmount,
-    participant,
-    publicClient,
-    refreshParticipant,
-    writeMutation,
-    zama,
-  ]);
+    },
+    [clearDepositSubmission, loadParticipant, publicClient],
+  );
 
-  const submitWithdrawal = useCallback(async () => {
-    if (!canUseWallet || participant?.state !== PARTICIPANT_STATE.ACTIVE || parsedAmount === null) {
+  const prepareRegistrationDepositReview = useCallback(async () => {
+    setDepositReview(null);
+    setDepositNotice(null);
+    setTransaction({ kind: "idle" });
+
+    if (!depositSubmissionStorageReady) {
+      setTransaction({
+        kind: "error",
+        message:
+          "Veilpot is still checking for a previous confidential-deposit attempt. No encryption was performed.",
+      });
       return;
     }
 
-    setTransaction({ kind: "wallet", label: "Encrypting your withdrawal request locally" });
+    if (depositSubmission !== null) {
+      setDepositNotice(
+        "A previous confidential-deposit wallet attempt must be reconciled before any new encryption.",
+      );
+      return;
+    }
+
+    if (connection.status !== "connected") {
+      setTransaction({
+        kind: "error",
+        message:
+          "Connect the wallet that owns the authenticated Veilpot session before encryption.",
+      });
+      return;
+    }
+
+    const connectedAddress = connection.address;
+    if (
+      connectedAddress.toLowerCase() !== authenticatedAddress.toLowerCase() ||
+      connection.chainId !== VEILPOT_SEPOLIA_DEPLOYMENT.chainId ||
+      publicClient === undefined
+    ) {
+      setTransaction({
+        kind: "error",
+        message: "Use the authenticated wallet on Ethereum Sepolia before encryption.",
+      });
+      return;
+    }
+
+    if (tokenDecimals !== 6 || parsedAmount === null) {
+      setTransaction({
+        kind: "error",
+        message: "Enter a valid cUSDTMock amount using its exact 6-decimal token units.",
+      });
+      return;
+    }
+
+    if (
+      parsedAmount < MIN_REGISTRATION_DEPOSIT_BASE_UNITS ||
+      parsedAmount > MAX_REGISTRATION_DEPOSIT_BASE_UNITS
+    ) {
+      setTransaction({
+        kind: "error",
+        message: "Registration deposit must be between 1.000000 and 1,000,000.000000 cUSDTMock.",
+      });
+      return;
+    }
+
+    setParticipantLoading(true);
+    setParticipantError(null);
+    setDepositPreparing(true);
 
     try {
-      const encrypted = await encryptPoolAmount(zama, parsedAmount, address);
-      const withdrawalNonce = await publicClient.readContract({
-        address: VEILPOT_SEPOLIA_DEPLOYMENT.pool,
-        abi: VEILPOT_POOL_ABI,
-        functionName: "nextWithdrawNonce",
-        args: [address],
-      });
+      const [liveParticipant, operatorResult, depositNonce, accountNonce, pendingBondRefund] =
+        await Promise.all([
+          loadParticipant(connectedAddress),
+          operatorQuery.refetch({ throwOnError: true }),
+          publicClient.readContract({
+            address: VEILPOT_SEPOLIA_DEPLOYMENT.pool,
+            abi: VEILPOT_POOL_ABI,
+            functionName: "nextDepositNonce",
+            args: [connectedAddress],
+          }),
+          publicClient.getTransactionCount({
+            address: connectedAddress,
+            blockTag: "pending",
+          }),
+          publicClient.readContract({
+            address: VEILPOT_SEPOLIA_DEPLOYMENT.pool,
+            abi: VEILPOT_POOL_ABI,
+            functionName: "pendingBondRefund",
+            args: [connectedAddress],
+          }),
+        ]);
 
-      const descriptor = buildWithdrawalCall({
-        encrypted,
-        caller: address,
-        registrationVersion: participant.registrationVersion,
-        reservationNonce: participant.reservationNonce,
-        withdrawalNonce,
-      });
+      setParticipant(liveParticipant);
 
-      setTransaction({
-        kind: "wallet",
-        label: "Review and approve the confidential withdrawal",
-      });
-
-      const hash = await writeMutation.mutateAsync(descriptor);
-      const receipt = await publicClient.waitForTransactionReceipt({ hash });
-
-      if (receipt.status !== "success") {
-        throw new Error("The confidential withdrawal transaction reverted.");
+      if (
+        liveParticipant?.state !== PARTICIPANT_STATE.RESERVED ||
+        liveParticipant.owner.toLowerCase() !== connectedAddress.toLowerCase() ||
+        !liveParticipant.bondHeld
+      ) {
+        throw new Error(
+          "A live RESERVED participant owned by this wallet with its registration bond held is required.",
+        );
       }
 
-      setTransaction({
-        kind: "included",
-        label: "Withdrawal included — confidential state updates are being finalized",
-        hash,
+      if (BigInt(Math.floor(Date.now() / 1000)) >= liveParticipant.reservationExpiry) {
+        throw new Error("The RESERVED participant registration has expired.");
+      }
+
+      if (operatorResult.data !== true) {
+        throw new Error(
+          "The Pool operator permission is not currently active. Prepare a fresh Pool approval first.",
+        );
+      }
+
+      if (pendingBondRefund !== 0n) {
+        throw new Error("A pending registration-bond refund must be resolved before deposit.");
+      }
+
+      setDepositNotice(
+        "Encryption explicitly authorized. Encrypting only the selected amount for the frozen Pool and authenticated wallet…",
+      );
+
+      const encrypted = await encryptPoolAmount(zama, parsedAmount, connectedAddress);
+
+      const [postParticipant, postOperatorResult, postDepositNonce, postAccountNonce] =
+        await Promise.all([
+          loadParticipant(connectedAddress),
+          operatorQuery.refetch({ throwOnError: true }),
+          publicClient.readContract({
+            address: VEILPOT_SEPOLIA_DEPLOYMENT.pool,
+            abi: VEILPOT_POOL_ABI,
+            functionName: "nextDepositNonce",
+            args: [connectedAddress],
+          }),
+          publicClient.getTransactionCount({
+            address: connectedAddress,
+            blockTag: "pending",
+          }),
+        ]);
+
+      setParticipant(postParticipant);
+
+      if (
+        postParticipant?.state !== PARTICIPANT_STATE.RESERVED ||
+        postParticipant.owner.toLowerCase() !== connectedAddress.toLowerCase() ||
+        postParticipant.slotIndex !== liveParticipant.slotIndex ||
+        postParticipant.registrationVersion !== liveParticipant.registrationVersion ||
+        postParticipant.reservationNonce !== liveParticipant.reservationNonce ||
+        postParticipant.reservationExpiry !== liveParticipant.reservationExpiry ||
+        postParticipant.bondHeld !== liveParticipant.bondHeld ||
+        postOperatorResult.data !== true ||
+        postDepositNonce !== depositNonce ||
+        postAccountNonce !== accountNonce
+      ) {
+        throw new Error(
+          "Live state changed while encrypting. The ciphertext was discarded; prepare a new review.",
+        );
+      }
+
+      const preparedAt = Math.floor(Date.now() / 1000);
+      const descriptor = buildDepositCall({
+        encrypted,
+        depositor: connectedAddress,
+        reservationNonce: postParticipant.reservationNonce,
+        depositNonce,
       });
-      await refreshParticipant();
+      const calldata = encodeFunctionData({
+        abi: descriptor.abi,
+        functionName: descriptor.functionName,
+        args: descriptor.args,
+      });
+
+      await publicClient.simulateContract({
+        ...descriptor,
+        account: connectedAddress,
+      });
+
+      const review = createDepositReview({
+        holder: connectedAddress,
+        token: VEILPOT_SEPOLIA_DEPLOYMENT.confidentialToken,
+        pool: VEILPOT_SEPOLIA_DEPLOYMENT.pool,
+        chainId: VEILPOT_SEPOLIA_DEPLOYMENT.chainId,
+        participant: postParticipant,
+        amountBaseUnits: parsedAmount,
+        amountDisplay: amount.trim(),
+        tokenSymbol,
+        tokenDecimals,
+        depositNonce,
+        accountNonce,
+        encryptedValue: encrypted.encryptedValue,
+        inputProof: encrypted.inputProof,
+        calldata,
+        preparedAt,
+        simulatedAt: Math.floor(Date.now() / 1000),
+      });
+
+      setDepositReview(review);
+      setDepositNotice(
+        "Exact encrypted deposit simulated successfully. Inspect the frozen amount, nonces, participant binding, and calldata before opening the wallet.",
+      );
     } catch (error: unknown) {
+      setDepositReview(null);
+      setDepositNotice(null);
       setTransaction({ kind: "error", message: errorMessage(error) });
+    } finally {
+      setParticipantLoading(false);
+      setDepositPreparing(false);
+    }
+  }, [
+    amount,
+    authenticatedAddress,
+    connection,
+    depositSubmission,
+    depositSubmissionStorageReady,
+    loadParticipant,
+    operatorQuery,
+    parsedAmount,
+    publicClient,
+    tokenDecimals,
+    tokenSymbol,
+    zama,
+  ]);
+
+  const openRegistrationDepositWalletReview = useCallback(async () => {
+    const review = depositReview;
+
+    if (!depositSubmissionStorageReady || depositSubmission !== null) {
+      setDepositReview(null);
+      setDepositNotice(
+        "A previous confidential-deposit wallet attempt must be reconciled first. No new wallet request was opened.",
+      );
+      return;
+    }
+
+    if (review === null) {
+      setTransaction({
+        kind: "error",
+        message: "Encrypt, simulate, and inspect a fresh confidential-deposit review first.",
+      });
+      return;
+    }
+
+    if (
+      connection.status !== "connected" ||
+      connection.address.toLowerCase() !== authenticatedAddress.toLowerCase() ||
+      connection.chainId !== VEILPOT_SEPOLIA_DEPLOYMENT.chainId ||
+      publicClient === undefined
+    ) {
+      setDepositReview(null);
+      setTransaction({
+        kind: "error",
+        message: "The authenticated wallet context changed. Prepare a new encrypted review.",
+      });
+      return;
+    }
+
+    const connectedAddress = connection.address;
+    setParticipantLoading(true);
+    setParticipantError(null);
+
+    let attempt: DepositSubmissionRecord | null = null;
+
+    try {
+      const [liveParticipant, operatorResult, depositNonce, accountNonce] = await Promise.all([
+        loadParticipant(connectedAddress),
+        operatorQuery.refetch({ throwOnError: true }),
+        publicClient.readContract({
+          address: VEILPOT_SEPOLIA_DEPLOYMENT.pool,
+          abi: VEILPOT_POOL_ABI,
+          functionName: "nextDepositNonce",
+          args: [connectedAddress],
+        }),
+        publicClient.getTransactionCount({
+          address: connectedAddress,
+          blockTag: "pending",
+        }),
+      ]);
+
+      setParticipant(liveParticipant);
+
+      const reviewedEncrypted = {
+        encryptedValue: review.encryptedValue,
+        inputProof: review.inputProof,
+        contractAddress: review.pool,
+        userAddress: review.holder,
+      } as const;
+      const descriptor = buildDepositCall({
+        encrypted: reviewedEncrypted,
+        depositor: review.holder,
+        reservationNonce: review.participant.reservationNonce,
+        depositNonce: review.depositNonce,
+      });
+      const currentCalldata = encodeFunctionData({
+        abi: descriptor.abi,
+        functionName: descriptor.functionName,
+        args: descriptor.args,
+      });
+
+      const invalidReason = depositReviewInvalidReason(review, {
+        holder: connectedAddress,
+        chainId: connection.chainId,
+        participant: liveParticipant,
+        amountBaseUnits: parsedAmount,
+        depositNonce,
+        accountNonce,
+        operatorActive: operatorResult.data === true,
+        currentCalldata,
+        nowSeconds: Math.floor(Date.now() / 1000),
+      });
+
+      if (invalidReason !== null) {
+        setDepositReview(null);
+        throw new Error(`${invalidReason} No replacement ciphertext or transaction was generated.`);
+      }
+
+      await publicClient.simulateContract({
+        ...descriptor,
+        account: connectedAddress,
+      });
+
+      attempt = createDepositSubmissionRecord(review, null);
+      preserveDepositSubmission(attempt);
+      setDepositReview(null);
+      setDepositNotice(
+        "The exact reviewed wallet nonce and calldata are now blocked against duplicate submission until this wallet attempt is reconciled.",
+      );
+      setTransaction({
+        kind: "wallet",
+        label: "Review the exact simulated confidential deposit in your wallet",
+      });
+
+      const hash = await writeMutation.mutateAsync({
+        ...descriptor,
+        nonce: review.accountNonce,
+      });
+      const submitted = withDepositSubmissionHash(attempt, hash);
+      attempt = submitted;
+      preserveDepositSubmission(submitted);
+
+      setTransaction({
+        kind: "submitted",
+        label: "Exact confidential deposit submitted; awaiting a conclusive receipt",
+        hash,
+        message:
+          "The exact transaction identity is preserved. Do not submit another deposit while this record is unresolved.",
+      });
+
+      await publicClient.waitForTransactionReceipt({ hash });
+      await reconcileMinedDeposit(submitted, hash);
+    } catch (error: unknown) {
+      if (attempt !== null && attempt.hash === null && isExplicitWalletRejection(error)) {
+        clearDepositSubmission();
+        setDepositReview(null);
+        setDepositNotice(
+          "The wallet explicitly rejected the deposit request before returning a transaction hash. No submitted attempt remains blocked; prepare a new review only if you still want to deposit.",
+        );
+        setTransaction({ kind: "idle" });
+      } else if (attempt !== null) {
+        if (attempt.hash === null) {
+          setDepositNotice(
+            "The wallet attempt did not return a transaction hash. Veilpot preserved its exact nonce and calldata. Reconcile this attempt before any retry.",
+          );
+          setTransaction({
+            kind: "error",
+            message:
+              "No conclusive transaction hash was returned. Do not retry automatically. " +
+              errorMessage(error),
+          });
+        } else {
+          setTransaction({
+            kind: "submitted",
+            label: "The confidential deposit still requires exact verification",
+            hash: attempt.hash,
+            message:
+              "The transaction may be submitted or mined. Its exact identity is preserved; do not retry. " +
+              errorMessage(error),
+          });
+        }
+      } else {
+        setTransaction({ kind: "error", message: errorMessage(error) });
+      }
+    } finally {
+      setParticipantLoading(false);
+    }
+  }, [
+    authenticatedAddress,
+    clearDepositSubmission,
+    connection,
+    depositReview,
+    depositSubmission,
+    depositSubmissionStorageReady,
+    loadParticipant,
+    operatorQuery,
+    parsedAmount,
+    preserveDepositSubmission,
+    publicClient,
+    reconcileMinedDeposit,
+    writeMutation,
+  ]);
+
+  const verifyDepositSubmission = useCallback(async () => {
+    const record = depositSubmission;
+    if (!depositSubmissionStorageReady || record === null || publicClient === undefined) return;
+
+    if (
+      connection.status !== "connected" ||
+      connection.address.toLowerCase() !== authenticatedAddress.toLowerCase() ||
+      connection.address.toLowerCase() !== record.holder.toLowerCase() ||
+      connection.chainId !== record.chainId
+    ) {
+      setDepositNotice(
+        "Reconnect the exact authenticated wallet on Ethereum Sepolia before reconciling this deposit attempt.",
+      );
+      return;
+    }
+
+    try {
+      if (record.hash !== null) {
+        await reconcileMinedDeposit(record, record.hash);
+        return;
+      }
+
+      const readNonces = async () =>
+        Promise.all([
+          publicClient.getTransactionCount({
+            address: record.holder,
+            blockTag: "latest",
+          }),
+          publicClient.getTransactionCount({
+            address: record.holder,
+            blockTag: "pending",
+          }),
+        ]);
+
+      const [latestFirst, pendingFirst] = await readNonces();
+      await new Promise((resolve) => window.setTimeout(resolve, 1_200));
+      const [latestSecond, pendingSecond] = await readNonces();
+
+      if (
+        latestFirst === record.accountNonce &&
+        pendingFirst === record.accountNonce &&
+        latestSecond === record.accountNonce &&
+        pendingSecond === record.accountNonce
+      ) {
+        setDepositNotice(
+          "No transaction hash was returned and the reviewed nonce currently appears unused, but RPC nonce checks cannot prove that the wallet did not broadcast elsewhere. Keep this deposit attempt blocked unless the original wallet request was explicitly rejected.",
+        );
+        return;
+      }
+
+      if (pendingSecond > record.accountNonce && latestSecond <= record.accountNonce) {
+        setDepositNotice(
+          "The reviewed nonce appears pending but no hash was returned. Keep this attempt blocked until it is mined or otherwise conclusively reconciled.",
+        );
+        return;
+      }
+
+      if (latestSecond > record.accountNonce) {
+        const latestBlock = await publicClient.getBlockNumber();
+        const earliestBlock = latestBlock > 128n ? latestBlock - 128n : 0n;
+        let locatedHash: Hex | null = null;
+
+        for (let blockNumber = latestBlock; blockNumber >= earliestBlock; blockNumber -= 1n) {
+          const block = await publicClient.getBlock({
+            blockNumber,
+            includeTransactions: true,
+          });
+
+          const match = block.transactions.find(
+            (candidate) =>
+              typeof candidate !== "string" &&
+              candidate.from.toLowerCase() === record.holder.toLowerCase() &&
+              candidate.nonce === record.accountNonce,
+          );
+
+          if (match !== undefined && typeof match !== "string") {
+            const invalidReason = depositTransactionInvalidReason(record, {
+              from: match.from,
+              to: match.to,
+              input: match.input,
+              nonce: match.nonce,
+              value: match.value,
+            });
+
+            if (invalidReason !== null) {
+              setDepositNotice(
+                `The reviewed nonce was consumed by a different transaction. ${invalidReason} Keep the deposit attempt blocked.`,
+              );
+              return;
+            }
+
+            locatedHash = match.hash;
+            break;
+          }
+
+          if (blockNumber === 0n) break;
+        }
+
+        if (locatedHash === null) {
+          setDepositNotice(
+            "The reviewed nonce was consumed, but the exact transaction could not be located in the recent confirmed blocks. Keep this attempt blocked.",
+          );
+          return;
+        }
+
+        const submitted = withDepositSubmissionHash(record, locatedHash);
+        preserveDepositSubmission(submitted);
+        await reconcileMinedDeposit(submitted, locatedHash);
+        return;
+      }
+
+      setDepositNotice(
+        "The wallet attempt is not yet conclusive. Keep it blocked and verify again before any retry.",
+      );
+    } catch (error: unknown) {
+      setDepositNotice(
+        "Deposit reconciliation was not conclusive. Do not retry automatically. " +
+          errorMessage(error),
+      );
+    }
+  }, [
+    authenticatedAddress,
+    clearDepositSubmission,
+    connection,
+    depositSubmission,
+    depositSubmissionStorageReady,
+    preserveDepositSubmission,
+    publicClient,
+    reconcileMinedDeposit,
+  ]);
+
+  useEffect(() => {
+    if (depositReview === null) return;
+
+    const invalidReason = depositReviewInvalidReason(depositReview, {
+      holder: address,
+      chainId: connection.chainId,
+      participant,
+      amountBaseUnits: parsedAmount,
+      depositNonce: depositReview.depositNonce,
+      accountNonce: depositReview.accountNonce,
+      operatorActive: operatorQuery.data === true,
+      currentCalldata: depositReview.calldata,
+      nowSeconds: Math.floor(Date.now() / 1000),
+    });
+
+    if (localAction !== "deposit" || invalidReason !== null) {
+      setDepositReview(null);
+      setDepositNotice(
+        localAction !== "deposit"
+          ? "The confidential-deposit review was closed. Encrypt again for any later deposit."
+          : `${invalidReason ?? "The confidential-deposit review changed."} No replacement ciphertext was generated.`,
+      );
     }
   }, [
     address,
-    canUseWallet,
+    connection.chainId,
+    depositReview,
+    localAction,
+    operatorQuery.data,
     parsedAmount,
     participant,
-    publicClient,
-    refreshParticipant,
-    writeMutation,
-    zama,
   ]);
+
+  useEffect(() => {
+    if (depositReview === null) return;
+
+    const staleAt = (depositReview.preparedAt + DEPOSIT_REVIEW_MAX_AGE_SECONDS) * 1000;
+    const delay = Math.max(0, staleAt - Date.now());
+
+    const timeout = window.setTimeout(() => {
+      setDepositReview(null);
+      setDepositNotice(
+        "The confidential-deposit review became stale. Its ciphertext and calldata were discarded; encrypt again to prepare a new review.",
+      );
+    }, delay);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [depositReview]);
+
+  const buildThresholdSettlementCall = useCallback(
+    (review: ThresholdSettlementReview) =>
+      ({
+        address: VEILPOT_SEPOLIA_DEPLOYMENT.pool,
+        abi: VEILPOT_POOL_ABI,
+        functionName: "settleThreshold",
+        args: [
+          review.participant.slotIndex,
+          review.participant.registrationVersion,
+          review.participant.reservationNonce,
+          review.clearSatisfied,
+          review.decryptionProof,
+        ],
+      }) as const,
+    [],
+  );
+
+  const reconcileThresholdSettlement = useCallback(
+    async (record: ThresholdSubmissionRecord, hash: Hex) => {
+      if (publicClient === undefined) {
+        throw new Error("The Ethereum Sepolia public client is unavailable.");
+      }
+
+      const [receipt, minedTransaction] = await Promise.all([
+        publicClient.getTransactionReceipt({ hash }),
+        publicClient.getTransaction({ hash }),
+      ]);
+
+      if (receipt.status === "reverted") {
+        clearThresholdSubmission();
+        setThresholdReview(null);
+        setTransaction({
+          kind: "reverted",
+          label: "Threshold settlement transaction reverted",
+          hash,
+          message:
+            "The exact reviewed threshold settlement was mined with failure. Veilpot did not retry.",
+        });
+        return;
+      }
+
+      const identityReason = thresholdSettlementTransactionInvalidReason(record, {
+        from: minedTransaction.from,
+        to: minedTransaction.to,
+        input: minedTransaction.input,
+        nonce: minedTransaction.nonce,
+        value: minedTransaction.value,
+      });
+      if (identityReason !== null) {
+        setTransaction({
+          kind: "submitted",
+          label: "Mined threshold settlement failed exact identity verification",
+          hash,
+          message: identityReason + " Keep this settlement record blocked and do not retry.",
+        });
+        return;
+      }
+
+      clearThresholdSubmission();
+      setThresholdReview(null);
+
+      try {
+        const liveParticipant = await loadParticipant(record.holder);
+        setParticipant(liveParticipant);
+        const expectedState = record.clearSatisfied ? ACTIVE_STATE : PENDING_REFUND_STATE;
+
+        if (
+          liveParticipant?.slotIndex === record.participantSlotIndex &&
+          liveParticipant.registrationVersion === record.registrationVersion &&
+          liveParticipant.reservationNonce === record.reservationNonce &&
+          liveParticipant.state === expectedState
+        ) {
+          setThresholdNotice(
+            record.clearSatisfied
+              ? "The exact threshold proof was settled and the participant is ACTIVE."
+              : "The exact threshold proof was settled FALSE and the participant moved to PENDING_REFUND.",
+          );
+          setTransaction({
+            kind: "included",
+            label: record.clearSatisfied
+              ? "Exact activation settlement included — participant ACTIVE"
+              : "Exact threshold settlement included — refund path required",
+            hash,
+          });
+          return;
+        }
+
+        const currentState =
+          liveParticipant === null
+            ? "no current live participant registration"
+            : participantStateName(liveParticipant.state);
+        setThresholdNotice(
+          `The exact threshold settlement is mined and its raw transaction identity is reconciled. The live lifecycle has since advanced to ${currentState}. Continue from current state; the old threshold proof cannot be reused.`,
+        );
+        setTransaction({
+          kind: "included",
+          label: "Exact threshold settlement included and conclusively reconciled",
+          hash,
+          warning:
+            "The participant lifecycle advanced after this exact settlement. The old settlement attempt is closed; refresh and continue from live state rather than retrying it.",
+        });
+      } catch (stateError: unknown) {
+        setThresholdNotice(
+          "The exact threshold settlement is mined and its raw transaction identity is reconciled. Current participant state could not be refreshed, but the old settlement attempt is conclusively closed and must not be retried.",
+        );
+        setTransaction({
+          kind: "included",
+          label: "Exact threshold settlement included and conclusively reconciled",
+          hash,
+          warning:
+            "Live participant refresh failed after conclusive settlement inclusion. " +
+            errorMessage(stateError),
+        });
+      }
+    },
+    [clearThresholdSubmission, loadParticipant, publicClient],
+  );
+
+  const decryptPendingActivationThreshold = useCallback(async () => {
+    setThresholdReview(null);
+    setThresholdNotice(null);
+    setTransaction({ kind: "idle" });
+
+    if (!thresholdSubmissionStorageReady) {
+      setThresholdNotice(
+        "Veilpot is still checking for an unresolved threshold-settlement wallet attempt.",
+      );
+      return;
+    }
+    if (thresholdSubmission !== null) {
+      setThresholdNotice(
+        "A previous threshold-settlement wallet attempt must be reconciled before another proof review.",
+      );
+      return;
+    }
+    if (
+      connection.status !== "connected" ||
+      connection.address.toLowerCase() !== authenticatedAddress.toLowerCase() ||
+      connection.chainId !== VEILPOT_SEPOLIA_DEPLOYMENT.chainId ||
+      publicClient === undefined
+    ) {
+      setThresholdNotice(
+        "Connect the authenticated wallet on Ethereum Sepolia before threshold decryption.",
+      );
+      return;
+    }
+
+    const connectedAddress = connection.address;
+    setThresholdDecrypting(true);
+    setParticipantLoading(true);
+    setParticipantError(null);
+
+    try {
+      const liveParticipant = await loadParticipant(connectedAddress);
+      setParticipant(liveParticipant);
+
+      if (
+        liveParticipant?.state !== PARTICIPANT_STATE.PENDING_ACTIVATION ||
+        liveParticipant.owner.toLowerCase() !== connectedAddress.toLowerCase()
+      ) {
+        throw new Error("The exact participant is no longer PENDING_ACTIVATION.");
+      }
+
+      const nowSeconds = Math.floor(Date.now() / 1000);
+      if (BigInt(nowSeconds) > liveParticipant.activationDeadline) {
+        throw new Error("The activation-proof deadline has expired.");
+      }
+
+      const thresholdHandle = await publicClient.readContract({
+        address: VEILPOT_SEPOLIA_DEPLOYMENT.pool,
+        abi: VEILPOT_POOL_ABI,
+        functionName: "thresholdHandle",
+        args: [liveParticipant.slotIndex],
+      });
+
+      if (!/^0x[0-9a-fA-F]{64}$/.test(thresholdHandle)) {
+        throw new Error("The Pool returned an invalid threshold handle.");
+      }
+
+      setThresholdNotice(
+        "Decrypting only the publicly decryptable threshold consequence. The confidential deposited amount is not being decrypted.",
+      );
+
+      const decrypted = await zama.decryption.decryptPublicValues([thresholdHandle], {
+        timeout: 180_000,
+      });
+      const clearEntry = Object.entries(decrypted.clearValues).find(
+        ([handle]) => handle.toLowerCase() === thresholdHandle.toLowerCase(),
+      );
+      if (clearEntry === undefined) {
+        throw new Error("The public decryption result did not contain the exact threshold handle.");
+      }
+
+      const clearSatisfied = parsePublicBoolean(clearEntry[1]);
+      const proof = decrypted.decryptionProof;
+      if (!/^0x(?:[0-9a-fA-F]{2})+$/.test(proof)) {
+        throw new Error("The public threshold proof is empty or malformed.");
+      }
+
+      const [postParticipant, postHandle, accountNonce] = await Promise.all([
+        loadParticipant(connectedAddress),
+        publicClient.readContract({
+          address: VEILPOT_SEPOLIA_DEPLOYMENT.pool,
+          abi: VEILPOT_POOL_ABI,
+          functionName: "thresholdHandle",
+          args: [liveParticipant.slotIndex],
+        }),
+        publicClient.getTransactionCount({
+          address: connectedAddress,
+          blockTag: "pending",
+        }),
+      ]);
+      setParticipant(postParticipant);
+
+      if (
+        postParticipant?.state !== PARTICIPANT_STATE.PENDING_ACTIVATION ||
+        postParticipant.slotIndex !== liveParticipant.slotIndex ||
+        postParticipant.owner.toLowerCase() !== liveParticipant.owner.toLowerCase() ||
+        postParticipant.registrationVersion !== liveParticipant.registrationVersion ||
+        postParticipant.reservationNonce !== liveParticipant.reservationNonce ||
+        postParticipant.activationDeadline !== liveParticipant.activationDeadline ||
+        postHandle.toLowerCase() !== thresholdHandle.toLowerCase()
+      ) {
+        throw new Error(
+          "Pending-activation state changed while decrypting. The proof review was discarded.",
+        );
+      }
+
+      const descriptor = {
+        address: VEILPOT_SEPOLIA_DEPLOYMENT.pool,
+        abi: VEILPOT_POOL_ABI,
+        functionName: "settleThreshold",
+        args: [
+          postParticipant.slotIndex,
+          postParticipant.registrationVersion,
+          postParticipant.reservationNonce,
+          clearSatisfied,
+          proof,
+        ],
+      } as const;
+      const calldata = encodeFunctionData({
+        abi: descriptor.abi,
+        functionName: descriptor.functionName,
+        args: descriptor.args,
+      });
+
+      await publicClient.simulateContract({
+        ...descriptor,
+        account: connectedAddress,
+      });
+
+      const preparedAt = Math.floor(Date.now() / 1000);
+      const review = createThresholdSettlementReview({
+        holder: connectedAddress,
+        pool: VEILPOT_SEPOLIA_DEPLOYMENT.pool,
+        chainId: VEILPOT_SEPOLIA_DEPLOYMENT.chainId,
+        participant: {
+          slotIndex: postParticipant.slotIndex,
+          state: postParticipant.state,
+          owner: postParticipant.owner,
+          registrationVersion: postParticipant.registrationVersion,
+          reservationNonce: postParticipant.reservationNonce,
+          activationDeadline: postParticipant.activationDeadline,
+        },
+        thresholdHandle,
+        clearSatisfied,
+        decryptionProof: proof,
+        calldata,
+        accountNonce,
+        preparedAt,
+        simulatedAt: preparedAt,
+      });
+
+      setThresholdReview(review);
+      setThresholdNotice(
+        clearSatisfied
+          ? "Threshold result: TRUE. Exact ACTIVE-settlement calldata simulated successfully."
+          : "Threshold result: FALSE. Exact PENDING_REFUND-settlement calldata simulated successfully.",
+      );
+    } catch (error: unknown) {
+      setThresholdReview(null);
+      setThresholdNotice(errorMessage(error));
+    } finally {
+      setThresholdDecrypting(false);
+      setParticipantLoading(false);
+    }
+  }, [
+    authenticatedAddress,
+    connection,
+    loadParticipant,
+    publicClient,
+    thresholdSubmission,
+    thresholdSubmissionStorageReady,
+    zama.decryption,
+  ]);
+
+  const openThresholdSettlementWalletReview = useCallback(async () => {
+    const review = thresholdReview;
+    if (review === null || publicClient === undefined) {
+      setThresholdNotice("Decrypt and inspect a fresh exact threshold review first.");
+      return;
+    }
+    if (!thresholdSubmissionStorageReady || thresholdSubmission !== null) {
+      setThresholdReview(null);
+      setThresholdNotice(
+        "An unresolved threshold-settlement wallet attempt must be reconciled first.",
+      );
+      return;
+    }
+    if (
+      connection.status !== "connected" ||
+      connection.address.toLowerCase() !== authenticatedAddress.toLowerCase() ||
+      connection.chainId !== VEILPOT_SEPOLIA_DEPLOYMENT.chainId
+    ) {
+      setThresholdReview(null);
+      setThresholdNotice(
+        "The authenticated wallet context changed. Prepare a new threshold review.",
+      );
+      return;
+    }
+
+    const connectedAddress = connection.address;
+    let attempt: ThresholdSubmissionRecord | null = null;
+    setParticipantLoading(true);
+
+    try {
+      const [liveParticipant, thresholdHandle, accountNonce] = await Promise.all([
+        loadParticipant(connectedAddress),
+        publicClient.readContract({
+          address: VEILPOT_SEPOLIA_DEPLOYMENT.pool,
+          abi: VEILPOT_POOL_ABI,
+          functionName: "thresholdHandle",
+          args: [review.participant.slotIndex],
+        }),
+        publicClient.getTransactionCount({
+          address: connectedAddress,
+          blockTag: "pending",
+        }),
+      ]);
+      setParticipant(liveParticipant);
+
+      const descriptor = buildThresholdSettlementCall(review);
+      const currentCalldata = encodeFunctionData({
+        abi: descriptor.abi,
+        functionName: descriptor.functionName,
+        args: descriptor.args,
+      });
+      const invalidReason = thresholdReviewInvalidReason(review, {
+        holder: connectedAddress,
+        chainId: connection.chainId,
+        participant:
+          liveParticipant === null
+            ? null
+            : {
+                slotIndex: liveParticipant.slotIndex,
+                state: liveParticipant.state,
+                owner: liveParticipant.owner,
+                registrationVersion: liveParticipant.registrationVersion,
+                reservationNonce: liveParticipant.reservationNonce,
+                activationDeadline: liveParticipant.activationDeadline,
+              },
+        thresholdHandle,
+        currentCalldata,
+        accountNonce,
+        nowSeconds: Math.floor(Date.now() / 1000),
+      });
+
+      if (invalidReason !== null) {
+        setThresholdReview(null);
+        throw new Error(invalidReason + " No replacement proof or transaction was generated.");
+      }
+
+      await publicClient.simulateContract({
+        ...descriptor,
+        account: connectedAddress,
+      });
+
+      attempt = createThresholdSubmissionRecord(review, null);
+      preserveThresholdSubmission(attempt);
+      setThresholdReview(null);
+      setTransaction({
+        kind: "wallet",
+        label: "Review the exact simulated threshold settlement in your wallet",
+      });
+      setThresholdNotice(
+        "The exact wallet nonce and threshold-settlement calldata are now blocked against duplicate submission until this wallet attempt is reconciled.",
+      );
+
+      const hash = await writeMutation.mutateAsync({
+        ...descriptor,
+        nonce: review.accountNonce,
+      });
+      const submitted = withThresholdSubmissionHash(attempt, hash);
+      attempt = submitted;
+      preserveThresholdSubmission(submitted);
+
+      setTransaction({
+        kind: "submitted",
+        label: "Exact threshold settlement submitted; awaiting conclusive receipt",
+        hash,
+        message:
+          "The exact transaction identity is preserved. Do not submit another threshold settlement while unresolved.",
+      });
+
+      await publicClient.waitForTransactionReceipt({ hash });
+      await reconcileThresholdSettlement(submitted, hash);
+    } catch (error: unknown) {
+      if (attempt !== null && attempt.hash === null && isExplicitWalletRejection(error)) {
+        clearThresholdSubmission();
+        setThresholdReview(null);
+        setThresholdNotice(
+          "The wallet explicitly rejected the threshold-settlement request before returning a transaction hash. No submitted attempt remains blocked; prepare a new proof review only if settlement is still required.",
+        );
+        setTransaction({ kind: "idle" });
+      } else if (attempt !== null) {
+        if (attempt.hash === null) {
+          setThresholdNotice(
+            "The wallet attempt returned no conclusive transaction hash. The exact nonce and calldata remain blocked; reconcile before any retry.",
+          );
+          setTransaction({
+            kind: "error",
+            message:
+              "No conclusive settlement hash was returned. Do not retry automatically. " +
+              errorMessage(error),
+          });
+        } else {
+          setTransaction({
+            kind: "submitted",
+            label: "The threshold settlement still requires exact verification",
+            hash: attempt.hash,
+            message:
+              "The transaction may be submitted or mined. Do not retry. " + errorMessage(error),
+          });
+        }
+      } else {
+        setTransaction({ kind: "error", message: errorMessage(error) });
+      }
+    } finally {
+      setParticipantLoading(false);
+    }
+  }, [
+    authenticatedAddress,
+    buildThresholdSettlementCall,
+    clearThresholdSubmission,
+    connection,
+    loadParticipant,
+    preserveThresholdSubmission,
+    publicClient,
+    reconcileThresholdSettlement,
+    thresholdReview,
+    thresholdSubmission,
+    thresholdSubmissionStorageReady,
+    writeMutation,
+  ]);
+
+  const verifyThresholdSubmission = useCallback(async () => {
+    const record = thresholdSubmission;
+    if (!thresholdSubmissionStorageReady || record === null || publicClient === undefined) return;
+
+    if (
+      connection.status !== "connected" ||
+      connection.address.toLowerCase() !== authenticatedAddress.toLowerCase() ||
+      connection.address.toLowerCase() !== record.holder.toLowerCase() ||
+      connection.chainId !== record.chainId
+    ) {
+      setThresholdNotice(
+        "Reconnect the exact authenticated wallet on Ethereum Sepolia before reconciliation.",
+      );
+      return;
+    }
+
+    try {
+      if (record.hash !== null) {
+        await reconcileThresholdSettlement(record, record.hash);
+        return;
+      }
+
+      const readNonces = async () =>
+        Promise.all([
+          publicClient.getTransactionCount({ address: record.holder, blockTag: "latest" }),
+          publicClient.getTransactionCount({ address: record.holder, blockTag: "pending" }),
+        ]);
+
+      const [latestFirst, pendingFirst] = await readNonces();
+      await new Promise((resolve) => window.setTimeout(resolve, 1_200));
+      const [latestSecond, pendingSecond] = await readNonces();
+
+      if (
+        latestFirst === record.accountNonce &&
+        pendingFirst === record.accountNonce &&
+        latestSecond === record.accountNonce &&
+        pendingSecond === record.accountNonce
+      ) {
+        setThresholdNotice(
+          "No settlement hash was returned and the reviewed nonce currently appears unused, but RPC nonce checks cannot prove that the wallet did not broadcast elsewhere. Keep this settlement attempt blocked unless the original wallet request was explicitly rejected.",
+        );
+        return;
+      }
+
+      if (pendingSecond > record.accountNonce && latestSecond <= record.accountNonce) {
+        setThresholdNotice(
+          "The reviewed settlement nonce appears pending but no hash was returned. Keep this attempt blocked.",
+        );
+        return;
+      }
+
+      if (latestSecond > record.accountNonce) {
+        const latestBlock = await publicClient.getBlockNumber();
+        const earliestBlock = latestBlock > 128n ? latestBlock - 128n : 0n;
+        let locatedHash: Hex | null = null;
+
+        for (let blockNumber = latestBlock; blockNumber >= earliestBlock; blockNumber -= 1n) {
+          const block = await publicClient.getBlock({
+            blockNumber,
+            includeTransactions: true,
+          });
+          const match = block.transactions.find(
+            (candidate) =>
+              typeof candidate !== "string" &&
+              candidate.from.toLowerCase() === record.holder.toLowerCase() &&
+              candidate.nonce === record.accountNonce,
+          );
+
+          if (match !== undefined && typeof match !== "string") {
+            const invalidReason = thresholdSettlementTransactionInvalidReason(record, {
+              from: match.from,
+              to: match.to,
+              input: match.input,
+              nonce: match.nonce,
+              value: match.value,
+            });
+            if (invalidReason !== null) {
+              setThresholdNotice(
+                "The reviewed nonce was consumed by a different transaction. " +
+                  invalidReason +
+                  " Keep this settlement attempt blocked.",
+              );
+              return;
+            }
+            locatedHash = match.hash;
+            break;
+          }
+          if (blockNumber === 0n) break;
+        }
+
+        if (locatedHash === null) {
+          setThresholdNotice(
+            "The reviewed nonce was consumed, but the exact settlement transaction could not be located in recent confirmed blocks. Keep this attempt blocked.",
+          );
+          return;
+        }
+
+        const submitted = withThresholdSubmissionHash(record, locatedHash);
+        preserveThresholdSubmission(submitted);
+        await reconcileThresholdSettlement(submitted, locatedHash);
+        return;
+      }
+
+      setThresholdNotice(
+        "The threshold-settlement wallet attempt is not conclusive. Keep it blocked and verify again before any retry.",
+      );
+    } catch (error: unknown) {
+      setThresholdNotice(
+        "Threshold-settlement reconciliation was not conclusive. Do not retry automatically. " +
+          errorMessage(error),
+      );
+    }
+  }, [
+    authenticatedAddress,
+    clearThresholdSubmission,
+    connection,
+    preserveThresholdSubmission,
+    publicClient,
+    reconcileThresholdSettlement,
+    thresholdSubmission,
+    thresholdSubmissionStorageReady,
+  ]);
+
+  useEffect(() => {
+    if (thresholdReview === null) return;
+    const staleAt = (thresholdReview.preparedAt + THRESHOLD_REVIEW_MAX_AGE_SECONDS) * 1000;
+    const delay = Math.max(0, staleAt - Date.now());
+    const timeout = window.setTimeout(() => {
+      setThresholdReview(null);
+      setThresholdNotice(
+        "The threshold settlement review became stale. No replacement proof or calldata was generated.",
+      );
+    }, delay);
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [thresholdReview]);
 
   const reviewPlan = useCallback(() => {
     const count = Number(plan.executionCount);
@@ -2580,7 +3948,6 @@ export function ActionSheet({ action, authenticatedAddress, onClose }: ActionShe
                 </div>
               </div>
             ) : null}
-
             {participant?.state === PARTICIPANT_STATE.RESERVED ? (
               <>
                 <div className="financial-step-card complete">
@@ -2760,6 +4127,9 @@ export function ActionSheet({ action, authenticatedAddress, onClose }: ActionShe
                       placeholder="25.00"
                       onChange={(event) => {
                         setAmount(event.target.value);
+                        setDepositReview(null);
+                        setDepositNotice(null);
+                        setTransaction({ kind: "idle" });
                       }}
                     />
                     <small>{tokenSymbol}</small>
@@ -2770,24 +4140,205 @@ export function ActionSheet({ action, authenticatedAddress, onClose }: ActionShe
                   </small>
                 </label>
 
-                <button
-                  className="financial-primary-button"
-                  type="button"
-                  disabled={
-                    parsedAmount === null ||
-                    operatorQuery.data !== true ||
-                    writeMutation.isPending ||
-                    transaction.kind === "wallet"
-                  }
-                  onClick={() => {
-                    void submitRegistrationDeposit();
-                  }}
-                >
-                  Encrypt & review deposit <LockKeyhole size={15} />
-                </button>
+                <div className="financial-step-card">
+                  <span className="financial-step-icon">
+                    {readinessBalance === null ? (
+                      <CircleDashed size={18} />
+                    ) : (
+                      <CircleCheck size={18} />
+                    )}
+                  </span>
+                  <div>
+                    <strong>Optional one-time deposit readiness check</strong>
+                    <p>
+                      This explicitly decrypts only this wallet&apos;s cUSDTMock balance. It does
+                      not submit a transaction, encrypt a deposit, or decrypt Veilpot principal.
+                    </p>
+                    {readinessBalance === null ? (
+                      <button
+                        className="financial-secondary-button"
+                        type="button"
+                        disabled={readinessBalanceQuery.isFetching}
+                        onClick={() => {
+                          void revealReadinessBalance();
+                        }}
+                      >
+                        {readinessBalanceQuery.isFetching ? (
+                          <>
+                            <LoaderCircle size={15} /> Decrypting balance…
+                          </>
+                        ) : (
+                          <>
+                            <LockKeyhole size={15} /> Decrypt cUSDTMock balance once
+                          </>
+                        )}
+                      </button>
+                    ) : (
+                      <span className="financial-inline-success">
+                        Available: {formatUnits(readinessBalance, tokenDecimals ?? 6)} {tokenSymbol}
+                      </span>
+                    )}
+                    {readinessBalance !== null &&
+                    readinessBalance < MIN_REGISTRATION_DEPOSIT_BASE_UNITS ? (
+                      <p className="financial-field-help">
+                        This balance is below the 1.000000 cUSDTMock registration minimum. Do not
+                        prepare a deposit until the confidential balance is funded.
+                      </p>
+                    ) : null}
+                    {readinessBalanceError !== null ? (
+                      <p className="financial-field-help">{readinessBalanceError}</p>
+                    ) : null}
+                  </div>
+                </div>
+
+                {!depositSubmissionStorageReady ? (
+                  <p className="financial-field-help">
+                    Checking for any unresolved confidential-deposit wallet attempt…
+                  </p>
+                ) : depositSubmission !== null ? (
+                  <div className="financial-state-card warning operator-verification-card">
+                    <ShieldCheck size={18} />
+                    <div>
+                      <strong>Exact deposit attempt must be reconciled before any retry</strong>
+                      <p>
+                        {depositSubmission.hash ??
+                          `Wallet nonce ${depositSubmission.accountNonce.toString()} · no conclusive hash returned`}
+                      </p>
+                      <button
+                        className="financial-secondary-button"
+                        type="button"
+                        disabled={participantLoading || writeMutation.isPending}
+                        onClick={() => {
+                          void verifyDepositSubmission();
+                        }}
+                      >
+                        <RefreshCw size={15} /> Reconcile exact deposit attempt
+                      </button>
+                    </div>
+                  </div>
+                ) : depositReview === null ? (
+                  <button
+                    className="financial-primary-button"
+                    type="button"
+                    disabled={
+                      parsedAmount === null ||
+                      operatorQuery.data !== true ||
+                      writeMutation.isPending ||
+                      participantLoading ||
+                      depositPreparing ||
+                      transaction.kind === "wallet" ||
+                      transaction.kind === "submitted"
+                    }
+                    onClick={() => {
+                      void prepareRegistrationDepositReview();
+                    }}
+                  >
+                    {depositPreparing ? (
+                      <>
+                        <LoaderCircle size={15} /> Encrypting & simulating…
+                      </>
+                    ) : (
+                      <>
+                        Encrypt & prepare exact review <LockKeyhole size={15} />
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <div className="financial-plan-review operator-approval-review">
+                    <div
+                      className="action-review-table"
+                      aria-label="Exact confidential deposit review"
+                    >
+                      <div>
+                        <span>Holder</span>
+                        <strong>{depositReview.holder}</strong>
+                      </div>
+                      <div>
+                        <span>Confidential token · testnet mock</span>
+                        <strong>{depositReview.token}</strong>
+                      </div>
+                      <div>
+                        <span>Pool</span>
+                        <strong>{depositReview.pool}</strong>
+                      </div>
+                      <div>
+                        <span>Selected amount</span>
+                        <strong>
+                          {depositReview.amountDisplay} {depositReview.tokenSymbol}
+                        </strong>
+                      </div>
+                      <div>
+                        <span>Participant state</span>
+                        <strong>{participantStateName(depositReview.participant.state)}</strong>
+                      </div>
+                      <div>
+                        <span>Participant slot</span>
+                        <strong>{depositReview.participant.slotIndex.toString()}</strong>
+                      </div>
+                      <div>
+                        <span>Registration version</span>
+                        <strong>{depositReview.participant.registrationVersion.toString()}</strong>
+                      </div>
+                      <div>
+                        <span>Reservation nonce</span>
+                        <strong>{depositReview.participant.reservationNonce.toString()}</strong>
+                      </div>
+                      <div>
+                        <span>Deposit nonce</span>
+                        <strong>{depositReview.depositNonce.toString()}</strong>
+                      </div>
+                      <div>
+                        <span>Wallet transaction nonce</span>
+                        <strong>{depositReview.accountNonce}</strong>
+                      </div>
+                      <div>
+                        <span>Network</span>
+                        <strong>{depositReview.network}</strong>
+                      </div>
+                      <div>
+                        <span>chainId</span>
+                        <strong>{depositReview.chainId}</strong>
+                      </div>
+                      <div>
+                        <span>Simulation</span>
+                        <strong>PASS · exact encrypted call</strong>
+                      </div>
+                      <div>
+                        <span>Exact expected calldata</span>
+                        <strong>{depositReview.calldata}</strong>
+                      </div>
+                    </div>
+
+                    <p className="financial-field-help">
+                      The selected amount was encrypted only after your explicit click. This exact
+                      ciphertext, participant binding, deposit nonce, wallet nonce, and calldata are
+                      frozen for five minutes. Opening the wallet re-reads live state and simulates
+                      this same call again; it never re-encrypts or replaces the reviewed calldata.
+                    </p>
+
+                    <button
+                      className="financial-primary-button"
+                      type="button"
+                      disabled={
+                        writeMutation.isPending ||
+                        participantLoading ||
+                        transaction.kind === "wallet" ||
+                        transaction.kind === "submitted"
+                      }
+                      onClick={() => {
+                        void openRegistrationDepositWalletReview();
+                      }}
+                    >
+                      Open wallet review <LockKeyhole size={15} />
+                    </button>
+                  </div>
+                )}
+
+                {depositNotice !== null ? (
+                  <p className="financial-field-help">{depositNotice}</p>
+                ) : null}
               </>
             ) : null}
-
             {participant?.state === PARTICIPANT_STATE.PENDING_ACTIVATION ? (
               <div className="financial-state-card pending">
                 <LoaderCircle size={20} />
@@ -2802,7 +4353,6 @@ export function ActionSheet({ action, authenticatedAddress, onClose }: ActionShe
                 </div>
               </div>
             ) : null}
-
             {participant?.state === PARTICIPANT_STATE.ACTIVE ? (
               <div className="financial-state-card">
                 <CircleCheck size={20} />
@@ -2817,16 +4367,166 @@ export function ActionSheet({ action, authenticatedAddress, onClose }: ActionShe
                     className="financial-secondary-button"
                     type="button"
                     onClick={() => {
-                      setLocalAction("plan");
-                      setTransaction({ kind: "idle" });
+                      onClose();
+                      window.dispatchEvent(
+                        new CustomEvent("veilpot:navigate", { detail: "autopilot" }),
+                      );
                     }}
                   >
-                    Set up Autopilot savings <ArrowRight size={16} />
+                    Open live Autopilot controls <ArrowRight size={16} />
                   </button>
                 </div>
               </div>
             ) : null}
+            {participant?.state === PARTICIPANT_STATE.PENDING_ACTIVATION ? (
+              <div className="financial-plan-review operator-approval-review">
+                {!thresholdSubmissionStorageReady ? (
+                  <p className="financial-field-help">
+                    Checking for an unresolved threshold-settlement wallet attempt…
+                  </p>
+                ) : thresholdSubmission !== null ? (
+                  <div className="financial-state-card warning operator-verification-card">
+                    <ShieldCheck size={18} />
+                    <div>
+                      <strong>Exact threshold settlement attempt must be reconciled</strong>
+                      <p>
+                        {thresholdSubmission.hash ??
+                          "Wallet nonce " +
+                            thresholdSubmission.accountNonce.toString() +
+                            " · no conclusive hash returned"}
+                      </p>
+                      <button
+                        className="financial-secondary-button"
+                        type="button"
+                        disabled={participantLoading || writeMutation.isPending}
+                        onClick={() => {
+                          void verifyThresholdSubmission();
+                        }}
+                      >
+                        <RefreshCw size={15} /> Reconcile exact threshold settlement attempt
+                      </button>
+                    </div>
+                  </div>
+                ) : thresholdReview === null ? (
+                  <>
+                    <p className="financial-field-help">
+                      The next action publicly decrypts only the Pool&apos;s threshold boolean for
+                      this exact pending activation. It does not decrypt the confidential deposited
+                      amount or any private balance.
+                    </p>
+                    <button
+                      className="financial-primary-button"
+                      type="button"
+                      disabled={
+                        thresholdDecrypting || participantLoading || writeMutation.isPending
+                      }
+                      onClick={() => {
+                        void decryptPendingActivationThreshold();
+                      }}
+                    >
+                      {thresholdDecrypting ? (
+                        <>
+                          <LoaderCircle size={15} /> Decrypting threshold boolean…
+                        </>
+                      ) : (
+                        <>
+                          <LockKeyhole size={15} /> Decrypt threshold boolean for this activation
+                        </>
+                      )}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div
+                      className="action-review-table"
+                      aria-label="Exact threshold settlement review"
+                    >
+                      <div>
+                        <span>Holder</span>
+                        <strong>{thresholdReview.holder}</strong>
+                      </div>
+                      <div>
+                        <span>Pool</span>
+                        <strong>{thresholdReview.pool}</strong>
+                      </div>
+                      <div>
+                        <span>Participant slot</span>
+                        <strong>{thresholdReview.participant.slotIndex.toString()}</strong>
+                      </div>
+                      <div>
+                        <span>Registration version</span>
+                        <strong>
+                          {thresholdReview.participant.registrationVersion.toString()}
+                        </strong>
+                      </div>
+                      <div>
+                        <span>Reservation nonce</span>
+                        <strong>{thresholdReview.participant.reservationNonce.toString()}</strong>
+                      </div>
+                      <div>
+                        <span>Threshold result</span>
+                        <strong>{thresholdReview.clearSatisfied ? "TRUE" : "FALSE"}</strong>
+                      </div>
+                      <div>
+                        <span>Settlement consequence</span>
+                        <strong>
+                          {thresholdReview.clearSatisfied ? "ACTIVE" : "PENDING_REFUND"}
+                        </strong>
+                      </div>
+                      <div>
+                        <span>Activation deadline</span>
+                        <strong>
+                          {unixTimeLabel(thresholdReview.participant.activationDeadline)}
+                        </strong>
+                      </div>
+                      <div>
+                        <span>Threshold handle</span>
+                        <strong>{thresholdReview.thresholdHandle}</strong>
+                      </div>
+                      <div>
+                        <span>Wallet transaction nonce</span>
+                        <strong>{thresholdReview.accountNonce}</strong>
+                      </div>
+                      <div>
+                        <span>Network</span>
+                        <strong>{thresholdReview.network}</strong>
+                      </div>
+                      <div>
+                        <span>chainId</span>
+                        <strong>{thresholdReview.chainId}</strong>
+                      </div>
+                      <div>
+                        <span>Simulation</span>
+                        <strong>PASS · exact public proof settlement</strong>
+                      </div>
+                      <div>
+                        <span>Exact expected calldata</span>
+                        <strong>{thresholdReview.calldata}</strong>
+                      </div>
+                    </div>
+                    <p className="financial-field-help">
+                      Only the public consequence boolean has been decrypted. The deposited amount
+                      remains confidential. Opening the wallet re-reads the same pending activation,
+                      threshold handle, wallet nonce, and simulates this exact proof again.
+                    </p>
+                    <button
+                      className="financial-primary-button"
+                      type="button"
+                      disabled={participantLoading || writeMutation.isPending}
+                      onClick={() => {
+                        void openThresholdSettlementWalletReview();
+                      }}
+                    >
+                      Open settlement wallet review <LockKeyhole size={15} />
+                    </button>
+                  </>
+                )}
 
+                {thresholdNotice !== null ? (
+                  <p className="financial-field-help">{thresholdNotice}</p>
+                ) : null}
+              </div>
+            ) : null}{" "}
             {participant !== null &&
             participant.state !== PARTICIPANT_STATE.RESERVED &&
             participant.state !== PARTICIPANT_STATE.PENDING_ACTIVATION &&
@@ -2846,74 +4546,7 @@ export function ActionSheet({ action, authenticatedAddress, onClose }: ActionShe
           </div>
         ) : null}
 
-        {isWithdraw ? (
-          <div className="financial-form">
-            {participant?.state === PARTICIPANT_STATE.ACTIVE ? (
-              <>
-                <div className="financial-step-card complete">
-                  <span className="financial-step-icon">
-                    <CircleCheck size={18} />
-                  </span>
-                  <div>
-                    <strong>Active private participant verified</strong>
-                    <p>
-                      Slot {participant.slotIndex.toString()} · registration version{" "}
-                      {participant.registrationVersion.toString()}
-                    </p>
-                  </div>
-                </div>
-
-                <label>
-                  <span>Requested withdrawal amount</span>
-                  <div className="financial-input-unit">
-                    <input
-                      inputMode="decimal"
-                      value={amount}
-                      placeholder="10.00"
-                      onChange={(event) => {
-                        setAmount(event.target.value);
-                      }}
-                    />
-                    <small>{tokenSymbol}</small>
-                  </div>
-                  <small className="financial-field-help">
-                    The Pool caps the encrypted request at your encrypted principal. The exact
-                    principal is not automatically decrypted.
-                  </small>
-                </label>
-
-                <button
-                  className="financial-primary-button"
-                  type="button"
-                  disabled={
-                    parsedAmount === null ||
-                    writeMutation.isPending ||
-                    transaction.kind === "wallet"
-                  }
-                  onClick={() => {
-                    void submitWithdrawal();
-                  }}
-                >
-                  Encrypt & review withdrawal <WalletCards size={15} />
-                </button>
-              </>
-            ) : (
-              <div className="financial-state-card warning">
-                <ShieldCheck size={20} />
-                <div>
-                  <strong>Withdrawal is not available in this participant state</strong>
-                  <p>
-                    {participantLoading
-                      ? "Checking the live Pool state…"
-                      : participant === null
-                        ? "This wallet does not currently have a live Veilpot participant registration."
-                        : `Current state: ${participantName}. The frozen Pool only accepts withdrawal from ACTIVE participants.`}
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-        ) : null}
+        {isWithdraw ? <WithdrawalPanel authenticatedAddress={authenticatedAddress} /> : null}
 
         {transaction.kind !== "idle" ? (
           <div

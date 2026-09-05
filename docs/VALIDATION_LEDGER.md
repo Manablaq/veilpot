@@ -2636,13 +2636,11 @@ Pre-repair live read-only state used to define this safety checkpoint:
 
 - Ethereum Sepolia chain ID: `11155111`
 - pinned snapshot block: `11632957`
-- pinned snapshot hash:
-  `0x17372d78941c3a04f5cc940d3cbac78078bbc2766be8b7c19006614ecda11dfa`
+- pinned snapshot hash: `0x17372d78941c3a04f5cc940d3cbac78078bbc2766be8b7c19006614ecda11dfa`
 - pinned snapshot time: `2026-09-04T10:45:24.000Z`
 - owner: `0x1f87Ae197af539253978d435aD45cCf28Fb95024`
 - Pool: `0x2029D8b7AE6Abe7dAa0C2A71E960839171a34601`
-- confidential token testnet mock:
-  `0x4E7B06D78965594eB5EF5414c357ca21E1554491`
+- confidential token testnet mock: `0x4E7B06D78965594eB5EF5414c357ca21E1554491`
 - participant slot: `1`
 - participant state: `RESERVED`
 - registration version: `1`
@@ -2685,8 +2683,8 @@ Submitted-transaction / retry safety:
 - installed Zama SDK `3.5.1` emits `setOperator:submitted` after transaction broadcast and before
   receipt waiting
 - the frontend captures that submitted event
-- once a hash is available, Veilpot preserves the expected public transaction identity:
-  hash, holder, confidential token, Pool/operator, frozen expiry, calldata, and chain ID
+- once a hash is available, Veilpot preserves the expected public transaction identity: hash,
+  holder, confidential token, Pool/operator, frozen expiry, calldata, and chain ID
 - unresolved submitted state is persisted so closing/reopening the action sheet or reloading the
   browser cannot silently make the approval retryable
 - exact reconciliation verifies transaction sender, target token, calldata, and receipt status
@@ -2721,10 +2719,8 @@ Validated frontend hashes:
   `242e0af71f22aed9768ec884e83877473a5bd98b0363a029f489c6bae9880ee4`
 - `apps/web/components/app-shell.tsx`:
   `f41c0050ed4e0252291f6e345c7b800c4e1135885745a91abb6da573b67b973b`
-- `apps/web/lib/zama.ts`:
-  `212d50775343b7ddcbcd000139c316843476223b8e118502c235fc40dc1ab0a0`
-- `apps/web/app/globals.css`:
-  `8959c0bdd2305e1cf6e1f964d979cb86ff455562b977ddf6e0f8eae61aaa615e`
+- `apps/web/lib/zama.ts`: `212d50775343b7ddcbcd000139c316843476223b8e118502c235fc40dc1ab0a0`
+- `apps/web/app/globals.css`: `8959c0bdd2305e1cf6e1f964d979cb86ff455562b977ddf6e0f8eae61aaa615e`
 - `apps/web/lib/operator-approval.ts`:
   `4cf92ede20079e5c1ec88c757ce6e0c445685c0fe375021708c9222227f9fe37`
 - `apps/web/lib/operator-approval.test.ts`:
@@ -2778,8 +2774,7 @@ Pinned Sepolia snapshot:
 
 - chain ID: `11155111`
 - block number: `11633273`
-- block hash:
-  `0x742c5488da2bf79f12b71c57cef7ea5c3fdc5b8bac7ae93f022119b9f2366bbb`
+- block hash: `0x742c5488da2bf79f12b71c57cef7ea5c3fdc5b8bac7ae93f022119b9f2366bbb`
 - block timestamp: `1788522732`
 - block timestamp UTC: `2026-09-04T11:52:12.000Z`
 - pinned block hash reconfirmed unchanged before accepting the result: **yes**
@@ -2788,8 +2783,7 @@ Deployment identity:
 
 - owner: `0x1f87Ae197af539253978d435aD45cCf28Fb95024`
 - Pool: `0x2029D8b7AE6Abe7dAa0C2A71E960839171a34601`
-- confidential-token testnet mock:
-  `0x4E7B06D78965594eB5EF5414c357ca21E1554491`
+- confidential-token testnet mock: `0x4E7B06D78965594eB5EF5414c357ca21E1554491`
 - Pool bytecode present: **yes**
 - confidential-token bytecode present: **yes**
 
@@ -2836,8 +2830,7 @@ Confidential-token readiness:
 - decimals: `6`
 - confidential balance handle present: **yes**
 - plaintext confidential balance: **NOT_DECRYPTED**
-- amount sufficiency:
-  `UNKNOWN_BY_DESIGN_UNTIL_EXACT_AMOUNT_AND_SEPARATE_AUTHORIZATION`
+- amount sufficiency: `UNKNOWN_BY_DESIGN_UNTIL_EXACT_AMOUNT_AND_SEPARATE_AUTHORIZATION`
 
 Account nonce observation:
 
@@ -2850,8 +2843,8 @@ Readiness interpretation:
 - public blocker list: `POOL_OPERATOR_NOT_ACTIVE`
 - operator-review preparation eligible: **true**
 - a new operator transaction would be needed if the state remains unchanged: **true**
-- public read-only gate as a complete deposit-readiness gate: **false**, because the Pool operator is
-  not active
+- public read-only gate as a complete deposit-readiness gate: **false**, because the Pool operator
+  is not active
 - this result does not infer or authorize any confidential deposit amount
 
 Authorization boundary:
@@ -2876,10 +2869,8 @@ Repository preservation after the probe:
   `242e0af71f22aed9768ec884e83877473a5bd98b0363a029f489c6bae9880ee4`
 - `apps/web/components/app-shell.tsx`:
   `f41c0050ed4e0252291f6e345c7b800c4e1135885745a91abb6da573b67b973b`
-- `apps/web/lib/zama.ts`:
-  `212d50775343b7ddcbcd000139c316843476223b8e118502c235fc40dc1ab0a0`
-- `apps/web/app/globals.css`:
-  `8959c0bdd2305e1cf6e1f964d979cb86ff455562b977ddf6e0f8eae61aaa615e`
+- `apps/web/lib/zama.ts`: `212d50775343b7ddcbcd000139c316843476223b8e118502c235fc40dc1ab0a0`
+- `apps/web/app/globals.css`: `8959c0bdd2305e1cf6e1f964d979cb86ff455562b977ddf6e0f8eae61aaa615e`
 - `apps/web/lib/operator-approval.ts`:
   `4cf92ede20079e5c1ec88c757ce6e0c445685c0fe375021708c9222227f9fe37`
 - `apps/web/lib/operator-approval.test.ts`:
@@ -2919,10 +2910,8 @@ Exact source / documentation identity:
   `242e0af71f22aed9768ec884e83877473a5bd98b0363a029f489c6bae9880ee4`
 - `apps/web/components/app-shell.tsx`:
   `f41c0050ed4e0252291f6e345c7b800c4e1135885745a91abb6da573b67b973b`
-- `apps/web/lib/zama.ts`:
-  `212d50775343b7ddcbcd000139c316843476223b8e118502c235fc40dc1ab0a0`
-- `apps/web/app/globals.css`:
-  `8959c0bdd2305e1cf6e1f964d979cb86ff455562b977ddf6e0f8eae61aaa615e`
+- `apps/web/lib/zama.ts`: `212d50775343b7ddcbcd000139c316843476223b8e118502c235fc40dc1ab0a0`
+- `apps/web/app/globals.css`: `8959c0bdd2305e1cf6e1f964d979cb86ff455562b977ddf6e0f8eae61aaa615e`
 - `apps/web/lib/operator-approval.ts`:
   `4cf92ede20079e5c1ec88c757ce6e0c445685c0fe375021708c9222227f9fe37`
 - `apps/web/lib/operator-approval.test.ts`:
@@ -2963,8 +2952,7 @@ Fresh runtime:
 - listener command: `next-server (v16.3.4)`
 - listener cwd: `/Users/mralbert/Downloads/veilpot/apps/web`
 - production URL: `http://127.0.0.1:3177`
-- runtime log:
-  `/tmp/veilpot-operator-review-runtime-20260904-125620.log`
+- runtime log: `/tmp/veilpot-operator-review-runtime-20260904-125620.log`
 
 HTTP smoke:
 
@@ -3120,8 +3108,7 @@ Observed browser state:
 
 Operator-control state:
 
-- the next protocol step displayed:
-  `2. Allow the Pool to pull this confidential deposit`
+- the next protocol step displayed: `2. Allow the Pool to pull this confidential deposit`
 - the explanatory copy stated that the permission is explicit and short-lived
 - the explanatory copy stated that Veilpot prepares one exact 30-minute approval for inspection
   before any wallet request
@@ -3185,12 +3172,9 @@ authenticated browser without opening the wallet.
 
 Review identity:
 
-- holder:
-  `0x1f87Ae197af539253978d435aD45cCf28Fb95024`
-- confidential-token testnet mock:
-  `0x4E7B06D78965594eB5EF5414c357ca21E1554491`
-- operator / Pool:
-  `0x2029D8b7AE6Abe7dAa0C2A71E960839171a34601`
+- holder: `0x1f87Ae197af539253978d435aD45cCf28Fb95024`
+- confidential-token testnet mock: `0x4E7B06D78965594eB5EF5414c357ca21E1554491`
+- operator / Pool: `0x2029D8b7AE6Abe7dAa0C2A71E960839171a34601`
 - participant state: `RESERVED`
 - participant slot: `1`
 - registration version: `1`
@@ -3269,8 +3253,8 @@ Safety result:
 ## Operator-review five-minute staleness fail-closed runtime validation — PASS
 
 The previously prepared exact Pool operator approval review was left untouched past its separate
-five-minute review-usability window and then inspected in the authenticated browser without
-clicking any operator or wallet control.
+five-minute review-usability window and then inspected in the authenticated browser without clicking
+any operator or wallet control.
 
 Observed stale-review behavior:
 
@@ -3339,12 +3323,9 @@ approval review. The wallet prompt was inspected without signing or cancelling.
 
 Veilpot review that opened this wallet prompt:
 
-- holder:
-  `0x1f87Ae197af539253978d435aD45cCf28Fb95024`
-- confidential-token testnet mock:
-  `0x4E7B06D78965594eB5EF5414c357ca21E1554491`
-- operator / Pool:
-  `0x2029D8b7AE6Abe7dAa0C2A71E960839171a34601`
+- holder: `0x1f87Ae197af539253978d435aD45cCf28Fb95024`
+- confidential-token testnet mock: `0x4E7B06D78965594eB5EF5414c357ca21E1554491`
+- operator / Pool: `0x2029D8b7AE6Abe7dAa0C2A71E960839171a34601`
 - function: `setOperator(address,uint48)`
 - selector: `0xd4febb96`
 - exact frozen `until`: `1788526259`
@@ -3359,10 +3340,8 @@ Observed Rabby wallet prompt:
 - requesting site: `http://127.0.0.1:3177`
 - wallet chain: `Sepolia`
 - raw `chainId`: `11155111`
-- raw `from`:
-  `0x1f87Ae197af539253978d435aD45cCf28Fb95024`
-- raw `to`:
-  `0x4E7B06D78965594eB5EF5414c357ca21E1554491`
+- raw `from`: `0x1f87Ae197af539253978d435aD45cCf28Fb95024`
+- raw `to`: `0x4E7B06D78965594eB5EF5414c357ca21E1554491`
 - raw `nonce`: `0x206`
 - decimal nonce interpretation: `518`
 - raw `gas`: `0xc97d`
@@ -3379,7 +3358,8 @@ Exact wallet-review identity checks:
 - wallet chain matched the reviewed Ethereum Sepolia chain: **PASS**
 - wallet sender matched the authenticated holder: **PASS**
 - wallet target matched the exact confidential-token testnet mock: **PASS**
-- wallet nonce `0x206` equals decimal `518`, consistent with the latest accepted account nonce: **PASS**
+- wallet nonce `0x206` equals decimal `518`, consistent with the latest accepted account nonce:
+  **PASS**
 - wallet calldata matched the frozen Veilpot review byte-for-byte: **PASS**
 - calldata selector remained `0xd4febb96`: **PASS**
 - calldata encoded the exact Pool address: **PASS**
@@ -3439,12 +3419,9 @@ Exact authorized transaction:
 
 - chain: Ethereum Sepolia
 - chain ID: `11155111`
-- sender / holder:
-  `0x1f87Ae197af539253978d435aD45cCf28Fb95024`
-- confidential-token testnet mock:
-  `0x4E7B06D78965594eB5EF5414c357ca21E1554491`
-- operator / Pool:
-  `0x2029D8b7AE6Abe7dAa0C2A71E960839171a34601`
+- sender / holder: `0x1f87Ae197af539253978d435aD45cCf28Fb95024`
+- confidential-token testnet mock: `0x4E7B06D78965594eB5EF5414c357ca21E1554491`
+- operator / Pool: `0x2029D8b7AE6Abe7dAa0C2A71E960839171a34601`
 - function: `setOperator(address,uint48)`
 - selector: `0xd4febb96`
 - reviewed nonce: `0x206` / decimal `518`
@@ -3455,15 +3432,12 @@ Exact authorized transaction:
 
 Mined transaction:
 
-- transaction hash:
-  `0x62cc18d7c985ff61f49956f99de8f3fa35e67cf00d16a0db6cad3b9de1582754`
+- transaction hash: `0x62cc18d7c985ff61f49956f99de8f3fa35e67cf00d16a0db6cad3b9de1582754`
 - Etherscan status: `Success`
 - block: `11633461`
 - Etherscan action: `Set Operator`
-- from:
-  `0x1f87Ae197af539253978d435aD45cCf28Fb95024`
-- to:
-  `0x4E7B06D78965594eB5EF5414c357ca21E1554491`
+- from: `0x1f87Ae197af539253978d435aD45cCf28Fb95024`
+- to: `0x4E7B06D78965594eB5EF5414c357ca21E1554491`
 - value: `0 ETH`
 
 Post-mine frontend reconciliation:
@@ -3478,9 +3452,8 @@ Post-mine frontend reconciliation:
 Retry / authorization boundary:
 
 - nonce `518` was consumed by this successful operator approval transaction
-- transaction
-  `0x62cc18d7c985ff61f49956f99de8f3fa35e67cf00d16a0db6cad3b9de1582754`
-  must not be retried
+- transaction `0x62cc18d7c985ff61f49956f99de8f3fa35e67cf00d16a0db6cad3b9de1582754` must not be
+  retried
 - historical nonce-`517` operator approval remains non-retryable
 - the existing reservation transaction remains non-retryable
 - this operator approval does not authorize any deposit

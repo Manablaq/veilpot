@@ -6,21 +6,24 @@ import {
   BookOpen,
   CalendarClock,
   ChevronRight,
-  CircleCheck,
   FileText,
-  Gift,
   HelpCircle,
   LockKeyhole,
   Plus,
   Settings,
   ShieldCheck,
-  Vault,
   WalletCards,
 } from "lucide-react";
 
-import { PrivacyValue } from "@/components/privacy-value";
+import type { Address } from "viem";
+
+import { AutopilotControlCenter } from "@/components/autopilot-control-center";
+import { DrawControlCenter } from "@/components/draw-control-center";
+import { LiveAccountOverview } from "@/components/live-account-overview";
+import { LiveActivityPanel } from "@/components/live-activity-panel";
+import { PrizeControlCenter } from "@/components/prize-control-center";
 import { ThemeControl } from "@/components/theme-control";
-import { PRODUCT, PRODUCT_PREVIEW_ACTIVITY, PRODUCT_PREVIEW_PLANS } from "@/lib/product";
+import { PRODUCT } from "@/lib/product";
 
 export type WorkspaceView =
   | "home"
@@ -36,6 +39,7 @@ export type WorkspaceView =
   | "settings";
 
 interface WorkspacePanelProps {
+  readonly authenticatedAddress: Address;
   readonly view: Exclude<WorkspaceView, "home">;
   readonly onNavigate: (view: WorkspaceView) => void;
   readonly onNewPot: () => void;
@@ -47,24 +51,24 @@ interface WorkspacePanelProps {
 
 const titles: Record<Exclude<WorkspaceView, "home">, readonly [string, string]> = {
   pots: [
-    "Saving pots · product preview",
-    "Illustrative pot layouts only. Live wallet state is never inferred from these examples.",
+    "Saving pots",
+    "Live public account state appears first. Any illustrative planning layouts below remain explicitly non-authoritative.",
   ],
   autopilot: [
     "Autopilot",
     "Protocol controls and schedule concepts. No live plan is assumed until protocol state is read.",
   ],
   draws: [
-    "VeilDraw · product preview",
-    "Lifecycle example only. No live draw or private result is inferred.",
+    "VeilDraw",
+    "Live snapshot, draw, public-proof, PrizeReserve, and claim controls. Private winner and amount data stay encrypted unless explicitly authorized.",
   ],
   portfolio: [
     "Portfolio",
     "Confidential values stay encrypted. This view never invents balances, allocation, or wallet history.",
   ],
   activity: [
-    "Activity · product preview",
-    "Illustrative event formatting only. Live transaction history is not claimed.",
+    "Activity",
+    "Recent public Sepolia account events are loaded from protocol contracts; confidential values are never inferred.",
   ],
   statements: ["Statements", "Account records prepared for review and export."],
   privacy: [
@@ -86,6 +90,7 @@ const titles: Record<Exclude<WorkspaceView, "home">, readonly [string, string]> 
 };
 
 export function WorkspacePanel({
+  authenticatedAddress,
   view,
   onNavigate,
   onNewPot,
@@ -111,127 +116,47 @@ export function WorkspacePanel({
         ) : null}
       </header>
 
-      {view === "pots" ? (
-        <div className="workspace-stack">
-          {PRODUCT_PREVIEW_PLANS.map((plan) => (
-            <article className="workspace-card plan-detail-card" key={plan.id}>
-              <div className="workspace-card-icon">
-                <Vault size={18} />
-              </div>
-              <div className="workspace-card-main">
-                <strong>{plan.name}</strong>
-                <span>
-                  {plan.cadence} · next {plan.next}
-                </span>
-                <div className="workspace-progress">
-                  <i style={{ width: `${String(plan.progress)}%` }} />
-                </div>
-              </div>
-              <div className="workspace-card-meta">
-                <span>Progress</span>
-                <strong>{String(plan.progress)}%</strong>
-              </div>
-              <div className="workspace-card-meta">
-                <span>Runway</span>
-                <strong>{String(plan.runway)} funded</strong>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  onNavigate("autopilot");
-                }}
-              >
-                Manage <ChevronRight size={15} />
-              </button>
-            </article>
-          ))}
-        </div>
-      ) : null}
+      {view === "pots" ? <LiveAccountOverview authenticatedAddress={authenticatedAddress} /> : null}
 
       {view === "autopilot" ? (
-        <div className="workspace-grid two">
-          <article className="workspace-card block">
-            <CalendarClock size={20} />
-            <span className="eyebrow">NEXT WINDOW</span>
-            <h2>No live schedule assumed</h2>
-            <p>
-              Live Autopilot state is not inferred from presentation fixtures. Create or review a
-              plan through the protocol-backed account actions.
-            </p>
-            <dl>
-              <div>
-                <dt>Keeper authority</dt>
-                <dd>Execution only</dd>
-              </div>
-              <div>
-                <dt>Lifetime authorization</dt>
-                <dd>Private · bounded</dd>
-              </div>
-              <div>
-                <dt>Plan state</dt>
-                <dd>Not loaded</dd>
-              </div>
-            </dl>
-          </article>
-          <article className="workspace-card block">
-            <ShieldCheck size={20} />
-            <span className="eyebrow">CONTROL</span>
-            <h2>You can stop future execution.</h2>
-            <p>
-              Pause, skip, resume, and revoke remain owner-controlled. Residual vault funds remain
-              recoverable by the owner after revocation.
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                onNavigate("help");
-              }}
-            >
-              Read Autopilot safety <ChevronRight size={15} />
-            </button>
-          </article>
-        </div>
+        <AutopilotControlCenter authenticatedAddress={authenticatedAddress} />
       ) : null}
 
       {view === "draws" ? (
-        <div className="workspace-grid two">
-          <article className="workspace-card block">
-            <Gift size={20} />
-            <span className="eyebrow">VEILDRAW PREVIEW</span>
-            <h2>Private finalization model</h2>
-            <p>
-              This example explains the privacy flow without claiming a live draw. An explicit
-              reveal remains user-initiated when an authorized private result exists.
-            </p>
-            <div className="status-line">
-              <CircleCheck size={15} /> Example only · no live draw status is inferred
-            </div>
-          </article>
-          <article className="workspace-card block">
-            <LockKeyhole size={20} />
-            <span className="eyebrow">PRIVATE RESULT</span>
-            <h2>No automatic reveal</h2>
-            <p>
-              Draw result decryption remains an explicit user action and is not performed by
-              sign-in, page load, or notifications.
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                onNavigate("privacy");
-              }}
-            >
-              Review privacy controls <ChevronRight size={15} />
-            </button>
-          </article>
-        </div>
+        <>
+          <DrawControlCenter authenticatedAddress={authenticatedAddress} />
+          <PrizeControlCenter authenticatedAddress={authenticatedAddress} />
+        </>
+      ) : null}
+
+      {view === "portfolio" ? (
+        <LiveAccountOverview authenticatedAddress={authenticatedAddress} />
       ) : null}
 
       {view === "portfolio" ? (
         <div className="workspace-grid two">
           <article className="workspace-card block private-surface">
             <span className="eyebrow">PRIVATE PORTFOLIO</span>
-            <PrivacyValue value="Not decrypted" label="confidential savings value" large />
+            <div className="private-account-placeholder" role="status">
+              <div className="privacy-value-toolbar">
+                <span>
+                  <LockKeyhole size={13} /> Encrypted on-chain
+                </span>
+              </div>
+              <div className="privacy-value-display masked">
+                <div className="privacy-mask-line" aria-hidden="true">
+                  <span>Private</span>
+                  <i />
+                  <i />
+                  <i />
+                </div>
+              </div>
+              <p className="financial-field-help">
+                Pool principal is intentionally not decrypted by this account view. This deployment
+                keeps the principal handle contract-private and supports confidential spending and
+                withdrawal without a fake presentation reveal.
+              </p>
+            </div>
             <div className="portfolio-facts">
               <div>
                 <span>Active pots</span>
@@ -270,22 +195,7 @@ export function WorkspacePanel({
       ) : null}
 
       {view === "activity" ? (
-        <article className="workspace-card block">
-          <Activity size={20} />
-          <span className="eyebrow">ACCOUNT TIMELINE</span>
-          <div className="workspace-activity-list">
-            {PRODUCT_PREVIEW_ACTIVITY.map((item) => (
-              <div key={item.title}>
-                <i className={`activity-state-dot ${item.state}`} />
-                <span>
-                  <strong>{item.title}</strong>
-                  <small>{item.detail}</small>
-                </span>
-                <time>{item.time}</time>
-              </div>
-            ))}
-          </div>
-        </article>
+        <LiveActivityPanel authenticatedAddress={authenticatedAddress} />
       ) : null}
 
       {view === "statements" ? (
