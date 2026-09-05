@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.27;
 
-import {FHE, ebool, euint8, euint128, euint256} from "@fhevm/solidity/lib/FHE.sol";
+import {FHE, ebool, euint8, euint64, euint128, euint256} from "@fhevm/solidity/lib/FHE.sol";
 import {ZamaEthereumConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
 
 /* solhint-disable gas-indexed-events, gas-increment-by-one, function-max-lines */
@@ -146,6 +146,7 @@ contract VeilDrawEngineV2 is ZamaEthereumConfig {
     error DrawShardSelectionComplete();
     error DrawWinnerResolutionComplete();
     error DrawWinnerIncomplete();
+    error MissingPrizeAcl();
 
     event SnapshotImportStarted(uint256 indexed snapshotId, uint256 participantCount);
 
@@ -878,6 +879,45 @@ contract VeilDrawEngineV2 is ZamaEthereumConfig {
         draw.state = DrawState.FINALIZED;
 
         emit DrawFinalized(drawId, snapshotId);
+    }
+
+    // ---------------------------------------------------------------------
+    // Gate 6: encrypted prize-entitlement consequence boundary
+    // ---------------------------------------------------------------------
+
+    /// @notice Derive one encrypted prize entitlement for the Pool.
+    /// @dev GATE_6_ENTITLEMENT_BOUNDARY
+    /// - Only the immutable Pool can consume a winner predicate.
+    /// - The draw must already be finalized.
+    /// - The Pool must explicitly grant this Engine the incoming prize ciphertext.
+    /// - Winner identity and entitlement remain encrypted.
+    /// - The result is granted back only transiently to the Pool.
+    function derivePrizeEntitlement(
+        uint256 drawId,
+        uint256 slotIndex,
+        euint64 prizeAmount
+    ) external onlyPool returns (euint64 entitlement) {
+        Draw storage draw = _drawExisting(drawId);
+
+        if (draw.state != DrawState.FINALIZED) {
+            revert InvalidDrawState(DrawState.FINALIZED, draw.state);
+        }
+
+        if (slotIndex >= draw.participantCount) {
+            revert InvalidDrawIndex();
+        }
+
+        if (!FHE.isAllowed(prizeAmount, address(this))) {
+            revert MissingPrizeAcl();
+        }
+
+        entitlement = FHE.select(
+            _drawWinnerPredicates[drawId][slotIndex],
+            prizeAmount,
+            FHE.asEuint64(0)
+        );
+
+        FHE.allowTransient(entitlement, pool);
     }
 
     // ---------------------------------------------------------------------

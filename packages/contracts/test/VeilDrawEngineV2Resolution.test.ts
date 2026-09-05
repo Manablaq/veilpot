@@ -1,3 +1,4 @@
+import { FhevmType } from "@fhevm/hardhat-plugin";
 import { expect } from "chai";
 import { ethers } from "ethers";
 import * as hre from "hardhat";
@@ -524,5 +525,207 @@ describe("VeilDrawEngineV2 private 16-shard winner resolution", function () {
     expect(runtimeBytes).to.be.at.most(24_576);
 
     expect(creationBytes).to.be.at.most(49_152);
+  });
+});
+
+interface EntitlementPool extends Host {
+  bindReserve(reserve: string): Tx;
+
+  derivePrizeEntitlement(drawId: bigint, slotIndex: bigint, prizeAmount: Handle): Tx;
+
+  derivePrizeEntitlementWithoutEngineGrant(
+    drawId: bigint,
+    slotIndex: bigint,
+    prizeAmount: Handle,
+  ): Tx;
+}
+
+interface EntitlementReserve extends ethers.BaseContract {
+  setPrize(encryptedPrize: Handle, proof: string): Tx;
+
+  deriveAndStore(drawId: bigint, slotIndex: bigint): Tx;
+
+  deriveWithoutReserveGrant(drawId: bigint, slotIndex: bigint): Tx;
+
+  deriveWithMissingEngineGrant(drawId: bigint, slotIndex: bigint): Tx;
+
+  prizeHandle(): Promise<Handle>;
+
+  storedEntitlementHandle(drawId: bigint, slotIndex: bigint): Promise<Handle>;
+}
+
+async function entitlementFixture() {
+  const signers = await hre.ethers.getSigners();
+
+  const alice = signers[0]!;
+
+  const pool = (await (
+    await hre.ethers.getContractFactory("TestVeilDrawEntitlementPoolV2")
+  ).deploy()) as unknown as EntitlementPool;
+
+  await pool.waitForDeployment();
+
+  const reserve = (await (
+    await hre.ethers.getContractFactory("TestVeilDrawEntitlementReserveV2")
+  ).deploy(await pool.getAddress())) as unknown as EntitlementReserve;
+
+  await reserve.waitForDeployment();
+
+  await waitFor(pool.bindReserve(await reserve.getAddress()));
+
+  const engine = (await hre.ethers.getContractAt(
+    "VeilDrawEngineV2",
+    await pool.engine(),
+  )) as unknown as Engine;
+
+  await hre.fhevm.assertCoprocessorInitialized(pool, "TestVeilDrawEntitlementPoolV2");
+
+  await hre.fhevm.assertCoprocessorInitialized(reserve, "TestVeilDrawEntitlementReserveV2");
+
+  await hre.fhevm.assertCoprocessorInitialized(engine, "VeilDrawEngineV2");
+
+  return {
+    alice,
+    pool,
+    reserve,
+    engine,
+  };
+}
+
+async function setReservePrize(
+  reserve: EntitlementReserve,
+  signer: Signer,
+  amount: bigint,
+): Promise<void> {
+  const input = await encrypted64(await reserve.getAddress(), signer, amount);
+
+  await waitFor(reserve.connect(signer).setPrize(input.handle, input.proof) as Tx);
+}
+
+async function decrypt64(handle: Handle): Promise<bigint> {
+  const value = await hre.fhevm.debugger.decryptEuint(FhevmType.euint64, handle);
+
+  if (typeof value !== "bigint") {
+    throw new TypeError("local FHE debugger did not return euint64");
+  }
+
+  return value;
+}
+
+describe("VeilDrawEngineV2 three-hop entitlement ACL boundary", function () {
+  this.timeout(180_000);
+
+  it("derives exact encrypted winner prize and encrypted zero for the non-winner", async function () {
+    const { alice, pool, reserve, engine } = await entitlementFixture();
+
+    // Total is exactly 8 and slot 0 owns the entire interval.
+    // Slot 0 therefore wins regardless of the hidden target in [0, 7].
+    await importSnapshot(pool, alice, [8n, 0n]);
+
+    await setReservePrize(reserve, alice, 5_000n);
+
+    // Finalized state is a hard consequence precondition.
+    await expectRejected(() => reserve.deriveAndStore(1n, 0n));
+
+    await acceptDraw(pool, engine, 1n);
+
+    await expectRejected(() => reserve.deriveAndStore(1n, 0n));
+
+    await waitFor(pool.startWinnerResolution(1n, 1n));
+
+    await processAllShardSelection(pool, 1n);
+
+    await processAllWinnerShards(pool, 1n);
+
+    await waitFor(pool.finalizeDraw(1n, 1n));
+
+    expect((await engine.drawMetadataV2(1n))[0]).to.equal(DRAW_STATE.FINALIZED);
+
+    const winnerReceipt = await waitFor(reserve.deriveAndStore(1n, 0n));
+
+    reportLocalCost("threeHopWinnerEntitlement", winnerReceipt);
+
+    const loserReceipt = await waitFor(reserve.deriveAndStore(1n, 1n));
+
+    reportLocalCost("threeHopLoserEntitlement", loserReceipt);
+
+    const winnerEntitlement = await reserve.storedEntitlementHandle(1n, 0n);
+
+    const loserEntitlement = await reserve.storedEntitlementHandle(1n, 1n);
+
+    expect(await decrypt64(winnerEntitlement)).to.equal(5_000n);
+
+    expect(await decrypt64(loserEntitlement)).to.equal(0n);
+
+    // Entitlements remain confidential.
+    await expectRejected(() => hre.fhevm.publicDecrypt([winnerEntitlement]));
+
+    await expectRejected(() => hre.fhevm.publicDecrypt([loserEntitlement]));
+
+    // The Reserve persisted a new derivative, not its original prize
+    // ciphertext.
+    expect(winnerEntitlement).to.not.equal(await reserve.prizeHandle());
+  });
+
+  it("proves every inter-contract ACL grant is transaction-scoped", async function () {
+    const { alice, pool, reserve, engine } = await entitlementFixture();
+
+    await importSnapshot(pool, alice, [8n, 0n]);
+
+    await acceptDraw(pool, engine, 1n);
+
+    await waitFor(pool.startWinnerResolution(1n, 1n));
+
+    await processAllShardSelection(pool, 1n);
+
+    await processAllWinnerShards(pool, 1n);
+
+    await waitFor(pool.finalizeDraw(1n, 1n));
+
+    await setReservePrize(reserve, alice, 777n);
+
+    // No Reserve -> Pool grant in this new transaction.
+    await expectRejected(() => reserve.deriveWithoutReserveGrant(1n, 0n));
+
+    // Reserve -> Pool exists, but Pool deliberately omits Pool -> Engine.
+    await expectRejected(() => reserve.deriveWithMissingEngineGrant(1n, 0n));
+
+    // Proper fresh grants across every hop succeed.
+    await waitFor(reserve.deriveAndStore(1n, 0n));
+
+    expect(await decrypt64(await reserve.storedEntitlementHandle(1n, 0n))).to.equal(777n);
+
+    // A previous successful transaction must not leave Reserve -> Pool
+    // authorization alive.
+    await expectRejected(() => reserve.deriveWithoutReserveGrant(1n, 0n));
+  });
+
+  it("fails closed for invalid draw and slot consequences", async function () {
+    const { alice, pool, reserve, engine } = await entitlementFixture();
+
+    await importSnapshot(pool, alice, [8n, 0n]);
+
+    await acceptDraw(pool, engine, 1n);
+
+    await waitFor(pool.startWinnerResolution(1n, 1n));
+
+    await processAllShardSelection(pool, 1n);
+
+    await processAllWinnerShards(pool, 1n);
+
+    await waitFor(pool.finalizeDraw(1n, 1n));
+
+    await setReservePrize(reserve, alice, 42n);
+
+    await expectRejected(() => reserve.deriveAndStore(999n, 0n));
+
+    await expectRejected(() => reserve.deriveAndStore(1n, 2n));
+
+    // Only the immutable Pool can call the Engine consequence function.
+    const prize = await reserve.prizeHandle();
+
+    await expectRejected(() =>
+      engine.connect(alice).getFunction("derivePrizeEntitlement").staticCall(1n, 0n, prize),
+    );
   });
 });
