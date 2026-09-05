@@ -2,17 +2,38 @@
 
 This document is the authoritative reviewer-facing status for the current Veilpot repository.
 
-Historical Gate and VeilDraw documents preserve earlier design and verification checkpoints. They
-remain engineering evidence but are not the source of truth for the current implementation status.
+Historical Gate, VeilDraw, and Autopilot design documents preserve earlier engineering checkpoints.
+They remain evidence, but this document is the source of truth for current implementation and
+submission readiness.
 
 ## Current checkpoint
 
-- Autopilot deployment source: `ad437e0edf1f4809a53d045879da28da87c10b78`
-- Autopilot deployment/runtime evidence freeze: `fb417f62db1ba7936b80c7cfb68b0a42c2fd4972`
-- Autopilot-v3 protocol SDK freeze: `de16e473739c28dbd00c731c6a7535ab3400ad0f`
-- Deployment evidence SHA-256: `939127735c3ea54763992b8238b09a37a4474d66f6774c0eab5f619328ffcd98`
-- Runtime journal SHA-256: `cb9fa6873acbfb04c58be61c643f2a9413aae75aea6afa3143298eac98a5c3ff`
-- Runtime evidence SHA-256: `147c83636f21ac13b8e26174cce1abe1a02d18f496d42d00aa53a7e8d0b8729a`
+| Surface                       | Status                               |
+| ----------------------------- | ------------------------------------ |
+| Confidential Pool             | Implemented and deployed             |
+| Confidential Autopilot Vault  | Implemented and deployed             |
+| Simulated Yield Adapter       | Implemented and deployed             |
+| Confidential Prize Reserve    | Implemented and deployed             |
+| Protocol SDK                  | Implemented and production-bound     |
+| Browser frontend              | Implemented                          |
+| Public website                | Live                                 |
+| Wallet authentication         | Implemented and production-validated |
+| Privacy-first value rendering | Implemented                          |
+| Exact wallet-action review    | Implemented and tested               |
+| Production browser acceptance | Passed                               |
+| Push CI                       | Passed                               |
+| Pull-request CI               | Passed                               |
+| Submission media              | External publication pending         |
+
+- Live application: https://veilpot.vercel.app
+- Application-code freeze: `9c82463bd56d3c23c0a248c9314ece9d728b76fa`
+- Production deployment validated for that code freeze: `dpl_2avvhvKmog4vLyAaotkc11XNUUBK`
+- Push CI run: `33941687165`
+- Pull-request CI run: `33941688451`
+- Final browser acceptance completed: `2026-09-05`
+
+A later repository head may contain documentation-only closeout changes. The application-code freeze
+above identifies the exact validated frontend/protocol integration state.
 
 ## Sepolia contracts
 
@@ -52,93 +73,92 @@ The configured token is Zama's official Sepolia **Confidential USDT Mock** and i
 deployment evidence as `OFFICIAL_ZAMA_TESTNET_MOCK_ASSET`. The current yield integration is
 explicitly `SIMULATED_YIELD_FOR_SEPOLIA_DEMO`.
 
-These classifications are deliberate. Veilpot must not present the Sepolia mock token or simulated
-yield adapter as a real production-mainnet asset/yield integration.
+These classifications are deliberate. Veilpot does not present the Sepolia mock token or simulated
+yield adapter as a production-mainnet asset or production yield source.
 
-## Deployment evidence
+## Deployment and runtime evidence
 
 The canonical current deployment record is:
 
-[`evidence/production-sepolia/autopilot-v3/deployment.json`](../evidence/production-sepolia/autopilot-v3/deployment.json)
+[`../evidence/production-sepolia/autopilot-v3/deployment.json`](../evidence/production-sepolia/autopilot-v3/deployment.json)
 
-Evidence SHA-256:
+Deployment evidence SHA-256:
 
 `939127735c3ea54763992b8238b09a37a4474d66f6774c0eab5f619328ffcd98`
 
-The record binds:
-
-- deployment source commit;
-- deployer address and starting nonce;
-- deterministic four-contract CREATE order;
-- exact Pool/Vault/Adapter/Reserve addresses;
-- exact mined transaction hashes and blocks;
-- confidential token and wrappers-registry identities;
-- exact Pool-to-Vault and Vault-to-Pool immutable bindings;
-- compiler-declared immutable ranges; and
-- local/deployed normalized runtime identities.
-
-The historical pre-Autopilot deployment record remains under
-`evidence/production-sepolia/deployment.json` for provenance and is not the current integration
-target.
-
-## Live runtime lifecycle evidence
-
 The canonical current runtime lifecycle record is:
 
-[`evidence/production-sepolia/autopilot-v3/runtime-smoke.json`](../evidence/production-sepolia/autopilot-v3/runtime-smoke.json)
+[`../evidence/production-sepolia/autopilot-v3/runtime-smoke.json`](../evidence/production-sepolia/autopilot-v3/runtime-smoke.json)
 
 Runtime evidence SHA-256:
 
 `147c83636f21ac13b8e26174cce1abe1a02d18f496d42d00aa53a7e8d0b8729a`
 
-The corresponding immutable runtime journal SHA-256 is:
+Immutable runtime journal SHA-256:
 
 `cb9fa6873acbfb04c58be61c643f2a9413aae75aea6afa3143298eac98a5c3ff`
 
-The live evidence validates the production lifecycle across the current four-contract deployment,
-including:
+The live evidence covers:
 
 - registration and threshold-proof settlement;
 - registration-bond recovery;
 - confidential Autopilot plan creation;
 - ERC-7984 `confidentialTransferAndCall` plan funding;
 - scheduled permissionless Autopilot execution;
-- exact transient operator grant/pull/revoke behavior;
+- transient operator grant/pull/revoke behavior;
 - replay rejection after consumed execution;
-- full principal withdrawal and TWAB checkpointing;
+- principal withdrawal and TWAB checkpointing;
 - KMS-backed deregistration proof settlement;
 - terminal participant tombstoning;
-- historical beneficiary and weight binding after tombstoning; and
+- historical beneficiary/weight binding after tombstoning; and
 - absence of residual wallet/Vault operator edges after completion.
 
-The frozen live plan used plan ID
-`0x2c9d9797c99c7b48856127e0cfc47ac3dea70c2091aa49d1f0fd7c8acac4c534` and schedule root
-`0xd3dfac053b783e1dfbe0e0df5f070e25b2b9b670ca4c9cc8a226ea95333b093a`.
+## Browser frontend status
 
-## Runtime and source identity
+The production browser application is implemented in [`../apps/web`](../apps/web) and deployed at
+https://veilpot.vercel.app.
 
-The current deployed Pool, Vault, Adapter, and Reserve normalized runtime identities match the
-frozen compiled artifacts recorded by the deployment/runtime evidence.
+It includes:
 
-| Component | Normalized runtime SHA-256                                         |
-| --------- | ------------------------------------------------------------------ |
-| Pool      | `d1ad1d24c304558f29f62a0ae89584d4f7b3382ee7198f0f8015ed5c816d076f` |
-| Vault     | `a79e7a5fd69729be992e09deaf74534fbbf31c9a1b954bde67ee9280e0b6521d` |
-| Adapter   | `b62902dd43d2ff5ef3187efc10d4d4b22b7e20c9a1d0df88c3a77635ee33590f` |
-| Reserve   | `7bf278b467b358666e73a12f2856c93385504b74a7567eb27caf0b5b1e11559f` |
+- public landing/trust/privacy surfaces;
+- light, dark, and system appearance modes;
+- wallet connection and wallet-signature authentication;
+- session restoration with bounded RPC verification behavior;
+- safe/public live account-state reads;
+- confidential deposit preparation;
+- withdrawal preparation;
+- Autopilot plan, funding, lifecycle, and recovery controls;
+- VeilDraw lifecycle controls;
+- prize/claim controls;
+- Privacy Shield presentation;
+- mobile/responsive navigation; and
+- explicit encrypted/not-decrypted placeholders where the browser does not possess legitimate
+  decryption authority.
 
-Frozen Solidity source SHA-256 values:
+The frontend intentionally does not convert encrypted values into fake account numbers. Illustrative
+public landing-page preview content is labeled as illustrative and not connected-wallet state.
 
-| Component | Source SHA-256                                                     |
-| --------- | ------------------------------------------------------------------ |
-| Pool      | `bd06e4f9217ffa6d584a518cb93ae0504221c760e4c6f17656d114262a82710e` |
-| Vault     | `d003c095c3260ce34ff2c4bd8559b306b092c6655c6ac030c5a9059a87c1d384` |
-| Adapter   | `3bb7593778e0d0a5b4b9c9b24745a28d7d97bbff85e63185046cda36212165fc` |
-| Reserve   | `b325862cd9bdb542ffd2b3580c3d80a63efcc8ef50c4cfbd5ffa847ca0ca6dd0` |
+## Frontend security status
+
+The current browser implementation includes:
+
+- exact reviewed transaction identity bound to sender, chain, destination, calldata, native value,
+  account nonce, and review age;
+- post-submission reconciliation of mined sender, destination, calldata, nonce, and native value;
+- fail-closed handling for changed wallet/network/nonce/calldata/value;
+- protocol-SDK-only frozen deployment/ABI/state/call construction;
+- encrypted input binding to the exact target contract and submitting user;
+- no automatic confidential-value decryption on page mount, wallet connect, or session restore;
+- no standing keeper custody or beneficiary decryption authority;
+- explicit user action before wallet signatures, transactions, and legitimate decryption flows;
+- safe/public provenance for dashboard lifecycle state; and
+- separation of transaction inclusion from confidential proof finality.
+
+See [`FRONTEND_SECURITY_MODEL.md`](FRONTEND_SECURITY_MODEL.md).
 
 ## Validation status
 
-The current protocol/SDK checkpoint has passed:
+The current repository checkpoint has passed:
 
 | Validation                          | Result      |
 | ----------------------------------- | ----------- |
@@ -146,40 +166,25 @@ The current protocol/SDK checkpoint has passed:
 | Deterministic reference-model tests | 102 passing |
 | Protocol-SDK tests                  | 16 passing  |
 | Reference-model build               | Pass        |
-| Protocol-SDK build                  | Pass        |
+| Protocol-SDK clean build            | Pass        |
 | Root TypeScript typecheck           | Pass        |
 | Root ESLint                         | Pass        |
 | Solidity lint                       | Pass        |
-| Four-contract SDK ABI parity        | Pass        |
-| Autopilot deployment evidence audit | Pass        |
-| Live runtime lifecycle evidence     | Pass        |
-| Local mock-FHE regression           | Pass        |
+| Contract compile                    | Pass        |
+| Gate 0                              | Pass        |
+| Production web build                | Pass        |
+| Push CI                             | Pass        |
+| Pull-request CI                     | Pass        |
+| Live deployment/runtime evidence    | Pass        |
+| Production browser acceptance       | Pass        |
 
-The local contract test environment and Sepolia compilation environment use different FHEVM address
-profiles. Local FHEVM tests must therefore be compiled for the local mock profile before execution.
-The production evidence separately freezes the mined Sepolia runtime/source identities.
+The clean-checkout CI failure discovered during final audit was caused by type-aware ESLint
+executing before `@veilpot/protocol-sdk` had generated its ignored `dist` declarations. The root
+`lint` script now builds the SDK before ESLint. The exact clean-checkout failure was reproduced
+locally, the dependency-order fix was proven under Node 22, and both push and pull-request CI passed
+after the fix.
 
-This is an artifact-profile distinction, not a Solidity source difference.
-
-## Protocol SDK status
-
-The framework-independent protocol SDK is implemented and frozen at
-[`packages/protocol-sdk`](../packages/protocol-sdk).
-
-The current SDK includes:
-
-- exact Pool, Vault, Adapter, and Reserve ABIs;
-- exact Autopilot-v3 Sepolia addresses and evidence hashes;
-- exact production state ordinals;
-- exact claim EIP-712 authorization construction;
-- exact Autopilot plan-ID and schedule-leaf builders;
-- Standard Merkle schedule construction;
-- shared-proof two-`euint64` Autopilot plan encryption;
-- ERC-7984 confidential transfer-and-call funding;
-- permissionless execute and missed-window advancement;
-- owner skip/pause/resume/revoke/residual-fund withdrawal builders;
-- explicit plan metadata/amount read builders; and
-- explicit, user-initiated decryption descriptors.
+See [`TESTING_AND_REPRODUCIBILITY.md`](TESTING_AND_REPRODUCIBILITY.md).
 
 ## Privacy/security status
 
@@ -199,25 +204,19 @@ The frozen implementation includes:
 - deadline/retry handling for proof-pending settlement states; and
 - historical beneficiary/weight preservation after terminal participant tombstoning.
 
-## Formatting/provenance boundary
+## Formatting and provenance boundary
 
-The repository's root Prettier check excludes a small exact set of archival/provenance anchors whose
-bytes are intentionally preserved:
+The root Prettier check excludes a small exact set of archival/provenance anchors whose bytes are
+intentionally preserved. Those exclusions do not relax protocol validation.
 
-- historical Gate documents authored under earlier formatting baselines;
-- the frozen Autopilot runtime journal; and
-- the deployed/frozen Pool and Autopilot Vault source files.
+Current reviewer-facing documents remain Prettier-checked. Frozen evidence/source identity remains
+protected by hash and Git history boundaries.
 
-Those exclusions do not relax protocol validation. Current reviewer-facing documents and current SDK
-changes remain Prettier-checked, while frozen evidence/source identity is enforced by SHA-256 and
-Git blob boundaries.
+## Submission boundary
 
-## Integration status
+The engineering and production acceptance work is complete at the application-code freeze above. The
+required real-person demo video and X thread/article are external submission media and remain
+separate from the codebase until published.
 
-The browser frontend has not yet been implemented. No current document should claim the Season 4
-dApp submission is complete until the backend reviewer-readiness audit is complete, frontend
-implementation is explicitly authorized, the browser application is implemented and deployed, live
-browser E2E passes against this frozen Sepolia deployment, and the required submission media are
-complete.
-
-See [`INTEGRATION_GUIDE.md`](INTEGRATION_GUIDE.md) for the current browser-integration boundary.
+No additional deposit, withdrawal, Autopilot execution, threshold decryption, draw, prize claim, or
+other on-chain lifecycle transaction is required for repository closeout.

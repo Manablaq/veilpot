@@ -1,7 +1,7 @@
 # Veilpot protocol SDK
 
-Framework-independent typed integration layer for the frozen Veilpot Autopilot-v3 Sepolia
-deployment.
+Framework-independent typed integration layer for the frozen Veilpot Autopilot-v3 Sepolia deployment
+and production web application.
 
 ## Frozen production deployment
 
@@ -17,33 +17,26 @@ deployment.
 - Runtime evidence commit: `fb417f62db1ba7936b80c7cfb68b0a42c2fd4972`
 - Protocol-SDK freeze: `de16e473739c28dbd00c731c6a7535ab3400ad0f`
 
-The configured confidential token is Zama's official Sepolia Confidential USDT Mock. The yield
-adapter is a simulated Sepolia-demo integration; neither is represented as a production-mainnet
-asset/yield source.
+The confidential token is Zama's official Sepolia Confidential USDT Mock. The yield adapter is a
+simulated Sepolia-demo integration; neither is represented as production-mainnet infrastructure.
 
 ## Zama integration
 
-The SDK pins `@zama-fhe/sdk@3.5.1`, the current high-level Zama Protocol SDK used by Veilpot for
-custom confidential-contract input encryption.
+The SDK pins `@zama-fhe/sdk@3.5.1`.
 
-Custom FHE inputs use `ZamaSDK.encrypt` and bind ciphertext generation to:
-
-1. the exact target contract; and
-2. the submitting user.
+Custom FHE inputs bind ciphertext generation to the exact target contract and submitting user.
 
 Autopilot plan creation encrypts period amount and lifetime cap as two `euint64` values under one
 shared input proof bound to the immutable Autopilot Vault and plan owner.
 
 Autopilot funding encrypts the amount against the confidential token and owner, then prepares the
-exact ERC-7984 `confidentialTransferAndCall` callback transfer required by the immutable Vault
-funding interface. This callback overload is a protocol-specific surface rather than a substitute
-for the high-level SDK's ordinary `Token.confidentialTransfer` flow.
+exact ERC-7984 `confidentialTransferAndCall` callback transfer required by the immutable Vault.
 
-## Design boundaries
+## Design boundary
 
 The SDK mirrors the exact frozen Pool, Vault, Adapter, and Reserve ABIs and state ordinals.
 
-It provides centralized builders for:
+It centralizes:
 
 - participant reservation, confidential deposit, withdrawal, and funding;
 - the exact eleven-field historical-owner EIP-712 prize-claim authorization;
@@ -60,25 +53,27 @@ frozen claim builder.
 No React dependency exists in this package.
 
 No decryption operation runs automatically. Decryption helpers create explicit user-intent
-descriptors only. A future frontend must require explicit user action before invoking Zama
-decryption.
+descriptors, and the production frontend requires an intentional supported user action before
+requesting confidential disclosure.
 
 The SDK does not contain deployment keys, RPC credentials, relayer API keys, browser UI code, or
 transaction-sending side effects.
 
 ## Validation
 
-The frozen current checkpoint is:
+The current checkpoint includes:
 
 - `16 passing / 0 failing` protocol-SDK tests;
 - exact Pool/Vault/Adapter/Reserve ABI parity with frozen production artifacts;
 - exact reconstruction of the live Autopilot schedule root;
-- root typecheck/lint/format validation; and
-- runtime/deployment evidence binding through the exported deployment constants.
+- root typecheck/lint/format validation;
+- clean-checkout SDK build before type-aware lint; and
+- runtime/deployment evidence binding through exported deployment constants.
 
 See:
 
 - [`../../docs/INTEGRATION_GUIDE.md`](../../docs/INTEGRATION_GUIDE.md)
 - [`../../docs/PRODUCTION_STATUS.md`](../../docs/PRODUCTION_STATUS.md)
+- [`../../docs/TESTING_AND_REPRODUCIBILITY.md`](../../docs/TESTING_AND_REPRODUCIBILITY.md)
 - [`../../evidence/production-sepolia/autopilot-v3/deployment.json`](../../evidence/production-sepolia/autopilot-v3/deployment.json)
 - [`../../evidence/production-sepolia/autopilot-v3/runtime-smoke.json`](../../evidence/production-sepolia/autopilot-v3/runtime-smoke.json)
