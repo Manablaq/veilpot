@@ -91,4 +91,45 @@ contract TestVeilDrawEngineV2Host is ZamaEthereumConfig {
     function sealSnapshotImport(uint256 snapshotId) external {
         engine.sealSnapshotImport(snapshotId);
     }
+
+    function startDrawRound(uint256 snapshotId) external returns (uint256[3] memory drawIds) {
+        return engine.startDrawRound(snapshotId);
+    }
+
+    function prepareDrawBucketEvidence(uint256 drawId, uint256 snapshotId) external {
+        engine.prepareDrawBucketEvidence(drawId, snapshotId);
+    }
+
+    function submitDrawBucketEvidence(
+        uint256 drawId,
+        uint256 snapshotId,
+        uint8 exponent,
+        bool zero,
+        bool supported,
+        bytes calldata proof
+    ) external {
+        engine.submitDrawBucketEvidence(drawId, snapshotId, exponent, zero, supported, proof);
+    }
+
+    function generateDrawCandidateBatch(uint256 drawId, uint256 snapshotId) external {
+        engine.generateDrawCandidateBatch(drawId, snapshotId);
+    }
+
+    function reduceDrawCandidateBatch(
+        uint256 drawId,
+        uint256 snapshotId,
+        uint256 batchId
+    ) external {
+        engine.reduceDrawCandidateBatch(drawId, snapshotId, batchId);
+    }
+
+    function submitDrawBatchEvidence(
+        uint256 drawId,
+        uint256 snapshotId,
+        uint256 batchId,
+        bool success,
+        bytes calldata proof
+    ) external {
+        engine.submitDrawBatchEvidence(drawId, snapshotId, batchId, success, proof);
+    }
 }
